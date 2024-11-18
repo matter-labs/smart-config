@@ -1,5 +1,6 @@
 pub mod metadata;
 mod parsing;
+mod schema;
 mod source;
 mod value;
 

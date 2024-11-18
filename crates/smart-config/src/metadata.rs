@@ -1,35 +1,23 @@
 //! Configuration metadata.
 
-use std::{any, fmt, num};
+use std::{any, fmt, num, path::PathBuf};
 
 #[doc(hidden)] // used in the derive macro
 pub use once_cell::sync::Lazy;
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
 pub use smart_config_derive::DescribeConfig;
 
 /// Describes a configuration (i.e., a group of related parameters).
-pub trait DescribeConfig {
+pub trait DescribeConfig: 'static + DeserializeOwned {
     /// Provides the description.
     fn describe_config() -> &'static ConfigMetadata;
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EmptyConfig {}
-
-impl DescribeConfig for EmptyConfig {
-    fn describe_config() -> &'static ConfigMetadata {
-        static METADATA_CELL: Lazy<ConfigMetadata> = Lazy::new(|| ConfigMetadata {
-            help: "",
-            params: Box::new([]),
-            nested_configs: Box::new([]),
-        });
-        &METADATA_CELL
-    }
 }
 
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]
 pub struct ConfigMetadata {
+    /// Type of this configuration.
+    pub ty: RustType,
     /// Help regarding the config itself.
     pub help: &'static str,
     /// Parameters included in the config.
@@ -38,17 +26,30 @@ pub struct ConfigMetadata {
     pub nested_configs: Box<[NestedConfigMetadata]>,
 }
 
+impl ConfigMetadata {
+    pub(crate) fn help_header(&self) -> Option<&'static str> {
+        let first_line = self.help.lines().next()?;
+        first_line.strip_prefix("# ")
+    }
+}
+
 /// Metadata for a specific configuration parameter.
 #[derive(Debug, Clone, Copy)]
 pub struct ParamMetadata {
     pub name: &'static str,
     pub aliases: &'static [&'static str],
-    pub merge_from: &'static [&'static str],
     pub help: &'static str,
     pub ty: RustType,
     pub base_type: RustType,
     pub unit: Option<UnitOfMeasurement>,
+    #[doc(hidden)] // set by derive macro
     pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
+}
+
+impl ParamMetadata {
+    pub fn default_value(&self) -> Option<impl fmt::Debug + '_> {
+        self.default_value.map(|value_fn| value_fn())
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -56,6 +57,7 @@ pub struct ParamMetadata {
 pub enum UnitOfMeasurement {
     Seconds,
     Milliseconds,
+    Bytes,
     Megabytes,
 }
 
@@ -64,6 +66,7 @@ impl fmt::Display for UnitOfMeasurement {
         formatter.write_str(match self {
             Self::Seconds => "seconds",
             Self::Milliseconds => "milliseconds",
+            Self::Bytes => "bytes",
             Self::Megabytes => "megabytes (IEC)",
         })
     }
@@ -79,6 +82,8 @@ impl UnitOfMeasurement {
             Some(Self::Milliseconds)
         } else if param_name.ends_with("_sec") {
             Some(Self::Seconds)
+        } else if param_name.ends_with("_bytes") {
+            Some(Self::Bytes)
         } else if param_name.ends_with("_mb") {
             Some(Self::Megabytes)
         } else {
@@ -92,7 +97,6 @@ impl UnitOfMeasurement {
 pub struct RustType {
     id: any::TypeId,
     name_in_code: &'static str,
-    canonical_name: &'static str,
 }
 
 impl RustType {
@@ -100,16 +104,11 @@ impl RustType {
         Self {
             id: any::TypeId::of::<T>(),
             name_in_code,
-            canonical_name: any::type_name::<T>(),
         }
     }
 
     pub fn name_in_code(&self) -> &'static str {
         self.name_in_code
-    }
-
-    pub fn canonical_name(self) -> &'static str {
-        self.canonical_name
     }
 
     pub fn kind(self) -> Option<TypeKind> {
@@ -142,6 +141,7 @@ impl RustType {
                 Some(TypeKind::Float)
             }
             id if id == any::TypeId::of::<String>() => Some(TypeKind::String),
+            id if id == any::TypeId::of::<PathBuf>() => Some(TypeKind::Path),
             _ => None,
         }
     }
@@ -155,7 +155,8 @@ pub enum TypeKind {
     Integer,
     Float,
     String,
-    // FIXME: support paths and URLs
+    Path,
+    // TODO: support URLs
 }
 
 impl fmt::Display for TypeKind {
@@ -165,6 +166,7 @@ impl fmt::Display for TypeKind {
             Self::Integer => formatter.write_str("integer"),
             Self::Float => formatter.write_str("floating-point value"),
             Self::String => formatter.write_str("string"),
+            Self::Path => formatter.write_str("filesystem path"),
         }
     }
 }

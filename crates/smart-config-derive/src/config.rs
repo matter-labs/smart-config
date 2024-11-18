@@ -4,8 +4,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{
-    parse::Parse, spanned::Spanned, Attribute, Data, DeriveInput, Expr, Field, GenericArgument,
-    Lit, LitStr, Path, PathArguments, Type, TypePath,
+    spanned::Spanned, Attribute, Data, DeriveInput, Expr, Field, GenericArgument, Lit, LitStr,
+    Path, PathArguments, Type, TypePath,
 };
 
 fn parse_docs(attrs: &[Attribute]) -> String {
@@ -93,7 +93,6 @@ impl SerdeData {
 
 struct ConfigFieldAttrs {
     nested: bool,
-    merge_from: Option<Vec<LitStr>>,
 }
 
 impl ConfigFieldAttrs {
@@ -101,7 +100,6 @@ impl ConfigFieldAttrs {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut nested = false;
-        let mut merge_from = None;
         let mut nested_span = None;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
@@ -109,30 +107,12 @@ impl ConfigFieldAttrs {
                     nested = true;
                     nested_span = Some(meta.path.span());
                     Ok(())
-                } else if meta.path.is_ident("merge_from") {
-                    let merge_from = merge_from.get_or_insert_with(Vec::new);
-                    let content;
-                    syn::parenthesized!(content in meta.input);
-                    let punctuated =
-                        content.parse_terminated(<LitStr as Parse>::parse, syn::Token![,])?;
-                    merge_from.extend(punctuated);
-                    Ok(())
                 } else {
-                    Err(meta.error(
-                        "Unsupported attribute; only `nested` and `merge_from` are supported`",
-                    ))
+                    Err(meta.error("Unsupported attribute; only `nested` is supported`"))
                 }
             })?;
         }
-
-        if let Some(nested_span) = nested_span {
-            if merge_from.is_some() {
-                let message =
-                    "`merge_from` can only be specified on common parameters (not nested configs)";
-                return Err(syn::Error::new(nested_span, message));
-            }
-        }
-        Ok(Self { nested, merge_from })
+        Ok(Self { nested })
     }
 }
 
@@ -215,14 +195,9 @@ impl ConfigField {
         angle_bracketed.args.len() == 1
     }
 
-    fn describe_param(
-        &self,
-        cr: &proc_macro2::TokenStream,
-        config_merge: &[syn::LitStr],
-    ) -> proc_macro2::TokenStream {
+    fn describe_param(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         let name = &self.name;
         let aliases = self.serde_data.aliases.iter();
-        let merge_from = self.attrs.merge_from.as_deref().unwrap_or(config_merge);
         let help = &self.docs;
 
         let param_name = self
@@ -264,7 +239,6 @@ impl ConfigField {
             #cr::ParamMetadata {
                 name: #param_name,
                 aliases: &[#(#aliases,)*],
-                merge_from: &[#(#merge_from,)*],
                 help: #help,
                 ty: #cr::RustType::of::<#ty>(#ty_in_code),
                 base_type,
@@ -297,7 +271,6 @@ impl ConfigField {
 
 struct DescribeConfigAttrs {
     cr: Option<Path>,
-    merge_from: Vec<LitStr>,
 }
 
 impl DescribeConfigAttrs {
@@ -305,27 +278,17 @@ impl DescribeConfigAttrs {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut cr = None;
-        let mut merge_from = vec![];
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("crate") {
                     cr = Some(meta.value()?.parse()?);
                     Ok(())
-                } else if meta.path.is_ident("merge_from") {
-                    let content;
-                    syn::parenthesized!(content in meta.input);
-                    let punctuated =
-                        content.parse_terminated(<LitStr as Parse>::parse, syn::Token![,])?;
-                    merge_from.extend(punctuated);
-                    Ok(())
                 } else {
-                    Err(meta.error(
-                        "Unsupported attribute; only `crate` and `merge_from` are supported`",
-                    ))
+                    Err(meta.error("Unsupported attribute; only `crate` is supported`"))
                 }
             })?;
         }
-        Ok(Self { cr, merge_from })
+        Ok(Self { cr })
     }
 }
 
@@ -370,19 +333,19 @@ impl DescribeConfigImpl {
             quote!(#cr::metadata)
         } else {
             let name = &self.name;
-            quote_spanned!(name.span()=> ::zksync_config::metadata)
+            quote_spanned!(name.span()=> ::smart_config::metadata)
         }
     }
 
     fn derive_describe_config(&self) -> proc_macro2::TokenStream {
         let cr = self.cr();
-        let merge_from = &self.attrs.merge_from;
         let name = &self.name;
+        let name_str = name.to_string();
         let help = &self.help;
 
         let params = self.fields.iter().filter_map(|field| {
             if !field.attrs.nested {
-                return Some(field.describe_param(&cr, merge_from));
+                return Some(field.describe_param(&cr));
             }
             None
         });
@@ -397,6 +360,7 @@ impl DescribeConfigImpl {
             impl #cr::DescribeConfig for #name {
                 fn describe_config() -> &'static #cr::ConfigMetadata {
                     static METADATA_CELL: #cr::Lazy<#cr::ConfigMetadata> = #cr::Lazy::new(|| #cr::ConfigMetadata {
+                        ty: #cr::RustType::of::<#name>(#name_str),
                         help: #help,
                         params: ::std::boxed::Box::new([#(#params,)*]),
                         nested_configs: ::std::boxed::Box::new([#(#nested_configs,)*]),
