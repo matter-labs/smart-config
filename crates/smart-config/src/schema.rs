@@ -396,7 +396,7 @@ optional
         );
         assert_eq!(
             parser.map().get(Pointer("test.optional")).unwrap().inner,
-            Value::String("123".into())
+            Value::Number(123_u64.into())
         );
 
         let config: TestConfig = parser.parse().unwrap();
@@ -476,7 +476,7 @@ optional
         let parser = ConfigRepository::from(env).parser(&schema).unwrap();
         assert_eq!(
             parser.map().get(Pointer("bool_value")).unwrap().inner,
-            Value::String("true".into())
+            Value::Bool(true)
         );
         assert_eq!(
             parser
@@ -486,8 +486,16 @@ optional
                 .inner,
             Value::String("???".into())
         );
+        assert_eq!(
+            parser.map().get(Pointer("optional")).unwrap().inner,
+            Value::Number("777".parse().unwrap())
+        );
 
-        let config: NestingConfig = parser.parse().unwrap(); // FIXME: doesn't work because of serde(flatten)
-        panic!("{config:?}");
+        let config: NestingConfig = parser.parse().unwrap();
+        assert!(config.bool_value);
+        assert_eq!(config.hierarchical.str, "???");
+        assert_eq!(config.hierarchical.optional_int, None);
+        assert_eq!(config.flattened.str, "!!!");
+        assert_eq!(config.flattened.optional_int, Some(777));
     }
 }

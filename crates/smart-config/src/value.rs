@@ -2,18 +2,22 @@
 
 use std::{collections::HashMap, fmt, iter, sync::Arc};
 
-#[derive(Debug, Clone)]
-pub(crate) struct ValueOrigin(pub Arc<str>);
+#[derive(Debug, Default)]
+pub(crate) enum ValueOrigin {
+    #[default]
+    Unknown,
+    SyntheticObject,
+    EnvVar(String),
+}
 
 impl fmt::Display for ValueOrigin {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl ValueOrigin {
-    pub fn env_var(name: &str) -> Self {
-        Self(format!("env variable '{name}'").into())
+        match self {
+            Self::Unknown => formatter.write_str("unknown"),
+            Self::SyntheticObject => formatter
+                .write_str("synthetic object (configuration mounting point or its ancestor)"),
+            Self::EnvVar(name) => write!(formatter, "env variable '{name}'"),
+        }
     }
 }
 
@@ -33,7 +37,7 @@ pub(crate) type Map = HashMap<String, ValueWithOrigin>;
 #[derive(Debug, Clone)]
 pub(crate) struct ValueWithOrigin {
     pub inner: Value,
-    pub origin: ValueOrigin,
+    pub origin: Arc<ValueOrigin>,
 }
 
 impl PartialEq for ValueWithOrigin {
@@ -46,7 +50,7 @@ impl ValueWithOrigin {
     pub fn empty() -> Self {
         Self {
             inner: Value::Null,
-            origin: ValueOrigin(Arc::default()),
+            origin: Arc::default(),
         }
     }
 

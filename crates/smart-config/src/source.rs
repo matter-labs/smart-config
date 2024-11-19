@@ -1,13 +1,14 @@
 use std::{
     collections::{BTreeSet, HashMap},
     env, mem,
+    sync::Arc,
 };
 
 use anyhow::Context as _;
 use serde::de::DeserializeOwned;
 
 use crate::{
-    metadata::DescribeConfig,
+    metadata::{ConfigMetadata, DescribeConfig, TypeKind},
     schema::{Alias, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, ValueWithOrigin},
 };
@@ -35,7 +36,7 @@ impl Environment {
                 retained_name,
                 ValueWithOrigin {
                     inner: Value::String(value.into()),
-                    origin: ValueOrigin::env_var(name.as_ref()),
+                    origin: Arc::new(ValueOrigin::EnvVar(name.into())),
                 },
             ))
         });
@@ -86,9 +87,10 @@ impl ConfigRepository {
     }
 
     pub fn parser(mut self, schema: &ConfigSchema) -> anyhow::Result<ConfigParser<'_>> {
+        let synthetic_origin = Arc::new(ValueOrigin::SyntheticObject);
         let mut map = ValueWithOrigin {
             inner: Value::Object(Map::new()),
-            origin: ValueOrigin("global configuration".into()),
+            origin: synthetic_origin.clone(),
         };
 
         let all_objects: BTreeSet<_> = schema
@@ -97,7 +99,7 @@ impl ConfigRepository {
             .chain([Pointer("")])
             .collect();
         for &object_ptr in &all_objects {
-            map.ensure_object(object_ptr)?;
+            map.ensure_object(object_ptr, &synthetic_origin)?;
         }
         for &object_ptr in all_objects.iter().rev() {
             map.copy_key_value_entries(object_ptr, &mut self.env);
@@ -107,6 +109,9 @@ impl ConfigRepository {
             for alias in &config_data.aliases {
                 map.merge_alias(prefix, alias);
             }
+            if let Some(config_map) = map.get_mut(prefix) {
+                config_map.normalize_value_types(config_data.metadata);
+            };
         }
 
         Ok(ConfigParser { map, schema })
@@ -162,7 +167,11 @@ impl ConfigParser<'_> {
 impl ValueWithOrigin {
     /// Ensures that there is an object (possibly empty) at the specified location. Returns an error
     /// if the locations contains anything other than an object.
-    fn ensure_object(&mut self, at: Pointer<'_>) -> anyhow::Result<()> {
+    fn ensure_object(
+        &mut self,
+        at: Pointer<'_>,
+        synthetic_origin: &Arc<ValueOrigin>,
+    ) -> anyhow::Result<()> {
         let Some((parent, last_segment)) = at.split_last() else {
             // Nothing to do.
             return Ok(());
@@ -177,7 +186,7 @@ impl ValueWithOrigin {
                 last_segment.to_owned(),
                 ValueWithOrigin {
                     inner: Value::Object(Map::new()),
-                    origin: ValueOrigin("".into()), // FIXME
+                    origin: synthetic_origin.clone(),
                 },
             );
         }
@@ -211,12 +220,46 @@ impl ValueWithOrigin {
         };
         map.extend(new_entries);
     }
+
+    /// This is necessary to prevent `deserialize_any` errors
+    fn normalize_value_types(&mut self, metadata: &ConfigMetadata) {
+        let Value::Object(map) = &mut self.inner else {
+            unreachable!("expected an object due to previous preprocessing steps");
+        };
+
+        for param in &metadata.params {
+            if let Some(value) = map.get_mut(param.name) {
+                if !matches!(value.origin.as_ref(), ValueOrigin::EnvVar(_)) {
+                    continue;
+                }
+                let Value::String(str) = &value.inner else {
+                    continue;
+                };
+
+                // Attempt to transform the type to the expected type
+                match param.base_type.kind() {
+                    Some(TypeKind::Bool) => {
+                        if let Ok(bool_value) = str.parse::<bool>() {
+                            value.inner = Value::Bool(bool_value);
+                        }
+                    }
+                    Some(TypeKind::Integer) => {
+                        if let Ok(number) = str.parse::<serde_json::Number>() {
+                            value.inner = Value::Number(number);
+                        }
+                    }
+                    _ => { /* Do nothing */ }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
+    use assert_matches::assert_matches;
     use serde::Deserialize;
 
     use super::*;
@@ -259,7 +302,7 @@ mod tests {
     fn wrap_into_value(env: Environment) -> ValueWithOrigin {
         ValueWithOrigin {
             inner: Value::Object(env.map),
-            origin: ValueOrigin("test".into()),
+            origin: Arc::default(),
         }
     }
 
@@ -304,9 +347,9 @@ mod tests {
         let err = NestedConfig::deserialize(wrap_into_value(env)).unwrap_err();
 
         assert!(err.inner.to_string().contains("u32 value 'what'"), "{err}");
-        assert!(
-            err.origin.as_ref().unwrap().0.contains("other_int"),
-            "{err}"
+        assert_matches!(
+            err.origin.as_ref().unwrap().as_ref(),
+            ValueOrigin::EnvVar(name) if name == "other_int"
         );
     }
 

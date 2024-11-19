@@ -1,6 +1,6 @@
 //! Schema-guided parsing of configurations.
 
-use std::{collections::HashMap, fmt, iter::empty};
+use std::{collections::HashMap, fmt, iter::empty, sync::Arc};
 
 use serde::de::{
     self,
@@ -37,7 +37,7 @@ impl ValueWithOrigin {
 #[derive(Debug)]
 pub(crate) struct ParseError {
     pub inner: serde_json::Error,
-    pub origin: Option<ValueOrigin>,
+    pub origin: Option<Arc<ValueOrigin>>,
 }
 
 impl fmt::Display for ParseError {
@@ -70,7 +70,7 @@ impl DeError for ParseError {
 }
 
 impl ParseError {
-    fn with_origin(mut self, origin: &ValueOrigin) -> Self {
+    fn with_origin(mut self, origin: &Arc<ValueOrigin>) -> Self {
         if self.origin.is_none() {
             self.origin = Some(origin.clone());
         }
@@ -106,7 +106,7 @@ macro_rules! parse_int_value {
 fn parse_array<'de, V: de::Visitor<'de>>(
     array: Vec<ValueWithOrigin>,
     visitor: V,
-    origin: &ValueOrigin,
+    origin: &Arc<ValueOrigin>,
 ) -> Result<V::Value, ParseError> {
     let mut deserializer = SeqDeserializer::new(array.into_iter());
     let seq = visitor
@@ -119,7 +119,7 @@ fn parse_array<'de, V: de::Visitor<'de>>(
 fn parse_object<'de, V: de::Visitor<'de>>(
     object: HashMap<String, ValueWithOrigin>,
     visitor: V,
-    origin: &ValueOrigin,
+    origin: &Arc<ValueOrigin>,
 ) -> Result<V::Value, ParseError> {
     let mut deserializer = MapDeserializer::new(object.into_iter());
     let map = visitor

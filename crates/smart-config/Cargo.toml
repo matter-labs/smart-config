@@ -14,3 +14,6 @@ once_cell.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 smart-config-derive.workspace = true
+
+[dev-dependencies]
+assert_matches.workspace = true
