@@ -107,6 +107,10 @@ impl RustType {
         }
     }
 
+    pub(crate) fn id(&self) -> any::TypeId {
+        self.id
+    }
+
     pub fn name_in_code(&self) -> &'static str {
         self.name_in_code
     }

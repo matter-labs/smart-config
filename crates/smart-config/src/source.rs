@@ -108,7 +108,7 @@ impl ConfigRepository {
 
         for config_data in schema.configs.values() {
             for alias in &config_data.aliases {
-                map.merge_alias(config_data.prefix, alias);
+                map.merge_alias(Pointer(&config_data.prefix), alias);
             }
         }
 
@@ -150,7 +150,7 @@ impl ConfigParser<'_> {
                 format!(
                     "error parsing configuration `{name}`{summary} at `{prefix}` (aliases: {aliases:?})",
                     name = config_data.metadata.ty.name_in_code(),
-                    prefix = config_data.prefix.0,
+                    prefix = config_data.prefix,
                     aliases = config_data.aliases
                 )
             })

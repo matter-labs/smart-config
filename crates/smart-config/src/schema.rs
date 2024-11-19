@@ -2,6 +2,7 @@
 
 use std::{
     any,
+    borrow::Cow,
     collections::{HashMap, HashSet},
     io, iter,
     marker::PhantomData,
@@ -10,7 +11,7 @@ use std::{
 use serde::de::DeserializeOwned;
 
 use crate::{
-    metadata::{ConfigMetadata, DescribeConfig, ParamMetadata},
+    metadata::{ConfigMetadata, DescribeConfig, NestedConfigMetadata, ParamMetadata},
     value::Pointer,
 };
 
@@ -56,14 +57,15 @@ impl<C: DescribeConfig> Alias<C> {
 
 #[derive(Debug)]
 pub(crate) struct ConfigData {
-    pub prefix: Pointer<'static>,
+    pub prefix: Cow<'static, str>,
     pub aliases: Vec<Alias<()>>,
     pub metadata: &'static ConfigMetadata,
 }
 
 impl ConfigData {
-    pub(crate) fn all_prefixes(&self) -> impl Iterator<Item = Pointer<'static>> + '_ {
-        iter::once(self.prefix).chain(self.aliases.iter().map(|alias| alias.prefix))
+    pub(crate) fn all_prefixes(&self) -> impl Iterator<Item = Pointer<'_>> + '_ {
+        iter::once(Pointer(self.prefix.as_ref()))
+            .chain(self.aliases.iter().map(|alias| alias.prefix))
     }
 }
 
@@ -94,17 +96,42 @@ impl ConfigSchema {
     where
         C: DescribeConfig + DeserializeOwned,
     {
-        // FIXME: insert nested configs as well
         let metadata = C::describe_config();
         self.configs.insert(
             any::TypeId::of::<C>(),
             ConfigData {
-                prefix: Pointer(prefix),
+                prefix: prefix.into(),
                 aliases: aliases.into_iter().map(Alias::drop_type_param).collect(),
                 metadata,
             },
         );
+
+        // Insert all nested configs recursively.
+        let mut pending_configs: Vec<_> =
+            Self::list_nested_configs(prefix, &metadata.nested_configs).collect();
+        while let Some((prefix, metadata)) = pending_configs.pop() {
+            let new_configs = Self::list_nested_configs(&prefix, &metadata.nested_configs);
+            pending_configs.extend(new_configs);
+
+            self.configs.insert(
+                metadata.ty.id(),
+                ConfigData {
+                    prefix: prefix.into(),
+                    aliases: vec![],
+                    metadata,
+                },
+            );
+        }
         self
+    }
+
+    fn list_nested_configs<'a>(
+        prefix: &'a str,
+        nested: &'a [NestedConfigMetadata],
+    ) -> impl Iterator<Item = (String, &'static ConfigMetadata)> + 'a {
+        nested
+            .iter()
+            .map(|nested| (Pointer(prefix).join(nested.name), nested.meta))
     }
 
     /// Writes help about this schema to the provided writer.
@@ -140,7 +167,7 @@ impl ConfigSchema {
         param: &ParamMetadata,
         config_data: &ConfigData,
     ) -> io::Result<()> {
-        let prefix = config_data.prefix.0;
+        let prefix = config_data.prefix.as_ref();
         let prefix_sep = if prefix.is_empty() || prefix.ends_with('.') {
             ""
         } else {

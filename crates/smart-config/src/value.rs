@@ -108,7 +108,11 @@ impl<'a> Pointer<'a> {
     }
 
     pub fn join(self, suffix: &str) -> String {
-        format!("{}.{suffix}", self.0)
+        if suffix.is_empty() {
+            self.0.to_owned()
+        } else {
+            format!("{}.{suffix}", self.0)
+        }
     }
 }
 
