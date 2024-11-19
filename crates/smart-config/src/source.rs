@@ -1,5 +1,4 @@
 use std::{
-    any,
     collections::{BTreeSet, HashMap},
     env, mem,
 };
@@ -9,7 +8,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     metadata::DescribeConfig,
-    schema::{Alias, ConfigData, ConfigSchema},
+    schema::{Alias, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, ValueWithOrigin},
 };
 
@@ -93,9 +92,7 @@ impl ConfigRepository {
         };
 
         let all_objects: BTreeSet<_> = schema
-            .configs
-            .values()
-            .flat_map(ConfigData::all_prefixes)
+            .prefixes_with_aliases()
             .flat_map(Pointer::with_ancestors)
             .chain([Pointer("")])
             .collect();
@@ -106,9 +103,9 @@ impl ConfigRepository {
             map.copy_key_value_entries(object_ptr, &mut self.env);
         }
 
-        for config_data in schema.configs.values() {
+        for (prefix, config_data) in schema.iter() {
             for alias in &config_data.aliases {
-                map.merge_alias(Pointer(&config_data.prefix), alias);
+                map.merge_alias(prefix, alias);
             }
         }
 
@@ -124,34 +121,39 @@ pub struct ConfigParser<'a> {
 }
 
 impl ConfigParser<'_> {
+    #[cfg(test)]
+    pub(crate) fn map(&self) -> &ValueWithOrigin {
+        &self.map
+    }
+
     /// Parses a configuration.
     pub fn parse<C>(&self) -> anyhow::Result<C>
     where
         C: DescribeConfig + DeserializeOwned,
     {
-        let config_data = self
-            .schema
-            .configs
-            .get(&any::TypeId::of::<C>())
-            .with_context(|| {
-                format!(
-                    "Config `{}` is not a part of the schema",
-                    any::type_name::<C>()
-                )
-            })?;
+        let metadata = C::describe_config();
+        let config_ref = self.schema.single(metadata)?;
+        let prefix = config_ref.prefix();
+
+        // `unwrap()` is safe due to preparations when constructing the `Parser`; all config prefixes have objects
+        let config_map = self.map.get(Pointer(prefix)).unwrap().clone();
+        debug_assert!(
+            matches!(&config_map.inner, Value::Object(_)),
+            "Unexpected value at {prefix:?}: {config_map:?}"
+        );
+
         // FIXME: implement `Deserializer` for `&ValueWithOrigin`
-        C::deserialize(self.map.clone())
+        C::deserialize(config_map)
             .with_context(|| {
-                let summary = if let Some(header) = config_data.metadata.help_header() {
+                let summary = if let Some(header) = metadata.help_header() {
                     format!(" ({})", header.trim().to_lowercase())
                 } else {
                     String::new()
                 };
                 format!(
                     "error parsing configuration `{name}`{summary} at `{prefix}` (aliases: {aliases:?})",
-                    name = config_data.metadata.ty.name_in_code(),
-                    prefix = config_data.prefix,
-                    aliases = config_data.aliases
+                    name = metadata.ty.name_in_code(),
+                    aliases = config_ref.data.aliases
                 )
             })
     }

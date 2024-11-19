@@ -57,26 +57,89 @@ impl<C: DescribeConfig> Alias<C> {
 
 #[derive(Debug)]
 pub(crate) struct ConfigData {
-    pub prefix: Cow<'static, str>,
-    pub aliases: Vec<Alias<()>>,
     pub metadata: &'static ConfigMetadata,
+    pub aliases: Vec<Alias<()>>,
 }
 
 impl ConfigData {
-    pub(crate) fn all_prefixes(&self) -> impl Iterator<Item = Pointer<'_>> + '_ {
-        iter::once(Pointer(self.prefix.as_ref()))
-            .chain(self.aliases.iter().map(|alias| alias.prefix))
+    fn new(metadata: &'static ConfigMetadata) -> Self {
+        Self {
+            metadata,
+            aliases: vec![],
+        }
+    }
+}
+
+/// Reference to a specific configuration inside [`ConfigSchema`].
+#[derive(Debug, Clone, Copy)]
+pub struct ConfigRef<'a> {
+    prefix: &'a str,
+    pub(crate) data: &'a ConfigData,
+}
+
+impl<'a> ConfigRef<'a> {
+    /// Gets the config prefix.
+    pub fn prefix(&self) -> &'a str {
+        self.prefix
+    }
+
+    /// Iterates over all aliases for this config.
+    pub fn aliases(&self) -> impl Iterator<Item = &'a Alias<()>> + '_ {
+        self.data.aliases.iter()
     }
 }
 
 /// Schema for configuration. Can contain multiple configs bound to different "locations".
 #[derive(Default, Debug)]
 pub struct ConfigSchema {
-    // FIXME: no guarantee that configs are unique by type ID only (they are unique by type ID + location)
-    pub(crate) configs: HashMap<any::TypeId, ConfigData>,
+    configs: HashMap<(any::TypeId, Cow<'static, str>), ConfigData>,
 }
 
 impl ConfigSchema {
+    /// Lists prefixes and aliases for all configs. There may be duplicates!
+    pub(crate) fn prefixes_with_aliases(&self) -> impl Iterator<Item = Pointer<'_>> + '_ {
+        self.configs.iter().flat_map(|((_, prefix), data)| {
+            iter::once(Pointer(prefix)).chain(data.aliases.iter().map(|alias| alias.prefix))
+        })
+    }
+
+    /// Iterates over all configs with their canonical prefixes.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (Pointer<'_>, &ConfigData)> + '_ {
+        self.configs
+            .iter()
+            .map(|((_, prefix), data)| (Pointer(prefix), data))
+    }
+
+    /// Lists all prefixes for the specified config. This does not include aliases.
+    pub fn locate(&self, metadata: &'static ConfigMetadata) -> impl Iterator<Item = &str> + '_ {
+        let config_type_id = metadata.ty.id();
+        self.configs.keys().filter_map(move |(type_id, prefix)| {
+            (*type_id == config_type_id).then_some(prefix.as_ref())
+        })
+    }
+
+    pub fn single(&self, metadata: &'static ConfigMetadata) -> anyhow::Result<ConfigRef<'_>> {
+        let prefixes: Vec<_> = self.locate(metadata).take(2).collect();
+        match prefixes.as_slice() {
+            [] => anyhow::bail!(
+                "configuration `{}` is not registered in schema",
+                metadata.ty.name_in_code()
+            ),
+            &[prefix] => Ok(ConfigRef {
+                prefix,
+                data: self
+                    .configs
+                    .get(&(metadata.ty.id(), prefix.into()))
+                    .unwrap(),
+            }),
+            [first, second] => anyhow::bail!(
+                "configuration `{}` is registered in at least 2 locations: {first:?}, {second:?}",
+                metadata.ty.name_in_code()
+            ),
+            _ => unreachable!(),
+        }
+    }
+
     /// Inserts a new configuration type at the specified place.
     #[must_use]
     pub fn insert<C>(self, prefix: &'static str) -> Self
@@ -97,10 +160,10 @@ impl ConfigSchema {
         C: DescribeConfig + DeserializeOwned,
     {
         let metadata = C::describe_config();
-        self.configs.insert(
+        self.insert_inner(
+            prefix.into(),
             any::TypeId::of::<C>(),
             ConfigData {
-                prefix: prefix.into(),
                 aliases: aliases.into_iter().map(Alias::drop_type_param).collect(),
                 metadata,
             },
@@ -113,14 +176,7 @@ impl ConfigSchema {
             let new_configs = Self::list_nested_configs(&prefix, &metadata.nested_configs);
             pending_configs.extend(new_configs);
 
-            self.configs.insert(
-                metadata.ty.id(),
-                ConfigData {
-                    prefix: prefix.into(),
-                    aliases: vec![],
-                    metadata,
-                },
-            );
+            self.insert_inner(prefix.into(), metadata.ty.id(), ConfigData::new(metadata));
         }
         self
     }
@@ -134,6 +190,10 @@ impl ConfigSchema {
             .map(|nested| (Pointer(prefix).join(nested.name), nested.meta))
     }
 
+    fn insert_inner(&mut self, prefix: Cow<'static, str>, type_id: any::TypeId, data: ConfigData) {
+        self.configs.insert((type_id, prefix), data);
+    }
+
     /// Writes help about this schema to the provided writer.
     ///
     /// `param_filter` can be used to filter displayed parameters.
@@ -142,7 +202,7 @@ impl ConfigSchema {
         writer: &mut impl io::Write,
         mut param_filter: impl FnMut(&ParamMetadata) -> bool,
     ) -> io::Result<()> {
-        for config_data in self.configs.values() {
+        for ((_, prefix), config_data) in &self.configs {
             let filtered_params: Vec<_> = config_data
                 .metadata
                 .params
@@ -155,7 +215,7 @@ impl ConfigSchema {
 
             writeln!(writer, "{}\n", config_data.metadata.help)?;
             for param in filtered_params {
-                Self::write_parameter(writer, param, config_data)?;
+                Self::write_parameter(writer, prefix, param, config_data)?;
                 writeln!(writer)?;
             }
         }
@@ -164,10 +224,10 @@ impl ConfigSchema {
 
     fn write_parameter(
         writer: &mut impl io::Write,
+        prefix: &str,
         param: &ParamMetadata,
         config_data: &ConfigData,
     ) -> io::Result<()> {
-        let prefix = config_data.prefix.as_ref();
         let prefix_sep = if prefix.is_empty() || prefix.ends_with('.') {
             ""
         } else {
@@ -228,7 +288,7 @@ mod tests {
     use serde::Deserialize;
 
     use super::*;
-    use crate::{metadata::DescribeConfig, ConfigRepository, Environment};
+    use crate::{metadata::DescribeConfig, value::Value, ConfigRepository, Environment};
 
     /// # Test configuration
     ///
@@ -248,6 +308,20 @@ mod tests {
         fn default_str() -> String {
             "default".to_owned()
         }
+    }
+
+    #[derive(Debug, Default, PartialEq, Deserialize, DescribeConfig)]
+    #[config(crate = crate)]
+    struct NestingConfig {
+        #[serde(default)]
+        bool_value: bool,
+        /// Hierarchical nested config.
+        #[serde(default)]
+        #[config(nested)]
+        hierarchical: TestConfig,
+        #[serde(flatten, default)]
+        #[config(nested)]
+        flattened: TestConfig,
     }
 
     #[test]
@@ -272,7 +346,7 @@ mod tests {
         assert_eq!(optional_metadata.name, "optional");
         assert_eq!(optional_metadata.aliases, [] as [&str; 0]);
         assert_eq!(optional_metadata.help, "Optional value.");
-        assert_eq!(optional_metadata.ty.name_in_code(), "Option<u32>");
+        assert_eq!(optional_metadata.ty.name_in_code(), "Option"); // FIXME: does `Option<u32>` get printed only for nightly Rust?
         assert_eq!(optional_metadata.base_type.name_in_code(), "u32");
     }
 
@@ -286,7 +360,7 @@ string
     String value.
 
 optional
-    Type: integer [Rust: Option<u32>], default: None
+    Type: integer [Rust: Option], default: None
     Optional value.
 "#;
 
@@ -303,15 +377,31 @@ optional
     fn using_alias() {
         let schema =
             ConfigSchema::default().insert_aliased::<TestConfig>("test", [Alias::prefix("")]);
+
+        let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
+        assert_eq!(all_prefixes, HashSet::from([Pointer("test"), Pointer("")]));
+        let config_prefixes: Vec<_> = schema.locate(TestConfig::describe_config()).collect();
+        assert_eq!(config_prefixes, ["test"]);
+        let config_ref = schema.single(TestConfig::describe_config()).unwrap();
+        assert_eq!(config_ref.prefix(), "test");
+        assert_eq!(config_ref.aliases().count(), 1);
+
         let env =
             Environment::from_iter("APP_", [("APP_TEST_STR", "test"), ("APP_OPTIONAL", "123")]);
 
-        let config: TestConfig = ConfigRepository::from(env)
-            .parser(&schema)
-            .unwrap()
-            .parse()
-            .unwrap();
-        panic!("{config:?}");
+        let parser = ConfigRepository::from(env).parser(&schema).unwrap();
+        assert_eq!(
+            parser.map().get(Pointer("test.str")).unwrap().inner,
+            Value::String("test".into())
+        );
+        assert_eq!(
+            parser.map().get(Pointer("test.optional")).unwrap().inner,
+            Value::String("123".into())
+        );
+
+        let config: TestConfig = parser.parse().unwrap();
+        assert_eq!(config.str, "test");
+        assert_eq!(config.optional_int, Some(123));
     }
 
     #[test]
@@ -323,6 +413,18 @@ optional
                 Alias::prefix("deprecated"),
             ],
         );
+
+        let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
+        assert_eq!(
+            all_prefixes,
+            HashSet::from([Pointer("test"), Pointer(""), Pointer("deprecated")])
+        );
+        let config_prefixes: Vec<_> = schema.locate(TestConfig::describe_config()).collect();
+        assert_eq!(config_prefixes, ["test"]);
+        let config_ref = schema.single(TestConfig::describe_config()).unwrap();
+        assert_eq!(config_ref.prefix(), "test");
+        assert_eq!(config_ref.aliases().count(), 2);
+
         let env = Environment::from_iter(
             "APP_",
             [
@@ -337,6 +439,55 @@ optional
             .unwrap()
             .parse()
             .unwrap();
+        assert_eq!(config.str, "?");
+        assert_eq!(config.optional_int, Some(321));
+    }
+
+    #[test]
+    fn using_nesting() {
+        let schema = ConfigSchema::default().insert::<NestingConfig>("");
+
+        let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
+        assert_eq!(
+            all_prefixes,
+            HashSet::from([Pointer(""), Pointer("hierarchical")])
+        );
+
+        let config_prefixes: Vec<_> = schema.locate(NestingConfig::describe_config()).collect();
+        assert_eq!(config_prefixes, [""]);
+        let config_prefixes: HashSet<_> = schema.locate(TestConfig::describe_config()).collect();
+        assert_eq!(config_prefixes, HashSet::from(["", "hierarchical"]));
+
+        let err = schema
+            .single(TestConfig::describe_config())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("at least 2 locations"), "{err}");
+
+        let env = Environment::from_iter(
+            "",
+            [
+                ("bool_value", "true"),
+                ("hierarchical_string", "???"),
+                ("str", "!!!"),
+                ("optional", "777"),
+            ],
+        );
+        let parser = ConfigRepository::from(env).parser(&schema).unwrap();
+        assert_eq!(
+            parser.map().get(Pointer("bool_value")).unwrap().inner,
+            Value::String("true".into())
+        );
+        assert_eq!(
+            parser
+                .map()
+                .get(Pointer("hierarchical.string"))
+                .unwrap()
+                .inner,
+            Value::String("???".into())
+        );
+
+        let config: NestingConfig = parser.parse().unwrap(); // FIXME: doesn't work because of serde(flatten)
         panic!("{config:?}");
     }
 }

@@ -71,7 +71,7 @@ impl ValueWithOrigin {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct Pointer<'a>(pub &'a str);
 
 impl<'a> Pointer<'a> {
@@ -110,6 +110,8 @@ impl<'a> Pointer<'a> {
     pub fn join(self, suffix: &str) -> String {
         if suffix.is_empty() {
             self.0.to_owned()
+        } else if self.0.is_empty() {
+            suffix.to_owned()
         } else {
             format!("{}.{suffix}", self.0)
         }
@@ -142,5 +144,20 @@ mod tests {
             pointer.with_ancestors().collect::<Vec<_>>(),
             [Pointer("test"), Pointer("test.value")]
         );
+    }
+
+    #[test]
+    fn joining_pointers() {
+        let pointer = Pointer("");
+        let joined = pointer.join("test");
+        assert_eq!(joined, "test");
+
+        let pointer = Pointer("test");
+        let joined = pointer.join("");
+        assert_eq!(joined, "test");
+
+        let pointer = Pointer("test");
+        let joined = pointer.join("other");
+        assert_eq!(joined, "test.other");
     }
 }
