@@ -1,0 +1,186 @@
+use std::collections::HashSet;
+
+use assert_matches::assert_matches;
+use serde::Deserialize;
+
+use super::*;
+use crate::schema::Alias;
+
+#[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SimpleEnum {
+    First,
+    Second,
+}
+
+#[derive(Debug, Deserialize, DescribeConfig)]
+#[config(crate = crate)]
+struct NestedConfig {
+    #[serde(rename = "renamed")]
+    simple_enum: SimpleEnum,
+    #[serde(default = "NestedConfig::default_other_int")]
+    other_int: u32,
+}
+
+impl NestedConfig {
+    const fn default_other_int() -> u32 {
+        42
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct TestConfig {
+    int: u64,
+    bool: bool,
+    string: String,
+    optional: Option<i64>,
+    array: Vec<u32>,
+    repeated: HashSet<SimpleEnum>,
+    #[serde(flatten)]
+    nested: NestedConfig,
+}
+
+fn wrap_into_value(env: Environment) -> ValueWithOrigin {
+    ValueWithOrigin {
+        inner: Value::Object(env.into_map()),
+        origin: Arc::default(),
+    }
+}
+
+#[test]
+fn parsing() {
+    let env = Environment::from_iter(
+        "",
+        [
+            ("int".to_owned(), "1".to_owned()),
+            ("bool".to_owned(), "true".to_owned()),
+            ("string".to_owned(), "??".to_owned()),
+            ("array".to_owned(), "1,2,3".to_owned()),
+            ("renamed".to_owned(), "first".to_owned()),
+            ("repeated".to_owned(), "second,first".to_owned()),
+        ],
+    );
+    let env = wrap_into_value(env);
+
+    let config = TestConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    assert_eq!(config.int, 1);
+    assert_eq!(config.optional, None);
+    assert!(config.bool);
+    assert_eq!(config.string, "??");
+    assert_eq!(config.array, [1, 2, 3]);
+    assert_eq!(
+        config.repeated,
+        HashSet::from([SimpleEnum::First, SimpleEnum::Second])
+    );
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 42);
+}
+
+#[test]
+fn parsing_errors() {
+    let env = Environment::from_iter(
+        "",
+        [
+            ("renamed".to_owned(), "first".to_owned()),
+            ("other_int".to_owned(), "what".to_owned()),
+        ],
+    );
+    let err = NestedConfig::deserialize(ValueDeserializer::new(&wrap_into_value(env))).unwrap_err();
+
+    assert!(err.inner.to_string().contains("u32 value 'what'"), "{err}");
+    assert_matches!(
+        err.origin.as_ref().unwrap().as_ref(),
+        ValueOrigin::EnvVar(name) if name == "other_int"
+    );
+}
+
+#[derive(Debug, Deserialize, DescribeConfig)]
+#[config(crate = crate)]
+struct ConfigWithNesting {
+    value: u32,
+    #[serde(default)]
+    not_merged: String,
+    #[config(nested)]
+    nested: NestedConfig,
+}
+
+#[test]
+fn nesting_json() {
+    let env = Environment::from_iter(
+        "",
+        [
+            ("value".to_owned(), "123".to_owned()),
+            ("nested_renamed".to_owned(), "first".to_owned()),
+            ("nested_other_int".to_owned(), "321".to_owned()),
+        ],
+    );
+
+    let schema = ConfigSchema::default().insert::<ConfigWithNesting>("");
+    let map = ConfigRepository::from(env).parser(&schema).unwrap().map;
+
+    assert_eq!(
+        map.get(Pointer("value")).unwrap().inner,
+        Value::Number(123_u64.into())
+    );
+    assert_eq!(
+        map.get(Pointer("nested.renamed")).unwrap().inner,
+        Value::String("first".to_owned())
+    );
+    assert_eq!(
+        map.get(Pointer("nested.other_int")).unwrap().inner,
+        Value::Number(321_u64.into())
+    );
+
+    let config = ConfigWithNesting::deserialize(ValueDeserializer::new(&map)).unwrap();
+    assert_eq!(config.value, 123);
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 321);
+}
+
+#[test]
+fn merging_config_parts() {
+    let env = Environment::from_iter(
+        "",
+        [
+            ("deprecated_value".to_owned(), "4".to_owned()),
+            ("nested_renamed".to_owned(), "first".to_owned()),
+        ],
+    );
+
+    let alias = Alias::prefix("deprecated").exclude(|name| name == "not_merged");
+    let mut schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("", [alias]);
+    schema
+        .single_mut::<NestedConfig>()
+        .unwrap()
+        .push_alias(Alias::prefix("deprecated"));
+
+    let config: ConfigWithNesting = ConfigRepository::from(env)
+        .parser(&schema)
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(config.value, 4);
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 42);
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("value".to_owned(), "123".to_owned()),
+            ("deprecated_value".to_owned(), "4".to_owned()),
+            ("nested_renamed".to_owned(), "first".to_owned()),
+            ("deprecated_other_int".to_owned(), "321".to_owned()),
+            ("deprecated_not_merged".to_owned(), "!".to_owned()),
+        ],
+    );
+
+    let config: ConfigWithNesting = ConfigRepository::from(env)
+        .parser(&schema)
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(config.value, 123);
+    assert_eq!(config.not_merged, "");
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 321);
+}
