@@ -109,6 +109,7 @@ impl ConfigRepository {
             for alias in &config_data.aliases {
                 map.merge_alias(prefix, alias);
             }
+
             if let Some(config_map) = map.get_mut(prefix) {
                 config_map.normalize_value_types(config_data.metadata);
             };
@@ -379,7 +380,7 @@ mod tests {
 
         assert_eq!(
             map.get(Pointer("value")).unwrap().inner,
-            Value::String("123".to_owned())
+            Value::Number(123_u64.into())
         );
         assert_eq!(
             map.get(Pointer("nested.renamed")).unwrap().inner,
@@ -387,19 +388,8 @@ mod tests {
         );
         assert_eq!(
             map.get(Pointer("nested.other_int")).unwrap().inner,
-            Value::String("321".to_owned())
+            Value::Number(321_u64.into())
         );
-
-        let Value::Object(global) = &map.inner else {
-            panic!("unexpected map: {map:#?}");
-        };
-        let nested = &global["nested"];
-        let Value::Object(nested) = &nested.inner else {
-            panic!("unexpected nested value: {nested:#?}");
-        };
-
-        assert_eq!(nested["renamed"].inner, Value::String("first".into()));
-        assert_eq!(nested["other_int"].inner, Value::String("321".into()));
 
         let config = ConfigWithNesting::deserialize(map).unwrap();
         assert_eq!(config.value, 123);
@@ -418,7 +408,12 @@ mod tests {
         );
 
         let alias = Alias::prefix("deprecated").exclude(|name| name == "not_merged");
-        let schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("", [alias]);
+        let mut schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("", [alias]);
+        schema
+            .single_mut::<NestedConfig>()
+            .unwrap()
+            .push_alias(Alias::prefix("deprecated"));
+
         let config: ConfigWithNesting = ConfigRepository::from(env)
             .parser(&schema)
             .unwrap()

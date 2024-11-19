@@ -8,6 +8,7 @@ use std::{
     marker::PhantomData,
 };
 
+use anyhow::Context;
 use serde::de::DeserializeOwned;
 
 use crate::{
@@ -89,6 +90,30 @@ impl<'a> ConfigRef<'a> {
     }
 }
 
+/// Mutable reference to a specific configuration inside [`ConfigSchema`].
+pub struct ConfigMut<'a, C> {
+    prefix: String,
+    pub(crate) data: &'a mut ConfigData,
+    _config: PhantomData<C>,
+}
+
+impl<'a, C: DescribeConfig> ConfigMut<'a, C> {
+    // Gets the config prefix.
+    pub fn prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    /// Iterates over all aliases for this config.
+    pub fn aliases(&self) -> impl Iterator<Item = &Alias<()>> + '_ {
+        self.data.aliases.iter()
+    }
+
+    /// Pushes an additional alias for the config.
+    pub fn push_alias(&mut self, alias: Alias<C>) {
+        self.data.aliases.push(alias.drop_type_param());
+    }
+}
+
 /// Schema for configuration. Can contain multiple configs bound to different "locations".
 #[derive(Default, Debug)]
 pub struct ConfigSchema {
@@ -118,6 +143,11 @@ impl ConfigSchema {
         })
     }
 
+    /// Returns a single reference to the specified config.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the configuration is not registered or has more than one mount point.
     pub fn single(&self, metadata: &'static ConfigMetadata) -> anyhow::Result<ConfigRef<'_>> {
         let prefixes: Vec<_> = self.locate(metadata).take(2).collect();
         match prefixes.as_slice() {
@@ -137,6 +167,39 @@ impl ConfigSchema {
                 metadata.ty.name_in_code()
             ),
             _ => unreachable!(),
+        }
+    }
+
+    /// Returns a single mutable reference to the specified config.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the configuration is not registered or has more than one mount point.
+    pub fn single_mut<C: DescribeConfig>(&mut self) -> anyhow::Result<ConfigMut<'_, C>> {
+        let metadata = C::describe_config();
+        let mut it = self.locate(metadata);
+        let first_prefix = it.next().with_context(|| {
+            format!(
+                "configuration `{}` is not registered in schema",
+                metadata.ty.name_in_code()
+            )
+        })?;
+        if let Some(second_prefix) = it.next() {
+            anyhow::bail!(
+                "configuration `{}` is registered in at least 2 locations: {first_prefix:?}, {second_prefix:?}",
+                metadata.ty.name_in_code()
+            );
+        } else {
+            drop(it);
+            let prefix = first_prefix.to_owned();
+            Ok(ConfigMut {
+                data: self
+                    .configs
+                    .get_mut(&(metadata.ty.id(), prefix.clone().into()))
+                    .unwrap(),
+                prefix,
+                _config: PhantomData,
+            })
         }
     }
 
