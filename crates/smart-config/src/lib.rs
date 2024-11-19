@@ -2,6 +2,6 @@ pub mod metadata;
 mod parsing;
 mod schema;
 mod source;
-mod value;
+pub mod value;
 
-pub use self::source::{ConfigRepository, Environment, Json};
+pub use self::source::{ConfigRepository, ConfigSource, Environment, Json, KeyValueMap};

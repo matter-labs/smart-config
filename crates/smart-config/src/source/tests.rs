@@ -40,9 +40,22 @@ struct TestConfig {
     nested: NestedConfig,
 }
 
-fn wrap_into_value(env: Environment) -> ValueWithOrigin {
-    ValueWithOrigin {
-        inner: Value::Object(env.into_map()),
+fn wrap_into_value(env: Environment) -> WithOrigin {
+    let ConfigContents::KeyValue(map) = env.into_contents() else {
+        unreachable!();
+    };
+    let map = map.into_iter().map(|(key, value)| {
+        (
+            key,
+            WithOrigin {
+                inner: Value::String(value.inner),
+                origin: value.origin,
+            },
+        )
+    });
+
+    WithOrigin {
+        inner: Value::Object(map.collect()),
         origin: Arc::default(),
     }
 }
@@ -214,9 +227,7 @@ fn merging_configs() {
     };
     let overrides = Json::new(json, "overrides.json");
 
-    let repo = ConfigRepository::default()
-        .with_json(base)
-        .with_json(overrides);
+    let repo = ConfigRepository::default().with(base).with(overrides);
 
     assert_eq!(repo.object["int"].inner, Value::Number(123_u64.into()));
     assert_matches!(
@@ -274,7 +285,7 @@ fn using_aliases_with_object_config() {
         unreachable!();
     };
     let base = Json::new(json, "base.json");
-    let repo = ConfigRepository::default().with_json(base);
+    let repo = ConfigRepository::from(base);
 
     let config: ConfigWithNesting = repo.clone().parser(&schema).unwrap().parse().unwrap();
     assert_eq!(config.value, 321);
@@ -298,7 +309,7 @@ fn using_env_config_overrides() {
         unreachable!();
     };
     let base = Json::new(json, "base.json");
-    let mut repo = ConfigRepository::default().with_json(base);
+    let mut repo = ConfigRepository::from(base);
 
     let config: ConfigWithNesting = repo.clone().parser(&schema).unwrap().parse().unwrap();
     assert_eq!(config.value, 321);
@@ -312,7 +323,7 @@ fn using_env_config_overrides() {
             ("TEST_NESTED_RENAMED", "second"),
         ],
     );
-    repo = repo.with_env(env);
+    repo = repo.with(env);
 
     let parser = repo.clone().parser(&schema).unwrap();
     let enum_value = parser.map().get(Pointer("test.nested.renamed")).unwrap();
@@ -324,7 +335,7 @@ fn using_env_config_overrides() {
     assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
 
     let env = Environment::from_iter("", [("TEST_VALUE", "555")]);
-    repo = repo.with_env(env);
+    repo = repo.with(env);
 
     let parser = repo.parser(&schema).unwrap();
     let int_value = parser.map().get(Pointer("test.value")).unwrap();

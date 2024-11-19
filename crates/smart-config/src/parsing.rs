@@ -8,7 +8,7 @@ use serde::de::{
     DeserializeSeed, Error as DeError, IntoDeserializer,
 };
 
-use crate::value::{Value, ValueOrigin, ValueWithOrigin};
+use crate::value::{Value, ValueOrigin, WithOrigin};
 
 #[derive(Debug)]
 pub(crate) struct ParseError {
@@ -81,7 +81,7 @@ macro_rules! parse_int_value {
 }
 
 fn parse_array<'de, V: de::Visitor<'de>>(
-    array: &[ValueWithOrigin],
+    array: &[WithOrigin],
     visitor: V,
     origin: &Arc<ValueOrigin>,
 ) -> Result<V::Value, ParseError> {
@@ -95,7 +95,7 @@ fn parse_array<'de, V: de::Visitor<'de>>(
 }
 
 fn parse_object<'de, V: de::Visitor<'de>>(
-    object: &HashMap<String, ValueWithOrigin>,
+    object: &HashMap<String, WithOrigin>,
     visitor: V,
     origin: &Arc<ValueOrigin>,
 ) -> Result<V::Value, ParseError> {
@@ -113,12 +113,12 @@ fn parse_object<'de, V: de::Visitor<'de>>(
 
 #[derive(Debug)]
 pub(crate) struct ValueDeserializer<'a> {
-    value: &'a ValueWithOrigin,
+    value: &'a WithOrigin,
     // TODO: options, e.g. mapping variants?
 }
 
 impl<'a> ValueDeserializer<'a> {
-    pub fn new(value: &'a ValueWithOrigin) -> Self {
+    pub fn new(value: &'a WithOrigin) -> Self {
         Self { value }
     }
 
@@ -185,7 +185,7 @@ impl<'de> de::Deserializer<'de> for ValueDeserializer<'_> {
                 if s.is_empty() {
                     SeqDeserializer::new(empty::<Self>()).deserialize_seq(visitor)
                 } else {
-                    let items = s.split(',').map(|item| ValueWithOrigin {
+                    let items = s.split(',').map(|item| WithOrigin {
                         inner: Value::String(item.to_owned()),
                         origin: origin.clone(),
                     });
@@ -357,7 +357,7 @@ impl<'de> IntoDeserializer<'de, ParseError> for ValueDeserializer<'_> {
 #[derive(Debug)]
 struct EnumDeserializer<'a> {
     variant: &'a str,
-    value: Option<&'a ValueWithOrigin>,
+    value: Option<&'a WithOrigin>,
 }
 
 impl<'a, 'de> de::EnumAccess<'de> for EnumDeserializer<'a> {
@@ -375,7 +375,7 @@ impl<'a, 'de> de::EnumAccess<'de> for EnumDeserializer<'a> {
 }
 
 #[derive(Debug)]
-struct VariantDeserializer<'a>(Option<&'a ValueWithOrigin>);
+struct VariantDeserializer<'a>(Option<&'a WithOrigin>);
 
 impl<'de> de::VariantAccess<'de> for VariantDeserializer<'_> {
     type Error = ParseError;

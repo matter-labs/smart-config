@@ -1,20 +1,39 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, mem, sync::Arc};
 
 use anyhow::Context as _;
 use serde::de::DeserializeOwned;
 
-pub use self::{env::Environment, json::Json};
+pub use self::{
+    env::{Environment, KeyValueMap},
+    json::Json,
+};
 use crate::{
     metadata::{ConfigMetadata, DescribeConfig, TypeKind},
     parsing::ValueDeserializer,
     schema::{Alias, ConfigSchema},
-    value::{Map, Pointer, Value, ValueOrigin, ValueWithOrigin},
+    value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
 };
 
 mod env;
 mod json;
 #[cfg(test)]
 mod tests;
+
+/// Contents of a [`ConfigSource`].
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ConfigContents {
+    /// Key–value / flat configuration.
+    KeyValue(Map<String>),
+    /// Hierarchical configuration.
+    Hierarchical(Map),
+}
+
+/// Source of configuration parameters that can be added to a [`ConfigRepository`].
+pub trait ConfigSource {
+    /// Converts this source into config contents.
+    fn into_contents(self) -> ConfigContents;
+}
 
 /// Configuration repository containing zero or more configuration sources.
 #[derive(Debug, Clone, Default)]
@@ -23,33 +42,40 @@ pub struct ConfigRepository {
     object: Map,
     /// Key-value part of the config that requires pre-processing.
     // TODO: rn, it always has higher priority than `object`; document this or change
-    env: Environment,
+    key_value_map: Map<String>,
 }
 
-impl From<Environment> for ConfigRepository {
-    fn from(env: Environment) -> Self {
+impl<S: ConfigSource> From<S> for ConfigRepository {
+    fn from(source: S) -> Self {
+        let (object, key_value_map) = match source.into_contents() {
+            ConfigContents::Hierarchical(object) => (object, Map::default()),
+            ConfigContents::KeyValue(kv) => (Map::default(), kv),
+        };
+
         Self {
-            object: Map::default(),
-            env,
+            object,
+            key_value_map,
         }
     }
 }
 
 impl ConfigRepository {
     /// Extends this environment with environment variables / key-value map.
-    pub fn with_env(mut self, env: Environment) -> Self {
-        self.env.extend(env);
-        self
-    }
-
-    pub fn with_json(mut self, json: Json) -> Self {
-        ValueWithOrigin::merge_into_map(&mut self.object, json.inner);
+    pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
+        match source.into_contents() {
+            ConfigContents::KeyValue(kv) => {
+                self.key_value_map.extend(kv);
+            }
+            ConfigContents::Hierarchical(map) => {
+                WithOrigin::merge_into_map(&mut self.object, map);
+            }
+        }
         self
     }
 
     pub fn parser(mut self, schema: &ConfigSchema) -> anyhow::Result<ConfigParser<'_>> {
-        let synthetic_origin = Arc::new(ValueOrigin::SyntheticObject);
-        let mut map = ValueWithOrigin {
+        let synthetic_origin = Arc::<ValueOrigin>::default();
+        let mut map = WithOrigin {
             inner: Value::Object(self.object),
             origin: synthetic_origin.clone(),
         };
@@ -63,7 +89,7 @@ impl ConfigRepository {
             map.ensure_object(object_ptr, &synthetic_origin)?;
         }
         for &object_ptr in all_objects.iter().rev() {
-            map.copy_key_value_entries(object_ptr, &mut self.env);
+            map.copy_key_value_entries(object_ptr, &mut self.key_value_map);
         }
 
         for (prefix, config_data) in schema.iter() {
@@ -84,12 +110,12 @@ impl ConfigRepository {
 #[derive(Debug)]
 pub struct ConfigParser<'a> {
     schema: &'a ConfigSchema,
-    map: ValueWithOrigin,
+    map: WithOrigin,
 }
 
 impl ConfigParser<'_> {
     #[cfg(test)]
-    pub(crate) fn map(&self) -> &ValueWithOrigin {
+    pub(crate) fn map(&self) -> &WithOrigin {
         &self.map
     }
 
@@ -126,7 +152,7 @@ impl ConfigParser<'_> {
     }
 }
 
-impl ValueWithOrigin {
+impl WithOrigin {
     /// Ensures that there is an object (possibly empty) at the specified location. Returns an error
     /// if the locations contains anything other than an object.
     fn ensure_object(
@@ -146,7 +172,7 @@ impl ValueWithOrigin {
         if !map.contains_key(last_segment) {
             map.insert(
                 last_segment.to_owned(),
-                ValueWithOrigin {
+                WithOrigin {
                     inner: Value::Object(Map::new()),
                     origin: synthetic_origin.clone(),
                 },
@@ -155,12 +181,50 @@ impl ValueWithOrigin {
         Ok(())
     }
 
-    fn copy_key_value_entries(&mut self, at: Pointer<'_>, entries: &mut Environment) {
+    fn copy_key_value_entries(&mut self, at: Pointer<'_>, entries: &mut Map<String>) {
         let Value::Object(map) = &mut self.get_mut(at).unwrap().inner else {
             unreachable!("expected object at {at:?}"); // Should be ensured by calling `ensure_object()`
         };
-        let matching_entries = entries.take_matching_entries(at);
+        let matching_entries =
+            Self::take_matching_kv_entries(entries, at)
+                .into_iter()
+                .map(|(key, value)| {
+                    (
+                        key,
+                        WithOrigin {
+                            inner: Value::String(value.inner),
+                            origin: value.origin,
+                        },
+                    )
+                });
         map.extend(matching_entries);
+    }
+
+    fn take_matching_kv_entries(
+        from: &mut Map<String>,
+        prefix: Pointer,
+    ) -> Vec<(String, WithOrigin<String>)> {
+        let mut matching_entries = vec![];
+        let env_prefix = Self::kv_prefix(prefix.0);
+        from.retain(|name, value| {
+            if let Some(name_suffix) = name.strip_prefix(&env_prefix) {
+                let value = mem::take(value);
+                matching_entries.push((name_suffix.to_owned(), value));
+                false
+            } else {
+                true
+            }
+        });
+        matching_entries
+    }
+
+    /// Converts a logical prefix like `api.limits` to `api_limits_`.
+    fn kv_prefix(prefix: &str) -> String {
+        let mut prefix = prefix.replace('.', "_");
+        if !prefix.is_empty() && !prefix.ends_with('_') {
+            prefix.push('_');
+        }
+        prefix
     }
 
     fn merge_alias(&mut self, target_prefix: Pointer<'_>, alias: &Alias<()>) {

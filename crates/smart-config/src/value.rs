@@ -3,11 +3,15 @@
 use std::{collections::HashMap, fmt, iter, sync::Arc};
 
 #[derive(Debug, Default)]
-pub(crate) enum ValueOrigin {
+#[non_exhaustive]
+pub enum ValueOrigin {
     #[default]
     Unknown,
-    SyntheticObject,
     EnvVar(String),
+    Map {
+        map_name: Arc<str>,
+        key: String,
+    },
     Json {
         filename: Arc<str>,
         path: String,
@@ -18,9 +22,8 @@ impl fmt::Display for ValueOrigin {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unknown => formatter.write_str("unknown"),
-            Self::SyntheticObject => formatter
-                .write_str("synthetic object (configuration mounting point or its ancestor)"),
             Self::EnvVar(name) => write!(formatter, "env variable '{name}'"),
+            Self::Map { map_name, key } => write!(formatter, "value '{key}' from {map_name}"),
             Self::Json { filename, path } => {
                 write!(formatter, "variable at {path} in JSON file '{filename}'")
             }
@@ -28,39 +31,36 @@ impl fmt::Display for ValueOrigin {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Value {
+/// JSON value with additional origin information.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum Value {
+    #[default]
     Null,
     Bool(bool),
     Number(serde_json::Number),
     String(String),
-    Array(Vec<ValueWithOrigin>),
+    Array(Vec<WithOrigin>),
     Object(Map),
 }
 
-pub(crate) type Map = HashMap<String, ValueWithOrigin>;
+/// JSON object.
+pub type Map<V = Value> = HashMap<String, WithOrigin<V>>;
 
-#[derive(Debug, Clone)]
-pub(crate) struct ValueWithOrigin {
-    pub inner: Value,
+/// JSON value together with its origin.
+#[derive(Debug, Clone, Default)]
+pub struct WithOrigin<T = Value> {
+    pub inner: T,
     pub origin: Arc<ValueOrigin>,
 }
 
-impl PartialEq for ValueWithOrigin {
+impl PartialEq for WithOrigin {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
-impl ValueWithOrigin {
-    pub fn empty() -> Self {
-        Self {
-            inner: Value::Null,
-            origin: Arc::default(),
-        }
-    }
-
-    pub fn get(&self, pointer: Pointer) -> Option<&Self> {
+impl WithOrigin {
+    pub(crate) fn get(&self, pointer: Pointer) -> Option<&Self> {
         pointer
             .segments()
             .try_fold(self, |ptr, segment| match &ptr.inner {
@@ -70,7 +70,7 @@ impl ValueWithOrigin {
             })
     }
 
-    pub fn get_mut(&mut self, pointer: Pointer) -> Option<&mut Self> {
+    pub(crate) fn get_mut(&mut self, pointer: Pointer) -> Option<&mut Self> {
         pointer
             .segments()
             .try_fold(self, |ptr, segment| match &mut ptr.inner {
@@ -81,7 +81,7 @@ impl ValueWithOrigin {
     }
 
     /// Only objects are meaningfully merged; all other values are replaced.
-    pub fn merge(&mut self, other: Self) {
+    pub(crate) fn merge(&mut self, other: Self) {
         match (&mut self.inner, other.inner) {
             (Value::Object(this), Value::Object(other)) => {
                 Self::merge_into_map(this, other);
@@ -93,7 +93,7 @@ impl ValueWithOrigin {
         }
     }
 
-    pub fn merge_into_map(dest: &mut Map, source: Map) {
+    pub(crate) fn merge_into_map(dest: &mut Map, source: Map) {
         for (key, value) in source {
             if let Some(existing_value) = dest.get_mut(&key) {
                 existing_value.merge(value);

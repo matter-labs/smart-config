@@ -1,11 +1,14 @@
-use std::{collections::HashMap, env, mem, sync::Arc};
+use std::{env, sync::Arc};
 
-use crate::value::{Pointer, Value, ValueOrigin, ValueWithOrigin};
+use super::{ConfigContents, ConfigSource};
+use crate::value::{Map, ValueOrigin, WithOrigin};
 
-/// A key-value configuration source (e.g., environment variables).
+/// Configuration sourced from environment variables.
+///
+/// Use [`KeyValueMap`] for string key–value entries that are not env variables (e.g., command-line args).
 #[derive(Debug, Clone, Default)]
 pub struct Environment {
-    map: HashMap<String, ValueWithOrigin>,
+    map: Map<String>,
 }
 
 impl Environment {
@@ -24,8 +27,8 @@ impl Environment {
             let retained_name = name.as_ref().strip_prefix(prefix)?.to_lowercase();
             Some((
                 retained_name,
-                ValueWithOrigin {
-                    inner: Value::String(value.into()),
+                WithOrigin {
+                    inner: value.into(),
                     origin: Arc::new(ValueOrigin::EnvVar(name.into())),
                 },
             ))
@@ -39,8 +42,8 @@ impl Environment {
             let value = env::var_os(name)?.into_string().ok()?;
             Some((
                 name.to_owned(),
-                ValueWithOrigin {
-                    inner: Value::String(value),
+                WithOrigin {
+                    inner: value,
                     origin: Arc::new(ValueOrigin::EnvVar(name.to_owned())),
                 },
             ))
@@ -48,40 +51,48 @@ impl Environment {
         self.map.extend(defined_vars);
         self
     }
+}
 
-    /// Converts a logical prefix like `api.limits` to `API_LIMITS_`.
-    fn env_prefix(prefix: &str) -> String {
-        let mut prefix = prefix.replace('.', "_");
-        if !prefix.is_empty() && !prefix.ends_with('_') {
-            prefix.push('_');
-        }
-        prefix
+impl ConfigSource for Environment {
+    fn into_contents(self) -> ConfigContents {
+        ConfigContents::KeyValue(self.map)
     }
+}
 
-    pub(super) fn take_matching_entries(
-        &mut self,
-        prefix: Pointer,
-    ) -> Vec<(String, ValueWithOrigin)> {
-        let mut matching_entries = vec![];
-        let env_prefix = Self::env_prefix(prefix.0);
-        self.map.retain(|name, value| {
-            if let Some(name_suffix) = name.strip_prefix(&env_prefix) {
-                let value = mem::replace(value, ValueWithOrigin::empty());
-                matching_entries.push((name_suffix.to_owned(), value));
-                false
-            } else {
-                true
-            }
-        });
-        matching_entries
+/// Generic key–value configuration source.
+#[derive(Debug)]
+pub struct KeyValueMap {
+    map: Map<String>,
+}
+
+impl KeyValueMap {
+    /// Creates a new key–value map with the specified name and contents.
+    pub fn new<K, V>(name: &str, entries: impl IntoIterator<Item = (K, V)>) -> Self
+    where
+        K: Into<String>,
+        V: Into<String>,
+    {
+        let map_name: Arc<str> = name.into();
+        let map = entries
+            .into_iter()
+            .map(|(key, value)| {
+                let key = key.into();
+                let value = WithOrigin {
+                    inner: value.into(),
+                    origin: Arc::new(ValueOrigin::Map {
+                        map_name: map_name.clone(),
+                        key: key.clone(),
+                    }),
+                };
+                (key, value)
+            })
+            .collect();
+        Self { map }
     }
+}
 
-    pub(super) fn extend(&mut self, other: Self) {
-        self.map.extend(other.map);
-    }
-
-    #[cfg(test)]
-    pub(super) fn into_map(self) -> HashMap<String, ValueWithOrigin> {
-        self.map
+impl ConfigSource for KeyValueMap {
+    fn into_contents(self) -> ConfigContents {
+        ConfigContents::KeyValue(self.map)
     }
 }

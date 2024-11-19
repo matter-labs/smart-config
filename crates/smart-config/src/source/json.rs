@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use crate::value::{Map, Pointer, Value, ValueOrigin, ValueWithOrigin};
+use super::{ConfigContents, ConfigSource};
+use crate::value::{Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// JSON-based configuration source.
 #[derive(Debug)]
@@ -19,7 +20,7 @@ impl Json {
         Self { inner }
     }
 
-    fn map_value(value: serde_json::Value, filename: &Arc<str>, path: String) -> ValueWithOrigin {
+    fn map_value(value: serde_json::Value, filename: &Arc<str>, path: String) -> WithOrigin {
         let inner = match value {
             serde_json::Value::Bool(value) => Value::Bool(value),
             serde_json::Value::Number(value) => Value::Number(value),
@@ -46,13 +47,19 @@ impl Json {
             ),
         };
 
-        ValueWithOrigin {
+        WithOrigin {
             inner,
             origin: Arc::new(ValueOrigin::Json {
                 filename: filename.clone(),
                 path,
             }),
         }
+    }
+}
+
+impl ConfigSource for Json {
+    fn into_contents(self) -> ConfigContents {
+        ConfigContents::Hierarchical(self.inner)
     }
 }
 
