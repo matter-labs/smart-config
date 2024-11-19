@@ -10,30 +10,6 @@ use serde::de::{
 
 use crate::value::{Value, ValueOrigin, ValueWithOrigin};
 
-impl ValueWithOrigin {
-    fn invalid_type(&self, expected: &str) -> ParseError {
-        let actual = match &self.inner {
-            Value::Null => de::Unexpected::Unit,
-            Value::Bool(value) => de::Unexpected::Bool(*value),
-            Value::Number(value) => {
-                if let Some(value) = value.as_u64() {
-                    de::Unexpected::Unsigned(value)
-                } else if let Some(value) = value.as_i64() {
-                    de::Unexpected::Signed(value)
-                } else if let Some(value) = value.as_f64() {
-                    de::Unexpected::Float(value)
-                } else {
-                    de::Unexpected::Other("number")
-                }
-            }
-            Value::String(s) => de::Unexpected::Str(s),
-            Value::Array(_) => de::Unexpected::Seq,
-            Value::Object(_) => de::Unexpected::Map,
-        };
-        ParseError::invalid_type(actual, &expected)
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct ParseError {
     pub inner: serde_json::Error,
@@ -82,19 +58,20 @@ macro_rules! parse_int_value {
     ($($ty:ident => $method:ident,)*) => {
         $(
         fn $method<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-            match &self.inner {
+            let origin = &self.value.origin;
+            match &self.value.inner {
                 Value::String(s) => {
                     match s.parse::<$ty>() {
                         Ok(val) => val.into_deserializer().$method(visitor),
                         Err(err) => {
                             let err = ParseError::custom(format_args!("{err} while parsing {} value '{s}'", stringify!($ty)));
-                            Err(err.with_origin(&self.origin))
+                            Err(err.with_origin(origin))
                         }
                     }
                 }
                 Value::Number(number) => number.deserialize_any(visitor).map_err(|err| ParseError {
                     inner: err,
-                    origin: Some(self.origin.clone()),
+                    origin: Some(origin.clone()),
                 }),
                 _ => Err(self.invalid_type(&format!("{} number", stringify!($ty))))
             }
@@ -104,11 +81,12 @@ macro_rules! parse_int_value {
 }
 
 fn parse_array<'de, V: de::Visitor<'de>>(
-    array: Vec<ValueWithOrigin>,
+    array: &[ValueWithOrigin],
     visitor: V,
     origin: &Arc<ValueOrigin>,
 ) -> Result<V::Value, ParseError> {
-    let mut deserializer = SeqDeserializer::new(array.into_iter());
+    let mut deserializer =
+        SeqDeserializer::new(array.iter().map(|value| ValueDeserializer { value }));
     let seq = visitor
         .visit_seq(&mut deserializer)
         .map_err(|err| err.with_origin(origin))?;
@@ -117,11 +95,15 @@ fn parse_array<'de, V: de::Visitor<'de>>(
 }
 
 fn parse_object<'de, V: de::Visitor<'de>>(
-    object: HashMap<String, ValueWithOrigin>,
+    object: &HashMap<String, ValueWithOrigin>,
     visitor: V,
     origin: &Arc<ValueOrigin>,
 ) -> Result<V::Value, ParseError> {
-    let mut deserializer = MapDeserializer::new(object.into_iter());
+    let mut deserializer = MapDeserializer::new(
+        object
+            .iter()
+            .map(|(key, value)| (key.as_str(), ValueDeserializer { value })),
+    );
     let map = visitor
         .visit_map(&mut deserializer)
         .map_err(|err| err.with_origin(origin))?;
@@ -129,25 +111,60 @@ fn parse_object<'de, V: de::Visitor<'de>>(
     Ok(map)
 }
 
-impl<'de> de::Deserializer<'de> for ValueWithOrigin {
+#[derive(Debug)]
+pub(crate) struct ValueDeserializer<'a> {
+    value: &'a ValueWithOrigin,
+    // TODO: options, e.g. mapping variants?
+}
+
+impl<'a> ValueDeserializer<'a> {
+    pub fn new(value: &'a ValueWithOrigin) -> Self {
+        Self { value }
+    }
+
+    fn invalid_type(&self, expected: &str) -> ParseError {
+        let actual = match &self.value.inner {
+            Value::Null => de::Unexpected::Unit,
+            Value::Bool(value) => de::Unexpected::Bool(*value),
+            Value::Number(value) => {
+                if let Some(value) = value.as_u64() {
+                    de::Unexpected::Unsigned(value)
+                } else if let Some(value) = value.as_i64() {
+                    de::Unexpected::Signed(value)
+                } else if let Some(value) = value.as_f64() {
+                    de::Unexpected::Float(value)
+                } else {
+                    de::Unexpected::Other("number")
+                }
+            }
+            Value::String(s) => de::Unexpected::Str(s),
+            Value::Array(_) => de::Unexpected::Seq,
+            Value::Object(_) => de::Unexpected::Map,
+        };
+        ParseError::invalid_type(actual, &expected)
+    }
+}
+
+impl<'de> de::Deserializer<'de> for ValueDeserializer<'_> {
     type Error = ParseError;
 
     fn deserialize_any<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        match self.inner {
+        let origin = &self.value.origin;
+        match &self.value.inner {
             Value::Null => visitor.visit_none(),
-            Value::Bool(value) => visitor.visit_bool(value),
+            Value::Bool(value) => visitor.visit_bool(*value),
             Value::Number(value) => value.deserialize_any(visitor).map_err(|err| ParseError {
                 inner: err,
-                origin: Some(self.origin.clone()),
+                origin: Some(self.value.origin.clone()),
             }),
-            Value::String(value) => visitor.visit_string(value),
-            Value::Array(array) => parse_array(array, visitor, &self.origin),
-            Value::Object(object) => parse_object(object, visitor, &self.origin),
+            Value::String(value) => visitor.visit_str(value),
+            Value::Array(array) => parse_array(array, visitor, origin),
+            Value::Object(object) => parse_object(object, visitor, origin),
         }
     }
 
     fn deserialize_option<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        match self.inner {
+        match &self.value.inner {
             Value::Null => visitor.visit_none(),
             _ => visitor.visit_some(self),
         }
@@ -162,19 +179,22 @@ impl<'de> de::Deserializer<'de> for ValueWithOrigin {
     }
 
     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        match self.inner {
+        let origin = &self.value.origin;
+        match &self.value.inner {
             Value::String(s) => {
                 if s.is_empty() {
                     SeqDeserializer::new(empty::<Self>()).deserialize_seq(visitor)
                 } else {
-                    let items = s.split(',').map(|item| Self {
+                    let items = s.split(',').map(|item| ValueWithOrigin {
                         inner: Value::String(item.to_owned()),
-                        origin: self.origin.clone(),
+                        origin: origin.clone(),
                     });
+                    let items: Vec<_> = items.collect();
+                    let items = items.iter().map(|value| ValueDeserializer { value });
                     SeqDeserializer::new(items).deserialize_seq(visitor)
                 }
             }
-            Value::Array(array) => parse_array(array, visitor, &self.origin),
+            Value::Array(array) => parse_array(array, visitor, origin),
             _ => Err(self.invalid_type("array or comma-separated string")),
         }
     }
@@ -197,8 +217,8 @@ impl<'de> de::Deserializer<'de> for ValueWithOrigin {
     }
 
     fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        match self.inner {
-            Value::Object(object) => parse_object(object, visitor, &self.origin),
+        match &self.value.inner {
+            Value::Object(object) => parse_object(object, visitor, &self.value.origin),
             _ => Err(self.invalid_type("object")),
         }
     }
@@ -209,9 +229,10 @@ impl<'de> de::Deserializer<'de> for ValueWithOrigin {
         _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        match self.inner {
-            Value::Array(array) => parse_array(array, visitor, &self.origin),
-            Value::Object(object) => parse_object(object, visitor, &self.origin),
+        let origin = &self.value.origin;
+        match &self.value.inner {
+            Value::Array(array) => parse_array(array, visitor, origin),
+            Value::Object(object) => parse_object(object, visitor, origin),
             _ => Err(self.invalid_type("array or object")),
         }
     }
@@ -222,9 +243,9 @@ impl<'de> de::Deserializer<'de> for ValueWithOrigin {
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        let (variant, value) = match self.inner {
+        let (variant, value) = match &self.value.inner {
             Value::Object(object) if object.len() == 1 => {
-                let (variant, value) = object.into_iter().next().unwrap();
+                let (variant, value) = object.iter().next().unwrap();
                 (variant, Some(value))
             }
             Value::String(s) => (s, None),
@@ -236,13 +257,13 @@ impl<'de> de::Deserializer<'de> for ValueWithOrigin {
     // Primitive values
 
     fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        match self.inner {
-            Value::Bool(value) => visitor.visit_bool(value),
+        match &self.value.inner {
+            Value::Bool(value) => visitor.visit_bool(*value),
             Value::String(s) => match s.parse::<bool>() {
                 Ok(val) => visitor.visit_bool(val),
                 Err(err) => Err(de::Error::custom(format_args!(
                     "{err} while parsing value '{s}' at {:?}",
-                    self.origin
+                    self.value.origin
                 ))),
             },
             _ => Err(self.invalid_type("boolean or boolean-like string")),
@@ -263,8 +284,8 @@ impl<'de> de::Deserializer<'de> for ValueWithOrigin {
     }
 
     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        match self.inner {
-            Value::String(s) => visitor.visit_string(s),
+        match &self.value.inner {
+            Value::String(s) => visitor.visit_str(s),
             Value::Null => visitor.visit_string("null".to_string()),
             Value::Bool(value) => visitor.visit_string(value.to_string()),
             Value::Number(value) => visitor.visit_string(value.to_string()),
@@ -284,9 +305,9 @@ impl<'de> de::Deserializer<'de> for ValueWithOrigin {
         self,
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        match self.inner {
-            Value::String(s) => visitor.visit_string(s),
-            Value::Array(array) => parse_array(array, visitor, &self.origin),
+        match &self.value.inner {
+            Value::String(s) => visitor.visit_str(s),
+            Value::Array(array) => parse_array(array, visitor, &self.value.origin),
             _ => Err(self.invalid_type("string or array")),
         }
     }
@@ -303,7 +324,7 @@ impl<'de> de::Deserializer<'de> for ValueWithOrigin {
     }
 
     fn deserialize_unit<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        match self.inner {
+        match self.value.inner {
             Value::Null => visitor.visit_unit(),
             _ => Err(self.invalid_type("null")),
         }
@@ -321,12 +342,11 @@ impl<'de> de::Deserializer<'de> for ValueWithOrigin {
         self,
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        drop(self);
         visitor.visit_unit()
     }
 }
 
-impl<'de> IntoDeserializer<'de, ParseError> for ValueWithOrigin {
+impl<'de> IntoDeserializer<'de, ParseError> for ValueDeserializer<'_> {
     type Deserializer = Self;
 
     fn into_deserializer(self) -> Self::Deserializer {
@@ -335,14 +355,14 @@ impl<'de> IntoDeserializer<'de, ParseError> for ValueWithOrigin {
 }
 
 #[derive(Debug)]
-struct EnumDeserializer {
-    variant: String,
-    value: Option<ValueWithOrigin>,
+struct EnumDeserializer<'a> {
+    variant: &'a str,
+    value: Option<&'a ValueWithOrigin>,
 }
 
-impl<'de> de::EnumAccess<'de> for EnumDeserializer {
+impl<'a, 'de> de::EnumAccess<'de> for EnumDeserializer<'a> {
     type Error = ParseError;
-    type Variant = VariantDeserializer;
+    type Variant = VariantDeserializer<'a>;
 
     fn variant_seed<V: DeserializeSeed<'de>>(
         self,
@@ -355,14 +375,14 @@ impl<'de> de::EnumAccess<'de> for EnumDeserializer {
 }
 
 #[derive(Debug)]
-struct VariantDeserializer(Option<ValueWithOrigin>);
+struct VariantDeserializer<'a>(Option<&'a ValueWithOrigin>);
 
-impl<'de> de::VariantAccess<'de> for VariantDeserializer {
+impl<'de> de::VariantAccess<'de> for VariantDeserializer<'_> {
     type Error = ParseError;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
         match self.0 {
-            Some(value) => de::Deserialize::deserialize(value),
+            Some(value) => de::Deserialize::deserialize(ValueDeserializer { value }),
             None => Ok(()),
         }
     }
@@ -372,7 +392,7 @@ impl<'de> de::VariantAccess<'de> for VariantDeserializer {
         T: DeserializeSeed<'de>,
     {
         match self.0 {
-            Some(value) => seed.deserialize(value),
+            Some(value) => seed.deserialize(ValueDeserializer { value }),
             None => Err(de::Error::invalid_type(
                 de::Unexpected::UnitVariant,
                 &"newtype variant",
@@ -386,7 +406,7 @@ impl<'de> de::VariantAccess<'de> for VariantDeserializer {
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
         match self.0 {
-            Some(value) => de::Deserializer::deserialize_seq(value, visitor),
+            Some(value) => de::Deserializer::deserialize_seq(ValueDeserializer { value }, visitor),
             None => Err(de::Error::invalid_type(
                 de::Unexpected::UnitVariant,
                 &"tuple variant",
@@ -400,7 +420,7 @@ impl<'de> de::VariantAccess<'de> for VariantDeserializer {
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
         match self.0 {
-            Some(value) => de::Deserializer::deserialize_map(value, visitor),
+            Some(value) => de::Deserializer::deserialize_map(ValueDeserializer { value }, visitor),
             None => Err(de::Error::invalid_type(
                 de::Unexpected::UnitVariant,
                 &"struct variant",

@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     metadata::{ConfigMetadata, DescribeConfig, TypeKind},
+    parsing::ValueDeserializer,
     schema::{Alias, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, ValueWithOrigin},
 };
@@ -142,14 +143,14 @@ impl ConfigParser<'_> {
         let prefix = config_ref.prefix();
 
         // `unwrap()` is safe due to preparations when constructing the `Parser`; all config prefixes have objects
-        let config_map = self.map.get(Pointer(prefix)).unwrap().clone();
+        let config_map = self.map.get(Pointer(prefix)).unwrap();
         debug_assert!(
             matches!(&config_map.inner, Value::Object(_)),
             "Unexpected value at {prefix:?}: {config_map:?}"
         );
 
-        // FIXME: implement `Deserializer` for `&ValueWithOrigin`
-        C::deserialize(config_map)
+        let deserializer = ValueDeserializer::new(config_map);
+        C::deserialize(deserializer)
             .with_context(|| {
                 let summary = if let Some(header) = metadata.help_header() {
                     format!(" ({})", header.trim().to_lowercase())
@@ -322,7 +323,7 @@ mod tests {
         );
         let env = wrap_into_value(env);
 
-        let config = TestConfig::deserialize(env).unwrap();
+        let config = TestConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
         assert_eq!(config.int, 1);
         assert_eq!(config.optional, None);
         assert!(config.bool);
@@ -345,7 +346,8 @@ mod tests {
                 ("other_int".to_owned(), "what".to_owned()),
             ],
         );
-        let err = NestedConfig::deserialize(wrap_into_value(env)).unwrap_err();
+        let err =
+            NestedConfig::deserialize(ValueDeserializer::new(&wrap_into_value(env))).unwrap_err();
 
         assert!(err.inner.to_string().contains("u32 value 'what'"), "{err}");
         assert_matches!(
@@ -391,7 +393,7 @@ mod tests {
             Value::Number(321_u64.into())
         );
 
-        let config = ConfigWithNesting::deserialize(map).unwrap();
+        let config = ConfigWithNesting::deserialize(ValueDeserializer::new(&map)).unwrap();
         assert_eq!(config.value, 123);
         assert_eq!(config.nested.simple_enum, SimpleEnum::First);
         assert_eq!(config.nested.other_int, 321);
