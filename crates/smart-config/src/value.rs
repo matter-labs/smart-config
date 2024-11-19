@@ -16,6 +16,10 @@ pub enum ValueOrigin {
         filename: Arc<str>,
         path: String,
     },
+    Yaml {
+        filename: Arc<str>,
+        path: String,
+    },
 }
 
 impl fmt::Display for ValueOrigin {
@@ -26,6 +30,9 @@ impl fmt::Display for ValueOrigin {
             Self::Map { map_name, key } => write!(formatter, "value '{key}' from {map_name}"),
             Self::Json { filename, path } => {
                 write!(formatter, "variable at {path} in JSON file '{filename}'")
+            }
+            Self::Yaml { filename, path } => {
+                write!(formatter, "variable at {path} in YAML file '{filename}'")
             }
         }
     }

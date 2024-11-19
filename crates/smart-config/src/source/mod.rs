@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 pub use self::{
     env::{Environment, KeyValueMap},
     json::Json,
+    yaml::Yaml,
 };
 use crate::{
     metadata::{ConfigMetadata, DescribeConfig, TypeKind},
@@ -18,6 +19,7 @@ mod env;
 mod json;
 #[cfg(test)]
 mod tests;
+mod yaml;
 
 /// Contents of a [`ConfigSource`].
 #[derive(Debug)]

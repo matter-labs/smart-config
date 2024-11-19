@@ -6,11 +6,11 @@ use crate::value::{Map, Pointer, Value, ValueOrigin, WithOrigin};
 /// JSON-based configuration source.
 #[derive(Debug)]
 pub struct Json {
-    pub(super) inner: Map,
+    inner: Map,
 }
 
 impl Json {
-    pub fn new(object: serde_json::Map<String, serde_json::Value>, filename: &str) -> Self {
+    pub fn new(filename: &str, object: serde_json::Map<String, serde_json::Value>) -> Self {
         let filename: Arc<str> = filename.into();
         let inner =
             Self::map_value(serde_json::Value::Object(object), &filename, String::new()).inner;
@@ -81,7 +81,7 @@ mod tests {
         let serde_json::Value::Object(json) = json else {
             unreachable!();
         };
-        let json = Json::new(json, "test.json");
+        let json = Json::new("test.json", json);
 
         assert_eq!(json.inner["bool_value"].inner, Value::Bool(true));
         assert_matches!(

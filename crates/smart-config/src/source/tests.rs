@@ -212,7 +212,7 @@ fn merging_configs() {
     let serde_json::Value::Object(json) = json else {
         unreachable!();
     };
-    let base = Json::new(json, "base.json");
+    let base = Json::new("base.json", json);
 
     let json = serde_json::json!({
         "bool": false,
@@ -225,7 +225,7 @@ fn merging_configs() {
     let serde_json::Value::Object(json) = json else {
         unreachable!();
     };
-    let overrides = Json::new(json, "overrides.json");
+    let overrides = Json::new("overrides.json", json);
 
     let repo = ConfigRepository::default().with(base).with(overrides);
 
@@ -284,7 +284,7 @@ fn using_aliases_with_object_config() {
     let serde_json::Value::Object(json) = json else {
         unreachable!();
     };
-    let base = Json::new(json, "base.json");
+    let base = Json::new("base.json", json);
     let repo = ConfigRepository::from(base);
 
     let config: ConfigWithNesting = repo.clone().parser(&schema).unwrap().parse().unwrap();
@@ -308,7 +308,7 @@ fn using_env_config_overrides() {
     let serde_json::Value::Object(json) = json else {
         unreachable!();
     };
-    let base = Json::new(json, "base.json");
+    let base = Json::new("base.json", json);
     let mut repo = ConfigRepository::from(base);
 
     let config: ConfigWithNesting = repo.clone().parser(&schema).unwrap().parse().unwrap();
