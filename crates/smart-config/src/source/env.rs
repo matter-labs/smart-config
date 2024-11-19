@@ -3,7 +3,7 @@ use std::{collections::HashMap, env, mem, sync::Arc};
 use crate::value::{Pointer, Value, ValueOrigin, ValueWithOrigin};
 
 /// A key-value configuration source (e.g., environment variables).
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Environment {
     map: HashMap<String, ValueWithOrigin>,
 }

@@ -4,4 +4,4 @@ mod schema;
 mod source;
 mod value;
 
-pub use self::source::{ConfigRepository, Environment};
+pub use self::source::{ConfigRepository, Environment, Json};

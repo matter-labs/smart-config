@@ -184,3 +184,153 @@ fn merging_config_parts() {
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 321);
 }
+
+#[test]
+fn merging_configs() {
+    let json = serde_json::json!({
+        "int": 123,
+        "bool": true,
+        "array": [42, 23],
+        "nested": {
+            "int": 321,
+            "string": "???",
+        },
+    });
+    let serde_json::Value::Object(json) = json else {
+        unreachable!();
+    };
+    let base = Json::new(json, "base.json");
+
+    let json = serde_json::json!({
+        "bool": false,
+        "array": [23],
+        "nested": {
+            "int": 123,
+            "bool": true,
+        },
+    });
+    let serde_json::Value::Object(json) = json else {
+        unreachable!();
+    };
+    let overrides = Json::new(json, "overrides.json");
+
+    let repo = ConfigRepository::default()
+        .with_json(base)
+        .with_json(overrides);
+
+    assert_eq!(repo.object["int"].inner, Value::Number(123_u64.into()));
+    assert_matches!(
+        repo.object["int"].origin.as_ref(),
+        ValueOrigin::Json { filename, .. } if filename.as_ref() == "base.json"
+    );
+    assert_eq!(repo.object["bool"].inner, Value::Bool(false));
+    assert_matches!(
+        repo.object["bool"].origin.as_ref(),
+        ValueOrigin::Json { filename, .. } if filename.as_ref() == "overrides.json"
+    );
+    assert_matches!(
+        &repo.object["array"].inner,
+        Value::Array(items) if items.len() == 1
+    );
+    assert_matches!(
+        repo.object["array"].origin.as_ref(),
+        ValueOrigin::Json { filename, .. } if filename.as_ref() == "overrides.json"
+    );
+
+    assert_matches!(
+        &repo.object["nested"].inner,
+        Value::Object(items) if items.len() == 3
+    );
+    let nested_int = repo.object["nested"].get(Pointer("int")).unwrap();
+    assert_eq!(nested_int.inner, Value::Number(123_u64.into()));
+    assert_matches!(
+        nested_int.origin.as_ref(),
+        ValueOrigin::Json { filename, .. } if filename.as_ref() == "overrides.json"
+    );
+
+    let nested_str = repo.object["nested"].get(Pointer("string")).unwrap();
+    assert_eq!(nested_str.inner, Value::String("???".into()));
+    assert_matches!(
+        nested_str.origin.as_ref(),
+        ValueOrigin::Json { filename, .. } if filename.as_ref() == "base.json"
+    );
+}
+
+#[test]
+fn using_aliases_with_object_config() {
+    let alias = Alias::prefix("deprecated");
+    let schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("test", [alias]);
+
+    let json = serde_json::json!({
+        "value": 123, // should not be parsed
+        "deprecated": {
+            "value": 321,
+        },
+        "test": {
+            "nested": { "renamed": "first" },
+        }
+    });
+    let serde_json::Value::Object(json) = json else {
+        unreachable!();
+    };
+    let base = Json::new(json, "base.json");
+    let repo = ConfigRepository::default().with_json(base);
+
+    let config: ConfigWithNesting = repo.clone().parser(&schema).unwrap().parse().unwrap();
+    assert_eq!(config.value, 321);
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 42);
+}
+
+#[test]
+fn using_env_config_overrides() {
+    let alias = Alias::prefix("deprecated");
+    let schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("test", [alias]);
+
+    let json = serde_json::json!({
+        "value": 123, // should not be parsed
+        "test": {
+            "value": 321,
+            "nested": { "renamed": "first" },
+        }
+    });
+    let serde_json::Value::Object(json) = json else {
+        unreachable!();
+    };
+    let base = Json::new(json, "base.json");
+    let mut repo = ConfigRepository::default().with_json(base);
+
+    let config: ConfigWithNesting = repo.clone().parser(&schema).unwrap().parse().unwrap();
+    assert_eq!(config.value, 321);
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 42);
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("DEPRECATED_VALUE", "777"), // should not be used (aliases have lower priorities)
+            ("TEST_NESTED_RENAMED", "second"),
+        ],
+    );
+    repo = repo.with_env(env);
+
+    let parser = repo.clone().parser(&schema).unwrap();
+    let enum_value = parser.map().get(Pointer("test.nested.renamed")).unwrap();
+    assert_eq!(enum_value.inner, Value::String("second".into()));
+    assert_matches!(enum_value.origin.as_ref(), ValueOrigin::EnvVar(_));
+
+    let config: ConfigWithNesting = parser.parse().unwrap();
+    assert_eq!(config.value, 321);
+    assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
+
+    let env = Environment::from_iter("", [("TEST_VALUE", "555")]);
+    repo = repo.with_env(env);
+
+    let parser = repo.parser(&schema).unwrap();
+    let int_value = parser.map().get(Pointer("test.value")).unwrap();
+    assert_eq!(int_value.inner, Value::Number(555_u64.into()));
+
+    let config: ConfigWithNesting = parser.parse().unwrap();
+    assert_eq!(config.value, 555);
+    assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
+}

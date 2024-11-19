@@ -8,6 +8,10 @@ pub(crate) enum ValueOrigin {
     Unknown,
     SyntheticObject,
     EnvVar(String),
+    Json {
+        filename: Arc<str>,
+        path: String,
+    },
 }
 
 impl fmt::Display for ValueOrigin {
@@ -17,11 +21,13 @@ impl fmt::Display for ValueOrigin {
             Self::SyntheticObject => formatter
                 .write_str("synthetic object (configuration mounting point or its ancestor)"),
             Self::EnvVar(name) => write!(formatter, "env variable '{name}'"),
+            Self::Json { filename, path } => {
+                write!(formatter, "variable at {path} in JSON file '{filename}'")
+            }
         }
     }
 }
 
-#[allow(dead_code)] // FIXME: allow deserializing from JSON etc.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Value {
     Null,
@@ -72,6 +78,29 @@ impl ValueWithOrigin {
                 Value::Array(array) => array.get_mut(segment.parse::<usize>().ok()?),
                 _ => None,
             })
+    }
+
+    /// Only objects are meaningfully merged; all other values are replaced.
+    pub fn merge(&mut self, other: Self) {
+        match (&mut self.inner, other.inner) {
+            (Value::Object(this), Value::Object(other)) => {
+                Self::merge_into_map(this, other);
+            }
+            (this, value) => {
+                *this = value;
+                self.origin = other.origin;
+            }
+        }
+    }
+
+    pub fn merge_into_map(dest: &mut Map, source: Map) {
+        for (key, value) in source {
+            if let Some(existing_value) = dest.get_mut(&key) {
+                existing_value.merge(value);
+            } else {
+                dest.insert(key, value);
+            }
+        }
     }
 }
 

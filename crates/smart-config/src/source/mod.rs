@@ -3,7 +3,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use anyhow::Context as _;
 use serde::de::DeserializeOwned;
 
-pub use self::env::Environment;
+pub use self::{env::Environment, json::Json};
 use crate::{
     metadata::{ConfigMetadata, DescribeConfig, TypeKind},
     parsing::ValueDeserializer,
@@ -12,18 +12,26 @@ use crate::{
 };
 
 mod env;
+mod json;
 #[cfg(test)]
 mod tests;
 
 /// Configuration repository containing zero or more configuration sources.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ConfigRepository {
+    /// Hierarchical part of the configuration.
+    object: Map,
+    /// Key-value part of the config that requires pre-processing.
+    // TODO: rn, it always has higher priority than `object`; document this or change
     env: Environment,
 }
 
 impl From<Environment> for ConfigRepository {
     fn from(env: Environment) -> Self {
-        Self { env }
+        Self {
+            object: Map::default(),
+            env,
+        }
     }
 }
 
@@ -34,10 +42,15 @@ impl ConfigRepository {
         self
     }
 
+    pub fn with_json(mut self, json: Json) -> Self {
+        ValueWithOrigin::merge_into_map(&mut self.object, json.inner);
+        self
+    }
+
     pub fn parser(mut self, schema: &ConfigSchema) -> anyhow::Result<ConfigParser<'_>> {
         let synthetic_origin = Arc::new(ValueOrigin::SyntheticObject);
         let mut map = ValueWithOrigin {
-            inner: Value::Object(Map::new()),
+            inner: Value::Object(self.object),
             origin: synthetic_origin.clone(),
         };
 
