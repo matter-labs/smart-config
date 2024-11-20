@@ -4,30 +4,10 @@ use assert_matches::assert_matches;
 use serde::Deserialize;
 
 use super::*;
-use crate::schema::Alias;
-
-#[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum SimpleEnum {
-    First,
-    Second,
-}
-
-#[derive(Debug, Deserialize, DescribeConfig)]
-#[config(crate = crate)]
-struct NestedConfig {
-    #[serde(rename = "renamed")]
-    #[config(kind = TypeKind::String)]
-    simple_enum: SimpleEnum,
-    #[serde(default = "NestedConfig::default_other_int")]
-    other_int: u32,
-}
-
-impl NestedConfig {
-    const fn default_other_int() -> u32 {
-        42
-    }
-}
+use crate::{
+    schema::Alias,
+    testonly::{EnumConfig, NestedConfig, SimpleEnum},
+};
 
 #[derive(Debug, Deserialize)]
 struct TestConfig {
@@ -88,6 +68,79 @@ fn parsing() {
     );
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 42);
+}
+
+#[test]
+fn parsing_enum_config() {
+    let env = Environment::from_iter("", [("type", "First")]);
+    let env = wrap_into_value(env);
+    let config = EnumConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    assert_eq!(config, EnumConfig::First);
+
+    let env = Environment::from_iter("", [("type", "Nested"), ("renamed", "second")]);
+    let env = wrap_into_value(env);
+    let config = EnumConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    assert_eq!(
+        config,
+        EnumConfig::Nested(NestedConfig {
+            simple_enum: SimpleEnum::Second,
+            other_int: 42,
+        })
+    );
+
+    let env = Environment::from_iter("", [("type", "WithFields")]);
+    let env = wrap_into_value(env);
+    let config = EnumConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    assert_eq!(
+        config,
+        EnumConfig::WithFields {
+            string: None,
+            flag: false,
+        }
+    );
+
+    let env = Environment::from_iter(
+        "",
+        [("type", "Fields"), ("renamed", "second"), ("string", "???")],
+    );
+    let env = wrap_into_value(env);
+    let config = EnumConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    assert_eq!(
+        config,
+        EnumConfig::WithFields {
+            string: Some("???".to_owned()),
+            flag: false,
+        }
+    );
+}
+
+#[test]
+fn parsing_enum_config_with_schema() {
+    let schema = ConfigSchema::default().insert::<EnumConfig>("");
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("type", "Fields"),
+            ("renamed", "second"),
+            ("string", "???"),
+            ("flag", "true"),
+        ],
+    );
+    let repo = ConfigRepository::new(&schema).with(env);
+    assert_eq!(
+        repo.merged().get(Pointer("flag")).unwrap().inner,
+        Value::Bool(true)
+    );
+
+    let config: EnumConfig = repo.parse().unwrap();
+    assert_eq!(
+        config,
+        EnumConfig::WithFields {
+            string: Some("???".to_owned()),
+            flag: true,
+        }
+    );
 }
 
 #[test]

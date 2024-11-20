@@ -7,6 +7,8 @@ pub use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 pub use smart_config_derive::DescribeConfig;
 
+#[cfg(test)]
+mod tests;
 #[doc(hidden)] // used in the derive macro
 pub mod validation;
 
