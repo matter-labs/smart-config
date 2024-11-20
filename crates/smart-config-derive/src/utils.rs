@@ -1,7 +1,7 @@
 //! Miscellaneous utils.
 
 use quote::quote;
-use syn::Type;
+use syn::{PathArguments, Type};
 
 /// Corresponds to the type kind in the main crate. Necessary because `TypeId::of()` is not a `const fn`
 /// and unlikely to get stabilized as one in the near future.
@@ -12,6 +12,8 @@ pub(crate) enum TypeKind {
     Float,
     String,
     Path,
+    Array,
+    Object,
 }
 
 const BUILTIN_INTEGER_TYPES: &[&str] = &[
@@ -30,11 +32,15 @@ const STD_INTEGER_TYPES: &[&str] = &[
     "NonZeroUsize",
     "NonZeroIsize",
 ];
+const STD_ARRAY_TYPES: &[&str] = &["Vec", "HashSet", "BTreeSet"];
+const STD_MAP_TYPES: &[&str] = &["HashMap", "BTreeMap"];
 
 impl TypeKind {
     pub fn detect(ty: &Type) -> Option<Self> {
-        let Type::Path(ty) = ty else {
-            return None;
+        let ty = match ty {
+            Type::Path(ty) => ty,
+            Type::Array(_) => return Some(Self::Array),
+            _ => return None,
         };
 
         if let Some(ident) = ty.path.get_ident() {
@@ -49,29 +55,43 @@ impl TypeKind {
         }
 
         let last_segment = ty.path.segments.last()?;
-        if !last_segment.arguments.is_empty() {
-            return None;
-        }
-        if last_segment.ident == "String" {
+        let args_len = match &last_segment.arguments {
+            PathArguments::None => 0,
+            PathArguments::AngleBracketed(args) => args.args.len(),
+            PathArguments::Parenthesized(_) => return None,
+        };
+
+        if last_segment.ident == "String" && args_len == 0 {
             return Some(Self::String);
-        } else if last_segment.ident == "PathBuf" {
+        } else if last_segment.ident == "PathBuf" && args_len == 0 {
             return Some(Self::Path);
-        } else if STD_INTEGER_TYPES
-            .iter()
-            .any(|&name| last_segment.ident == name)
+        } else if args_len == 0
+            && STD_INTEGER_TYPES
+                .iter()
+                .any(|&name| last_segment.ident == name)
         {
             return Some(Self::Integer);
+        } else if args_len == 1
+            && STD_ARRAY_TYPES
+                .iter()
+                .any(|&name| last_segment.ident == name)
+        {
+            return Some(Self::Array);
+        } else if args_len == 2 && STD_MAP_TYPES.iter().any(|&name| last_segment.ident == name) {
+            return Some(Self::Object);
         }
         None
     }
 
     pub fn to_tokens(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         match self {
-            Self::Bool => quote!(#cr::TypeKind::Bool),
-            Self::Integer => quote!(#cr::TypeKind::Integer),
-            Self::Float => quote!(#cr::TypeKind::Float),
-            Self::String => quote!(#cr::TypeKind::String),
-            Self::Path => quote!(#cr::TypeKind::Path),
+            Self::Bool => quote!(#cr::PrimitiveType::Bool.as_type()),
+            Self::Integer => quote!(#cr::PrimitiveType::Integer.as_type()),
+            Self::Float => quote!(#cr::PrimitiveType::Float.as_type()),
+            Self::String => quote!(#cr::PrimitiveType::String.as_type()),
+            Self::Path => quote!(#cr::PrimitiveType::Path.as_type()),
+            Self::Array => quote!(#cr::SchemaType::Array),
+            Self::Object => quote!(#cr::SchemaType::Object),
         }
     }
 }

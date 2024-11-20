@@ -9,7 +9,7 @@ pub use self::{
     yaml::Yaml,
 };
 use crate::{
-    metadata::{ConfigMetadata, DescribeConfig, TypeKind},
+    metadata::{ConfigMetadata, DescribeConfig, PrimitiveType, SchemaType},
     parsing::ValueDeserializer,
     schema::{Alias, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
@@ -255,13 +255,13 @@ impl WithOrigin {
                 };
 
                 // Attempt to transform the type to the expected type
-                match param.base_type_kind {
-                    TypeKind::Bool => {
+                match param.type_kind {
+                    SchemaType::Primitive(PrimitiveType::Bool) => {
                         if let Ok(bool_value) = str.parse::<bool>() {
                             value.inner = Value::Bool(bool_value);
                         }
                     }
-                    TypeKind::Integer | TypeKind::Float => {
+                    SchemaType::Primitive(PrimitiveType::Integer | PrimitiveType::Float) => {
                         if let Ok(number) = str.parse::<serde_json::Number>() {
                             value.inner = Value::Number(number);
                         }

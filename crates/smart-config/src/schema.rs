@@ -320,7 +320,7 @@ impl ConfigSchema {
             writeln!(writer, "{prefix}{prefix_sep}{alias}")?;
         }
 
-        let kind = param.base_type_kind;
+        let kind = param.type_kind;
         let ty = format!("{kind} [Rust: {}]", param.ty.name_in_code());
         let default = if let Some(default) = param.default_value() {
             format!(", default: {default:?}")
@@ -348,7 +348,11 @@ mod tests {
     use serde::Deserialize;
 
     use super::*;
-    use crate::{metadata::DescribeConfig, value::Value, ConfigRepository, Environment};
+    use crate::{
+        metadata::{DescribeConfig, PrimitiveType},
+        value::Value,
+        ConfigRepository, Environment,
+    };
 
     /// # Test configuration
     ///
@@ -407,7 +411,10 @@ mod tests {
         assert_eq!(optional_metadata.aliases, [] as [&str; 0]);
         assert_eq!(optional_metadata.help, "Optional value.");
         assert_eq!(optional_metadata.ty.name_in_code(), "Option"); // FIXME: does `Option<u32>` get printed only for nightly Rust?
-        assert_eq!(optional_metadata.base_type.name_in_code(), "u32");
+        assert_eq!(
+            optional_metadata.type_kind,
+            PrimitiveType::Integer.as_type()
+        );
     }
 
     const EXPECTED_HELP: &str = r#"

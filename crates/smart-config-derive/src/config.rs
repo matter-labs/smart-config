@@ -269,7 +269,7 @@ impl ConfigField {
                         break;
                     }
                     let segment = &path.segments[0];
-                    if segment.ident != "Vec" && segment.ident != "Option" {
+                    if segment.ident != "Option" {
                         break;
                     }
                     let PathArguments::AngleBracketed(angle_bracketed) = &segment.arguments else {
@@ -336,11 +336,6 @@ impl ConfigField {
         } else {
             quote!(::core::stringify!(#ty))
         };
-        let base_type_in_code = if let Some(text) = base_type.span().source_text() {
-            quote!(#text)
-        } else {
-            quote!(::core::stringify!(#base_type))
-        };
 
         let type_kind = if let Some(kind) = &self.attrs.kind {
             quote!(#kind)
@@ -381,8 +376,7 @@ impl ConfigField {
                 aliases: &[#(#aliases,)*],
                 help: #help,
                 ty: #cr::RustType::of::<#ty>(#ty_in_code),
-                base_type: #cr::RustType::of::<#base_type>(#base_type_in_code),
-                base_type_kind: #type_kind,
+                type_kind: #type_kind,
                 unit: #cr::UnitOfMeasurement::detect(#param_name, #type_kind),
                 default_value: #default_value,
             }

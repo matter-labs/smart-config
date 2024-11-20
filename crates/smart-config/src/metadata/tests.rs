@@ -12,15 +12,21 @@ fn describing_enum_config() {
     let nested_meta = metadata.nested_configs[0].meta;
     let nested_param_names: HashSet<_> =
         nested_meta.params.iter().map(|param| param.name).collect();
-    assert_eq!(nested_param_names, HashSet::from(["renamed", "other_int"]));
+    assert_eq!(
+        nested_param_names,
+        HashSet::from(["renamed", "other_int", "map"])
+    );
 
     let param_names: HashSet<_> = metadata.params.iter().map(|param| param.name).collect();
-    assert_eq!(param_names, HashSet::from(["string", "flag", "type"]));
+    assert_eq!(
+        param_names,
+        HashSet::from(["string", "flag", "set", "type"])
+    );
 
     let tag_param = metadata
         .params
         .iter()
         .find(|param| param.name == "type")
         .unwrap();
-    assert_eq!(tag_param.base_type_kind, TypeKind::String);
+    assert_eq!(tag_param.type_kind, PrimitiveType::String.as_type());
 }

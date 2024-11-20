@@ -44,9 +44,9 @@ pub struct ParamMetadata {
     pub name: &'static str,
     pub aliases: &'static [&'static str],
     pub help: &'static str,
+    /// Type with a potential `Option<_>` wrapper stripped.
     pub ty: RustType,
-    pub base_type: RustType,
-    pub base_type_kind: TypeKind,
+    pub type_kind: SchemaType,
     pub unit: Option<UnitOfMeasurement>,
     #[doc(hidden)] // set by derive macro
     pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
@@ -79,8 +79,8 @@ impl fmt::Display for UnitOfMeasurement {
 }
 
 impl UnitOfMeasurement {
-    pub fn detect(param_name: &str, base_type_kind: TypeKind) -> Option<Self> {
-        if base_type_kind != TypeKind::Integer {
+    pub fn detect(param_name: &str, base_type_kind: SchemaType) -> Option<Self> {
+        if base_type_kind != SchemaType::Primitive(PrimitiveType::Integer) {
             return None;
         }
 
@@ -122,19 +122,17 @@ impl RustType {
     }
 }
 
-/// Human-readable kind for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
-pub enum TypeKind {
+pub enum PrimitiveType {
     Bool,
     Integer,
     Float,
     String,
     Path,
-    // TODO: support URLs
 }
 
-impl fmt::Display for TypeKind {
+impl fmt::Display for PrimitiveType {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Bool => formatter.write_str("Boolean"),
@@ -142,6 +140,31 @@ impl fmt::Display for TypeKind {
             Self::Float => formatter.write_str("floating-point value"),
             Self::String => formatter.write_str("string"),
             Self::Path => formatter.write_str("filesystem path"),
+        }
+    }
+}
+
+impl PrimitiveType {
+    pub const fn as_type(self) -> SchemaType {
+        SchemaType::Primitive(self)
+    }
+}
+
+/// Human-readable kind for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum SchemaType {
+    Primitive(PrimitiveType),
+    Array,
+    Object,
+}
+
+impl fmt::Display for SchemaType {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Primitive(ty) => fmt::Display::fmt(ty, formatter),
+            Self::Array => formatter.write_str("array"),
+            Self::Object => formatter.write_str("object"),
         }
     }
 }

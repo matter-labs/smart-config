@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use assert_matches::assert_matches;
 use serde::Deserialize;
@@ -85,6 +85,7 @@ fn parsing_enum_config() {
         EnumConfig::Nested(NestedConfig {
             simple_enum: SimpleEnum::Second,
             other_int: 42,
+            map: HashMap::new(),
         })
     );
 
@@ -96,6 +97,7 @@ fn parsing_enum_config() {
         EnumConfig::WithFields {
             string: None,
             flag: false,
+            set: HashSet::new(),
         }
     );
 
@@ -110,6 +112,7 @@ fn parsing_enum_config() {
         EnumConfig::WithFields {
             string: Some("???".to_owned()),
             flag: false,
+            set: HashSet::new(),
         }
     );
 }
@@ -119,9 +122,27 @@ fn parsing_enum_config_with_schema() {
     let schema = ConfigSchema::default().insert::<EnumConfig>("");
 
     let json = config!(
+        "type": "Nested",
+        "renamed": "second",
+        "map.first": 1,
+        "map.second": 2,
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: EnumConfig = repo.parse().unwrap();
+    assert_eq!(
+        config,
+        EnumConfig::Nested(NestedConfig {
+            simple_enum: SimpleEnum::Second,
+            other_int: 42,
+            map: HashMap::from([("first".to_owned(), 1), ("second".to_owned(), 2)]),
+        })
+    );
+
+    let json = config!(
         "type": "Fields",
         "string": "???",
         "flag": true,
+        "set": [42, 23],
     );
     let repo = ConfigRepository::new(&schema).with(json);
     let config: EnumConfig = repo.parse().unwrap();
@@ -130,6 +151,7 @@ fn parsing_enum_config_with_schema() {
         EnumConfig::WithFields {
             string: Some("???".to_owned()),
             flag: true,
+            set: HashSet::from([42, 23]),
         }
     );
 
@@ -154,6 +176,7 @@ fn parsing_enum_config_with_schema() {
         EnumConfig::WithFields {
             string: Some("???".to_owned()),
             flag: true,
+            set: HashSet::new(),
         }
     );
 }
