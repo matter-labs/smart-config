@@ -15,6 +15,8 @@ use crate::{
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
 };
 
+#[macro_use]
+mod macros;
 mod env;
 mod json;
 #[cfg(test)]
@@ -68,7 +70,7 @@ impl<'a> ConfigRepository<'a> {
             .chain([Pointer("")])
             .collect();
         for &object_ptr in &all_prefixes_with_aliases {
-            map.ensure_object(object_ptr, &synthetic_origin);
+            map.ensure_object(object_ptr, || synthetic_origin.clone());
         }
         (all_prefixes_with_aliases, map)
     }
@@ -148,22 +150,27 @@ impl<'a> ConfigRepository<'a> {
 
 impl WithOrigin {
     /// Ensures that there is an object (possibly empty) at the specified location.
-    fn ensure_object(&mut self, at: Pointer<'_>, synthetic_origin: &Arc<ValueOrigin>) {
+    fn ensure_object(&mut self, at: Pointer<'_>, create_origin: impl FnOnce() -> Arc<ValueOrigin>) {
         let Some((parent, last_segment)) = at.split_last() else {
             // Nothing to do.
             return;
         };
 
         // `unwrap()` is safe since `ensure_object()` is always called for the parent
-        let Value::Object(map) = &mut self.get_mut(parent).unwrap().inner else {
+        let parent = &mut self.get_mut(parent).unwrap().inner;
+        if !matches!(parent, Value::Object(_)) {
+            *parent = Value::Object(Map::new());
+        }
+        let Value::Object(parent_object) = parent else {
             unreachable!();
         };
-        if !map.contains_key(last_segment) {
-            map.insert(
+
+        if !parent_object.contains_key(last_segment) {
+            parent_object.insert(
                 last_segment.to_owned(),
                 WithOrigin {
                     inner: Value::Object(Map::new()),
-                    origin: synthetic_origin.clone(),
+                    origin: create_origin(),
                 },
             );
         }
