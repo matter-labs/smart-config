@@ -100,7 +100,7 @@ impl WithOrigin {
         }
     }
 
-    pub(crate) fn merge_into_map(dest: &mut Map, source: Map) {
+    fn merge_into_map(dest: &mut Map, source: Map) {
         for (key, value) in source {
             if let Some(existing_value) = dest.get_mut(&key) {
                 existing_value.merge(value);

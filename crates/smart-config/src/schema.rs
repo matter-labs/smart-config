@@ -449,13 +449,13 @@ optional
         let env =
             Environment::from_iter("APP_", [("APP_TEST_STR", "test"), ("APP_OPTIONAL", "123")]);
 
-        let parser = ConfigRepository::from(env).parser(&schema).unwrap();
+        let parser = ConfigRepository::new(&schema).with(env);
         assert_eq!(
-            parser.map().get(Pointer("test.str")).unwrap().inner,
+            parser.merged().get(Pointer("test.str")).unwrap().inner,
             Value::String("test".into())
         );
         assert_eq!(
-            parser.map().get(Pointer("test.optional")).unwrap().inner,
+            parser.merged().get(Pointer("test.optional")).unwrap().inner,
             Value::Number(123_u64.into())
         );
 
@@ -494,11 +494,7 @@ optional
                 ("APP_DEPRECATED_OPTIONAL", "321"),
             ],
         );
-        let config: TestConfig = ConfigRepository::from(env)
-            .parser(&schema)
-            .unwrap()
-            .parse()
-            .unwrap();
+        let config: TestConfig = ConfigRepository::new(&schema).with(env).parse().unwrap();
         assert_eq!(config.str, "?");
         assert_eq!(config.optional_int, Some(321));
     }
@@ -533,25 +529,24 @@ optional
                 ("optional", "777"),
             ],
         );
-        let parser = ConfigRepository::from(env).parser(&schema).unwrap();
+        let repo = ConfigRepository::new(&schema).with(env);
         assert_eq!(
-            parser.map().get(Pointer("bool_value")).unwrap().inner,
+            repo.merged().get(Pointer("bool_value")).unwrap().inner,
             Value::Bool(true)
         );
         assert_eq!(
-            parser
-                .map()
+            repo.merged()
                 .get(Pointer("hierarchical.string"))
                 .unwrap()
                 .inner,
             Value::String("???".into())
         );
         assert_eq!(
-            parser.map().get(Pointer("optional")).unwrap().inner,
+            repo.merged().get(Pointer("optional")).unwrap().inner,
             Value::Number("777".parse().unwrap())
         );
 
-        let config: NestingConfig = parser.parse().unwrap();
+        let config: NestingConfig = repo.parse().unwrap();
         assert!(config.bool_value);
         assert_eq!(config.hierarchical.str, "???");
         assert_eq!(config.hierarchical.optional_int, None);

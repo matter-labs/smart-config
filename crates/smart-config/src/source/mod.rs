@@ -38,87 +38,79 @@ pub trait ConfigSource {
 }
 
 /// Configuration repository containing zero or more configuration sources.
-#[derive(Debug, Clone, Default)]
-pub struct ConfigRepository {
-    /// Hierarchical part of the configuration.
-    object: Map,
-    /// Key-value part of the config that requires pre-processing.
-    // TODO: rn, it always has higher priority than `object`; document this or change
-    key_value_map: Map<String>,
+#[derive(Debug, Clone)]
+pub struct ConfigRepository<'a> {
+    schema: &'a ConfigSchema,
+    all_prefixes_with_aliases: BTreeSet<Pointer<'a>>,
+    merged: WithOrigin,
 }
 
-impl<S: ConfigSource> From<S> for ConfigRepository {
-    fn from(source: S) -> Self {
-        let (object, key_value_map) = match source.into_contents() {
-            ConfigContents::Hierarchical(object) => (object, Map::default()),
-            ConfigContents::KeyValue(kv) => (Map::default(), kv),
-        };
-
+impl<'a> ConfigRepository<'a> {
+    pub fn new(schema: &'a ConfigSchema) -> Self {
+        let (all_prefixes_with_aliases, merged) = Self::initialize_object(schema);
         Self {
-            object,
-            key_value_map,
+            schema,
+            all_prefixes_with_aliases,
+            merged,
         }
     }
-}
 
-impl ConfigRepository {
-    /// Extends this environment with environment variables / key-value map.
-    pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
-        match source.into_contents() {
-            ConfigContents::KeyValue(kv) => {
-                self.key_value_map.extend(kv);
-            }
-            ConfigContents::Hierarchical(map) => {
-                WithOrigin::merge_into_map(&mut self.object, map);
-            }
-        }
-        self
-    }
-
-    pub fn parser(mut self, schema: &ConfigSchema) -> anyhow::Result<ConfigParser<'_>> {
+    fn initialize_object(schema: &'a ConfigSchema) -> (BTreeSet<Pointer<'a>>, WithOrigin) {
         let synthetic_origin = Arc::<ValueOrigin>::default();
         let mut map = WithOrigin {
-            inner: Value::Object(self.object),
+            inner: Value::Object(Map::default()),
             origin: synthetic_origin.clone(),
         };
 
-        let all_objects: BTreeSet<_> = schema
+        let all_prefixes_with_aliases: BTreeSet<_> = schema
             .prefixes_with_aliases()
             .flat_map(Pointer::with_ancestors)
             .chain([Pointer("")])
             .collect();
-        for &object_ptr in &all_objects {
-            map.ensure_object(object_ptr, &synthetic_origin)?;
+        for &object_ptr in &all_prefixes_with_aliases {
+            map.ensure_object(object_ptr, &synthetic_origin);
         }
-        for &object_ptr in all_objects.iter().rev() {
-            map.copy_key_value_entries(object_ptr, &mut self.key_value_map);
-        }
-
-        for (prefix, config_data) in schema.iter() {
-            for alias in &config_data.aliases {
-                map.merge_alias(prefix, alias);
-            }
-
-            if let Some(config_map) = map.get_mut(prefix) {
-                config_map.normalize_value_types(config_data.metadata);
-            };
-        }
-
-        Ok(ConfigParser { map, schema })
+        (all_prefixes_with_aliases, map)
     }
-}
 
-/// Output of parsing configurations using [`ConfigSchema::parser()`].
-#[derive(Debug)]
-pub struct ConfigParser<'a> {
-    schema: &'a ConfigSchema,
-    map: WithOrigin,
-}
+    /// Extends this environment with a new configuration source.
+    // FIXME: is it possible to break invariants (e.g., overwrite objects at mounting points)?
+    pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
+        match source.into_contents() {
+            ConfigContents::KeyValue(mut kv) => {
+                for &object_ptr in self.all_prefixes_with_aliases.iter().rev() {
+                    self.merged.copy_key_value_entries(object_ptr, &mut kv);
+                }
+            }
+            ConfigContents::Hierarchical(map) => {
+                self.merged.merge(WithOrigin {
+                    inner: Value::Object(map),
+                    origin: Arc::default(),
+                });
+            }
+        }
 
-impl ConfigParser<'_> {
+        // Copy all aliased values.
+        for (prefix, config_data) in self.schema.iter() {
+            for alias in &config_data.aliases {
+                self.merged.merge_alias(prefix, alias);
+            }
+        }
+        // Normalize types of all copied values. At this point we only care about canonical names,
+        // since any aliases were copied on the previous step.
+        for (prefix, config_data) in self.schema.iter() {
+            if let Some(config_map) = self.merged.get_mut(prefix) {
+                config_map.normalize_value_types(config_data.metadata);
+            }
+        }
+
+        self
+    }
+
+    // TODO: probably makes sense to make public
     #[cfg(test)]
-    pub(crate) fn map(&self) -> &WithOrigin {
-        &self.map
+    pub(crate) fn merged(&self) -> &WithOrigin {
+        &self.merged
     }
 
     /// Parses a configuration.
@@ -130,8 +122,8 @@ impl ConfigParser<'_> {
         let config_ref = self.schema.single(metadata)?;
         let prefix = config_ref.prefix();
 
-        // `unwrap()` is safe due to preparations when constructing the `Parser`; all config prefixes have objects
-        let config_map = self.map.get(Pointer(prefix)).unwrap();
+        // `unwrap()` is safe due to preparations when constructing the repo; all config prefixes have objects
+        let config_map = self.merged.get(Pointer(prefix)).unwrap();
         debug_assert!(
             matches!(&config_map.inner, Value::Object(_)),
             "Unexpected value at {prefix:?}: {config_map:?}"
@@ -155,21 +147,16 @@ impl ConfigParser<'_> {
 }
 
 impl WithOrigin {
-    /// Ensures that there is an object (possibly empty) at the specified location. Returns an error
-    /// if the locations contains anything other than an object.
-    fn ensure_object(
-        &mut self,
-        at: Pointer<'_>,
-        synthetic_origin: &Arc<ValueOrigin>,
-    ) -> anyhow::Result<()> {
+    /// Ensures that there is an object (possibly empty) at the specified location.
+    fn ensure_object(&mut self, at: Pointer<'_>, synthetic_origin: &Arc<ValueOrigin>) {
         let Some((parent, last_segment)) = at.split_last() else {
             // Nothing to do.
-            return Ok(());
+            return;
         };
 
         // `unwrap()` is safe since `ensure_object()` is always called for the parent
         let Value::Object(map) = &mut self.get_mut(parent).unwrap().inner else {
-            anyhow::bail!("expected object at {parent:?}");
+            unreachable!();
         };
         if !map.contains_key(last_segment) {
             map.insert(
@@ -180,7 +167,6 @@ impl WithOrigin {
                 },
             );
         }
-        Ok(())
     }
 
     fn copy_key_value_entries(&mut self, at: Pointer<'_>, entries: &mut Map<String>) {

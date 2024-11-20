@@ -130,7 +130,7 @@ fn nesting_json() {
     );
 
     let schema = ConfigSchema::default().insert::<ConfigWithNesting>("");
-    let map = ConfigRepository::from(env).parser(&schema).unwrap().map;
+    let map = ConfigRepository::new(&schema).with(env).merged;
 
     assert_eq!(
         map.get(Pointer("value")).unwrap().inner,
@@ -168,11 +168,7 @@ fn merging_config_parts() {
         .unwrap()
         .push_alias(Alias::prefix("deprecated"));
 
-    let config: ConfigWithNesting = ConfigRepository::from(env)
-        .parser(&schema)
-        .unwrap()
-        .parse()
-        .unwrap();
+    let config: ConfigWithNesting = ConfigRepository::new(&schema).with(env).parse().unwrap();
     assert_eq!(config.value, 4);
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 42);
@@ -188,11 +184,7 @@ fn merging_config_parts() {
         ],
     );
 
-    let config: ConfigWithNesting = ConfigRepository::from(env)
-        .parser(&schema)
-        .unwrap()
-        .parse()
-        .unwrap();
+    let config: ConfigWithNesting = ConfigRepository::new(&schema).with(env).parse().unwrap();
     assert_eq!(config.value, 123);
     assert_eq!(config.not_merged, "");
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
@@ -228,39 +220,45 @@ fn merging_configs() {
     };
     let overrides = Json::new("overrides.json", json);
 
-    let repo = ConfigRepository::default().with(base).with(overrides);
+    let empty_schema = ConfigSchema::default();
+    let repo = ConfigRepository::new(&empty_schema)
+        .with(base)
+        .with(overrides);
+    let Value::Object(merged) = &repo.merged().inner else {
+        panic!("unexpected merged value");
+    };
 
-    assert_eq!(repo.object["int"].inner, Value::Number(123_u64.into()));
+    assert_eq!(merged["int"].inner, Value::Number(123_u64.into()));
     assert_matches!(
-        repo.object["int"].origin.as_ref(),
+        merged["int"].origin.as_ref(),
         ValueOrigin::Json { filename, .. } if filename.as_ref() == "base.json"
     );
-    assert_eq!(repo.object["bool"].inner, Value::Bool(false));
+    assert_eq!(merged["bool"].inner, Value::Bool(false));
     assert_matches!(
-        repo.object["bool"].origin.as_ref(),
+        merged["bool"].origin.as_ref(),
         ValueOrigin::Json { filename, .. } if filename.as_ref() == "overrides.json"
     );
     assert_matches!(
-        &repo.object["array"].inner,
+        &merged["array"].inner,
         Value::Array(items) if items.len() == 1
     );
     assert_matches!(
-        repo.object["array"].origin.as_ref(),
+        merged["array"].origin.as_ref(),
         ValueOrigin::Json { filename, .. } if filename.as_ref() == "overrides.json"
     );
 
     assert_matches!(
-        &repo.object["nested"].inner,
+        &merged["nested"].inner,
         Value::Object(items) if items.len() == 3
     );
-    let nested_int = repo.object["nested"].get(Pointer("int")).unwrap();
+    let nested_int = merged["nested"].get(Pointer("int")).unwrap();
     assert_eq!(nested_int.inner, Value::Number(123_u64.into()));
     assert_matches!(
         nested_int.origin.as_ref(),
         ValueOrigin::Json { filename, .. } if filename.as_ref() == "overrides.json"
     );
 
-    let nested_str = repo.object["nested"].get(Pointer("string")).unwrap();
+    let nested_str = merged["nested"].get(Pointer("string")).unwrap();
     assert_eq!(nested_str.inner, Value::String("???".into()));
     assert_matches!(
         nested_str.origin.as_ref(),
@@ -286,9 +284,9 @@ fn using_aliases_with_object_config() {
         unreachable!();
     };
     let base = Json::new("base.json", json);
-    let repo = ConfigRepository::from(base);
+    let repo = ConfigRepository::new(&schema).with(base);
 
-    let config: ConfigWithNesting = repo.clone().parser(&schema).unwrap().parse().unwrap();
+    let config: ConfigWithNesting = repo.parse().unwrap();
     assert_eq!(config.value, 321);
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 42);
@@ -310,9 +308,9 @@ fn using_env_config_overrides() {
         unreachable!();
     };
     let base = Json::new("base.json", json);
-    let mut repo = ConfigRepository::from(base);
+    let mut repo = ConfigRepository::new(&schema).with(base);
 
-    let config: ConfigWithNesting = repo.clone().parser(&schema).unwrap().parse().unwrap();
+    let config: ConfigWithNesting = repo.parse().unwrap();
     assert_eq!(config.value, 321);
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 42);
@@ -326,23 +324,21 @@ fn using_env_config_overrides() {
     );
     repo = repo.with(env);
 
-    let parser = repo.clone().parser(&schema).unwrap();
-    let enum_value = parser.map().get(Pointer("test.nested.renamed")).unwrap();
+    let enum_value = repo.merged().get(Pointer("test.nested.renamed")).unwrap();
     assert_eq!(enum_value.inner, Value::String("second".into()));
     assert_matches!(enum_value.origin.as_ref(), ValueOrigin::EnvVar(_));
 
-    let config: ConfigWithNesting = parser.parse().unwrap();
+    let config: ConfigWithNesting = repo.parse().unwrap();
     assert_eq!(config.value, 321);
     assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
 
     let env = Environment::from_iter("", [("TEST_VALUE", "555")]);
     repo = repo.with(env);
 
-    let parser = repo.parser(&schema).unwrap();
-    let int_value = parser.map().get(Pointer("test.value")).unwrap();
+    let int_value = repo.merged().get(Pointer("test.value")).unwrap();
     assert_eq!(int_value.inner, Value::Number(555_u64.into()));
 
-    let config: ConfigWithNesting = parser.parse().unwrap();
+    let config: ConfigWithNesting = repo.parse().unwrap();
     assert_eq!(config.value, 555);
     assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
 }
