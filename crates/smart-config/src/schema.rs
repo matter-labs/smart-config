@@ -320,11 +320,8 @@ impl ConfigSchema {
             writeln!(writer, "{prefix}{prefix_sep}{alias}")?;
         }
 
-        let ty = if let Some(kind) = param.base_type.kind() {
-            format!("{kind} [Rust: {}]", param.ty.name_in_code())
-        } else {
-            param.ty.name_in_code().to_owned()
-        };
+        let kind = param.base_type_kind;
+        let ty = format!("{kind} [Rust: {}]", param.ty.name_in_code());
         let default = if let Some(default) = param.default_value() {
             format!(", default: {default:?}")
         } else {

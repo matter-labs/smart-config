@@ -257,21 +257,18 @@ impl WithOrigin {
 
         for param in &metadata.params {
             if let Some(value) = map.get_mut(param.name) {
-                if !matches!(value.origin.as_ref(), ValueOrigin::EnvVar(_)) {
-                    continue;
-                }
                 let Value::String(str) = &value.inner else {
                     continue;
                 };
 
                 // Attempt to transform the type to the expected type
-                match param.base_type.kind() {
-                    Some(TypeKind::Bool) => {
+                match param.base_type_kind {
+                    TypeKind::Bool => {
                         if let Ok(bool_value) = str.parse::<bool>() {
                             value.inner = Value::Bool(bool_value);
                         }
                     }
-                    Some(TypeKind::Integer) => {
+                    TypeKind::Integer | TypeKind::Float => {
                         if let Ok(number) = str.parse::<serde_json::Number>() {
                             value.inner = Value::Number(number);
                         }

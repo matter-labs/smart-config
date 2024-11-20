@@ -8,6 +8,8 @@ use syn::{
     Path, PathArguments, Type, TypePath,
 };
 
+use crate::utils::TypeKind;
+
 fn parse_docs(attrs: &[Attribute]) -> String {
     let doc_lines = attrs.iter().filter_map(|attr| {
         if attr.meta.path().is_ident("doc") {
@@ -93,6 +95,7 @@ impl SerdeData {
 
 struct ConfigFieldAttrs {
     nested: bool,
+    kind: Option<Expr>,
 }
 
 impl ConfigFieldAttrs {
@@ -101,18 +104,30 @@ impl ConfigFieldAttrs {
 
         let mut nested = false;
         let mut nested_span = None;
+        let mut kind = None;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("nested") {
                     nested = true;
                     nested_span = Some(meta.path.span());
                     Ok(())
+                } else if meta.path.is_ident("kind") {
+                    kind = Some(meta.value()?.parse()?);
+                    Ok(())
                 } else {
-                    Err(meta.error("Unsupported attribute; only `nested` is supported`"))
+                    Err(meta.error("Unsupported attribute; only `nested` and `kind` supported`"))
                 }
             })?;
         }
-        Ok(Self { nested })
+
+        if kind.is_some() {
+            if let Some(nested_span) = nested_span {
+                let msg = "cannot specify `kind` for a `nested` configuration";
+                return Err(syn::Error::new(nested_span, msg));
+            }
+        }
+
+        Ok(Self { nested, kind })
     }
 }
 
@@ -195,7 +210,10 @@ impl ConfigField {
         angle_bracketed.args.len() == 1
     }
 
-    fn describe_param(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    fn describe_param(
+        &self,
+        cr: &proc_macro2::TokenStream,
+    ) -> syn::Result<proc_macro2::TokenStream> {
         let name = &self.name;
         let aliases = self.serde_data.aliases.iter();
         let help = &self.docs;
@@ -219,6 +237,15 @@ impl ConfigField {
             quote!(::core::stringify!(#base_type))
         };
 
+        let type_kind = if let Some(kind) = TypeKind::detect(base_type) {
+            kind.to_tokens(cr)
+        } else if let Some(kind) = &self.attrs.kind {
+            quote!(#kind)
+        } else {
+            let msg = "Cannot auto-detect kind of this type; please add the `config(kind = ..)` attribute for the field";
+            return Err(syn::Error::new_spanned(base_type, msg));
+        };
+
         let default_value = match &self.serde_data.default {
             None if !Self::is_option(ty) => None,
             Some(None) | None => Some(quote_spanned! {name.span()=>
@@ -234,18 +261,18 @@ impl ConfigField {
             quote_spanned!(name.span()=> ::core::option::Option::None)
         };
 
-        quote_spanned! {name.span()=> {
-            let base_type = #cr::RustType::of::<#base_type>(#base_type_in_code);
+        Ok(quote_spanned! {name.span()=>
             #cr::ParamMetadata {
                 name: #param_name,
                 aliases: &[#(#aliases,)*],
                 help: #help,
                 ty: #cr::RustType::of::<#ty>(#ty_in_code),
-                base_type,
-                unit: #cr::UnitOfMeasurement::detect(#param_name, base_type),
+                base_type: #cr::RustType::of::<#base_type>(#base_type_in_code),
+                base_type_kind: #type_kind,
+                unit: #cr::UnitOfMeasurement::detect(#param_name, #type_kind),
                 default_value: #default_value,
             }
-        }}
+        })
     }
 
     fn describe_nested_config(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
@@ -337,7 +364,7 @@ impl DescribeConfigImpl {
         }
     }
 
-    fn derive_describe_config(&self) -> proc_macro2::TokenStream {
+    fn derive_describe_config(&self) -> syn::Result<proc_macro2::TokenStream> {
         let cr = self.cr();
         let name = &self.name;
         let name_str = name.to_string();
@@ -349,6 +376,8 @@ impl DescribeConfigImpl {
             }
             None
         });
+        let params = params.collect::<syn::Result<Vec<_>>>()?;
+
         let nested_configs = self.fields.iter().filter_map(|field| {
             if field.attrs.nested {
                 return Some(field.describe_nested_config(&cr));
@@ -356,7 +385,7 @@ impl DescribeConfigImpl {
             None
         });
 
-        quote! {
+        Ok(quote! {
             impl #cr::DescribeConfig for #name {
                 fn describe_config() -> &'static #cr::ConfigMetadata {
                     static METADATA_CELL: #cr::Lazy<#cr::ConfigMetadata> = #cr::Lazy::new(|| #cr::ConfigMetadata {
@@ -368,7 +397,7 @@ impl DescribeConfigImpl {
                     &METADATA_CELL
                 }
             }
-        }
+        })
     }
 }
 
@@ -378,5 +407,8 @@ pub(crate) fn impl_describe_config(input: TokenStream) -> TokenStream {
         Ok(trait_impl) => trait_impl,
         Err(err) => return err.into_compile_error().into(),
     };
-    trait_impl.derive_describe_config().into()
+    match trait_impl.derive_describe_config() {
+        Ok(derived) => derived.into(),
+        Err(err) => err.into_compile_error().into(),
+    }
 }

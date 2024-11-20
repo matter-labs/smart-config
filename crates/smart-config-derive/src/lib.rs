@@ -5,6 +5,7 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 
 mod config;
+mod utils;
 
 #[proc_macro_derive(DescribeConfig, attributes(config))]
 pub fn config(input: TokenStream) -> TokenStream {

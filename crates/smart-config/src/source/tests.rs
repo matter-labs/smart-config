@@ -17,6 +17,7 @@ enum SimpleEnum {
 #[config(crate = crate)]
 struct NestedConfig {
     #[serde(rename = "renamed")]
+    #[config(kind = TypeKind::String)]
     simple_enum: SimpleEnum,
     #[serde(default = "NestedConfig::default_other_int")]
     other_int: u32,
