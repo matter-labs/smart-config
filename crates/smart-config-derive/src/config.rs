@@ -261,7 +261,16 @@ impl ConfigField {
             quote_spanned!(name.span()=> ::core::option::Option::None)
         };
 
-        Ok(quote_spanned! {name.span()=>
+        let aliases_validation = aliases
+            .clone()
+            .map(|alias| quote_spanned!(name.span()=> #cr::validation::assert_param_name(#alias);));
+
+        Ok(quote_spanned! {name.span()=> {
+            const _: () = {
+                #cr::validation::assert_param_name(#param_name);
+                #(#aliases_validation)*
+            };
+
             #cr::ParamMetadata {
                 name: #param_name,
                 aliases: &[#(#aliases,)*],
@@ -272,7 +281,7 @@ impl ConfigField {
                 unit: #cr::UnitOfMeasurement::detect(#param_name, #type_kind),
                 default_value: #default_value,
             }
-        })
+        }})
     }
 
     fn describe_nested_config(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {

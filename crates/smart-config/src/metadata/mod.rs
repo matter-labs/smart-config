@@ -7,6 +7,9 @@ pub use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 pub use smart_config_derive::DescribeConfig;
 
+#[doc(hidden)] // used in the derive macro
+pub mod validation;
+
 /// Describes a configuration (i.e., a group of related parameters).
 pub trait DescribeConfig: 'static + DeserializeOwned {
     /// Provides the description.
