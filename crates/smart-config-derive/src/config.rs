@@ -46,13 +46,12 @@ fn parse_docs(attrs: &[Attribute]) -> String {
     docs
 }
 
-/// Recognized subset of `serde` container attributes.
-struct SerdeContainerAttrs {
+struct ContainerAttrs {
     rename_all: Option<LitStr>,
     tag: Option<LitStr>,
 }
 
-impl SerdeContainerAttrs {
+impl ContainerAttrs {
     fn new(attrs: &[Attribute]) -> syn::Result<Self> {
         let serde_attrs = attrs.iter().filter(|attr| attr.path().is_ident("serde"));
 
@@ -60,22 +59,16 @@ impl SerdeContainerAttrs {
         let mut tag = None;
         for attr in serde_attrs {
             attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("rename_all_fields") {
-                    let msg = "`rename_all_fields` must not be specified for configs";
-                    return Err(syn::Error::new(meta.path.span(), msg));
-                } else if meta.path.is_ident("content") {
-                    let msg = "`content` attribute (i.e., adjacently tagged enum) is not supported; use `serde(tag = ..)`";
-                    return Err(syn::Error::new(meta.path.span(), msg));
-                } else if meta.path.is_ident("rename_all") {
+                if meta.path.is_ident("rename_all") {
                     rename_all = Some(meta.value()?.parse()?);
-                    return Ok(());
+                    Ok(())
                 } else if meta.path.is_ident("tag") {
                     tag = Some(meta.value()?.parse()?);
-                    return Ok(());
+                    Ok(())
+                } else {
+                    Err(meta
+                        .error("Unsupported attribute; only `rename_all` and `tag` are supported`"))
                 }
-
-                meta.input.parse::<proc_macro2::TokenStream>()?; // consume all tokens
-                Ok(())
             })?;
         }
         Ok(Self { rename_all, tag })
@@ -94,92 +87,78 @@ impl SerdeContainerAttrs {
     }
 }
 
-/// Recognized subset of `serde` field / variant attributes.
 #[derive(Default)]
-struct SerdeFieldAttrs {
+struct ConfigFieldAttrs {
     rename: Option<String>,
     aliases: Vec<String>,
     default: Option<Option<Path>>,
     flatten: bool,
+    nest: bool,
+    kind: Option<Expr>,
 }
 
-impl SerdeFieldAttrs {
-    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
-        let serde_attrs = attrs.iter().filter(|attr| attr.path().is_ident("serde"));
+impl ConfigFieldAttrs {
+    fn new(attrs: &[Attribute], name_span: proc_macro2::Span) -> syn::Result<Self> {
+        let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut rename = None;
         let mut aliases = vec![];
         let mut default = None;
         let mut flatten = false;
-        for attr in serde_attrs {
-            attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("rename") {
-                    let s: LitStr = meta.value()?.parse()?;
-                    rename = Some(s.value());
-                } else if meta.path.is_ident("alias") {
-                    let s: LitStr = meta.value()?.parse()?;
-                    aliases.push(s.value());
-                } else if meta.path.is_ident("default") {
-                    if meta.input.is_empty() {
-                        default = Some(None);
-                    } else {
-                        let s: LitStr = meta.value()?.parse()?;
-                        default = Some(Some(s.parse()?));
-                    }
-                } else if meta.path.is_ident("flatten") {
-                    flatten = true;
-                } else {
-                    // Digest any tokens
-                    meta.input.parse::<proc_macro2::TokenStream>()?;
-                }
-                Ok(())
-            })?;
-        }
-        Ok(Self {
-            rename,
-            aliases,
-            default,
-            flatten,
-        })
-    }
-}
-
-#[derive(Default)]
-struct ConfigFieldAttrs {
-    nested: bool,
-    kind: Option<Expr>,
-}
-
-impl ConfigFieldAttrs {
-    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
-        let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
-
-        let mut nested = false;
+        let mut nest = false;
         let mut nested_span = None;
         let mut kind = None;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("nested") {
-                    nested = true;
+                if meta.path.is_ident("rename") {
+                    let s: LitStr = meta.value()?.parse()?;
+                    rename = Some(s.value());
+                    Ok(())
+                } else if meta.path.is_ident("alias") {
+                    let s: LitStr = meta.value()?.parse()?;
+                    aliases.push(s.value());
+                    Ok(())
+                } else if meta.path.is_ident("default") {
+                    default = Some(if meta.input.peek(syn::Token![=]) {
+                        Some(meta.value()?.parse()?)
+                    } else {
+                        None
+                    });
+                    Ok(())
+                } else if meta.path.is_ident("flatten") {
+                    flatten = true;
+                    Ok(())
+                } else if meta.path.is_ident("nest") {
+                    nest = true;
                     nested_span = Some(meta.path.span());
                     Ok(())
                 } else if meta.path.is_ident("kind") {
                     kind = Some(meta.value()?.parse()?);
                     Ok(())
                 } else {
-                    Err(meta.error("Unsupported attribute; only `nested` and `kind` supported`"))
+                    Err(meta.error("Unsupported attribute"))
                 }
             })?;
         }
 
-        if kind.is_some() {
-            if let Some(nested_span) = nested_span {
-                let msg = "cannot specify `kind` for a `nested` configuration";
-                return Err(syn::Error::new(nested_span, msg));
-            }
+        if flatten {
+            // All flattened configs are nested, but not necessarily vice versa.
+            nest = true;
+        }
+        if kind.is_some() && nest {
+            let msg = "cannot specify `kind` for a `nest`ed / `flatten`ed configuration";
+            let err_span = nested_span.unwrap_or(name_span);
+            return Err(syn::Error::new(err_span, msg));
         }
 
-        Ok(Self { nested, kind })
+        Ok(Self {
+            nest,
+            kind,
+            rename,
+            aliases,
+            default,
+            flatten,
+        })
     }
 }
 
@@ -207,7 +186,6 @@ impl ConfigFieldData {
 struct ConfigField {
     attrs: ConfigFieldAttrs,
     docs: String,
-    serde_attrs: SerdeFieldAttrs,
     data: ConfigFieldData,
 }
 
@@ -219,8 +197,8 @@ impl ConfigField {
     fn from_newtype_variant(raw: &Field) -> syn::Result<Self> {
         let mut this = Self::new_inner(raw, true)?;
         // Emulate flattening which happens to newtype variants in tagged enums.
-        this.attrs.nested = true;
-        this.serde_attrs.flatten = true;
+        this.attrs.flatten = true;
+        this.attrs.nest = true;
         Ok(this)
     }
 
@@ -235,18 +213,10 @@ impl ConfigField {
         };
         let ty = raw.ty.clone();
 
-        let serde_data = SerdeFieldAttrs::new(&raw.attrs)?;
-        let attrs = ConfigFieldAttrs::new(&raw.attrs)?;
-
-        if serde_data.flatten && !attrs.nested {
-            let message = "#[serde(flatten)] should only be placed on nested configurations";
-            return Err(syn::Error::new_spanned(raw, message));
-        }
-
+        let attrs = ConfigFieldAttrs::new(&raw.attrs, raw.span())?;
         Ok(Self {
             attrs,
             docs: parse_docs(&raw.attrs),
-            serde_attrs: serde_data,
             data: ConfigFieldData::Ordinary { name, ty },
         })
     }
@@ -255,7 +225,6 @@ impl ConfigField {
         Self {
             attrs: ConfigFieldAttrs::default(),
             docs: "Tag for the enum config".to_owned(),
-            serde_attrs: SerdeFieldAttrs::default(),
             data: ConfigFieldData::EnumTag(tag),
         }
     }
@@ -307,7 +276,7 @@ impl ConfigField {
     }
 
     fn param_name(&self) -> String {
-        self.serde_attrs
+        self.attrs
             .rename
             .clone()
             .unwrap_or_else(|| self.data.name())
@@ -318,7 +287,7 @@ impl ConfigField {
         cr: &proc_macro2::TokenStream,
     ) -> syn::Result<proc_macro2::TokenStream> {
         let name_span = self.data.name_span();
-        let aliases = self.serde_attrs.aliases.iter();
+        let aliases = self.attrs.aliases.iter();
         let help = &self.docs;
         let param_name = self.param_name();
 
@@ -346,7 +315,7 @@ impl ConfigField {
             return Err(syn::Error::new_spanned(base_type, msg));
         };
 
-        let default_value = match &self.serde_attrs.default {
+        let default_value = match &self.attrs.default {
             None if !Self::is_option(ty) => None,
             Some(None) | None => Some(quote_spanned! {name_span=>
                 <::std::boxed::Box<#ty> as ::core::default::Default>::default()
@@ -387,7 +356,7 @@ impl ConfigField {
         let ConfigFieldData::Ordinary { name, ty } = &self.data else {
             unreachable!("enum tags are never nested");
         };
-        let config_name = if self.serde_attrs.flatten {
+        let config_name = if self.attrs.flatten {
             String::new()
         } else {
             self.param_name()
@@ -399,6 +368,45 @@ impl ConfigField {
                 meta: <#ty as #cr::DescribeConfig>::describe_config(),
             }
         }
+    }
+
+    fn deserialize_param(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let ConfigFieldData::Ordinary { name, ty } = &self.data else {
+            unreachable!("enum tags are not deserialized using this method");
+        };
+        let name_span = name.span();
+        let param_name = self.param_name();
+
+        let default_fallback = match &self.attrs.default {
+            None if !Self::is_option(ty) => {
+                quote_spanned!(name_span=> ::core::option::Option::None)
+            }
+            Some(None) | None => {
+                quote_spanned!(name_span=> ::core::option::Option::Some(::core::default::Default::default))
+            }
+            Some(Some(def_fn)) => quote_spanned!(name_span=> ::core::option::Option::Some(#def_fn)),
+        };
+
+        let value = if !self.attrs.nest {
+            quote_spanned! {name_span=>
+                deserializer.deserialize_param(
+                    #param_name,
+                    #default_fallback,
+                )?
+            }
+        } else if self.attrs.flatten {
+            quote_spanned! {name_span=>
+                #cr::DeserializeConfig::deserialize_config(deserializer)?
+            }
+        } else {
+            quote_spanned! {name_span=>
+                deserializer.deserialize_nested_config(
+                    #param_name,
+                    #default_fallback,
+                )?
+            }
+        };
+        quote_spanned!(name_span=> #name: #value)
     }
 }
 
@@ -442,7 +450,7 @@ impl DescribeConfigImpl {
             return Err(syn::Error::new_spanned(&raw.generics, message));
         }
 
-        let serde_attrs = SerdeContainerAttrs::new(&raw.attrs)?;
+        let serde_attrs = ContainerAttrs::new(&raw.attrs)?;
         let fields = match &raw.data {
             Data::Struct(data) => {
                 serde_attrs.validate_for_struct()?;
@@ -471,7 +479,7 @@ impl DescribeConfigImpl {
 
     fn extract_enum_fields(
         data: &DataEnum,
-        serde_attrs: &SerdeContainerAttrs,
+        serde_attrs: &ContainerAttrs,
     ) -> syn::Result<Vec<ConfigField>> {
         let mut merged_fields = vec![];
         let mut merged_fields_by_name = HashSet::new();
@@ -518,7 +526,7 @@ impl DescribeConfigImpl {
         Ok(merged_fields)
     }
 
-    fn cr(&self) -> proc_macro2::TokenStream {
+    fn metadata_mod(&self) -> proc_macro2::TokenStream {
         if let Some(cr) = &self.attrs.cr {
             quote!(#cr::metadata)
         } else {
@@ -528,13 +536,13 @@ impl DescribeConfigImpl {
     }
 
     fn derive_describe_config(&self) -> syn::Result<proc_macro2::TokenStream> {
-        let cr = self.cr();
+        let cr = self.metadata_mod();
         let name = &self.name;
         let name_str = name.to_string();
         let help = &self.help;
 
         let params = self.fields.iter().filter_map(|field| {
-            if !field.attrs.nested {
+            if !field.attrs.nest {
                 return Some(field.describe_param(&cr));
             }
             None
@@ -542,7 +550,7 @@ impl DescribeConfigImpl {
         let params = params.collect::<syn::Result<Vec<_>>>()?;
 
         let nested_configs = self.fields.iter().filter_map(|field| {
-            if field.attrs.nested {
+            if field.attrs.nest {
                 return Some(field.describe_nested_config(&cr));
             }
             None
@@ -562,6 +570,43 @@ impl DescribeConfigImpl {
             }
         })
     }
+
+    fn de_mod(&self) -> proc_macro2::TokenStream {
+        if let Some(cr) = &self.attrs.cr {
+            quote!(#cr::de)
+        } else {
+            let name = &self.name;
+            quote_spanned!(name.span()=> ::smart_config::de)
+        }
+    }
+
+    fn derive_deserialize_config(&self) -> proc_macro2::TokenStream {
+        let cr = self.de_mod();
+        let name = &self.name;
+
+        let fields = self.fields.iter().map(|field| field.deserialize_param(&cr));
+
+        quote! {
+            impl #cr::DeserializeConfig for #name {
+                fn deserialize_config(
+                    deserializer: #cr::ValueDeserializer<'_>,
+                ) -> ::core::result::Result<Self, #cr::ParseError> {
+                    ::core::result::Result::Ok(Self {
+                        #(#fields,)*
+                    })
+                }
+            }
+        }
+    }
+
+    fn derive_everything(&self) -> syn::Result<proc_macro2::TokenStream> {
+        let describe = self.derive_describe_config()?;
+        let deserialize = self.derive_deserialize_config();
+        Ok(quote! {
+            #describe
+            #deserialize
+        })
+    }
 }
 
 pub(crate) fn impl_describe_config(input: TokenStream) -> TokenStream {
@@ -570,7 +615,7 @@ pub(crate) fn impl_describe_config(input: TokenStream) -> TokenStream {
         Ok(trait_impl) => trait_impl,
         Err(err) => return err.into_compile_error().into(),
     };
-    match trait_impl.derive_describe_config() {
+    match trait_impl.derive_everything() {
         Ok(derived) => derived.into(),
         Err(err) => err.into_compile_error().into(),
     }

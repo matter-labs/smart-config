@@ -1,7 +1,6 @@
 use std::{collections::BTreeSet, mem, sync::Arc};
 
 use anyhow::Context as _;
-use serde::de::DeserializeOwned;
 
 pub use self::{
     env::{Environment, KeyValueMap},
@@ -9,8 +8,8 @@ pub use self::{
     yaml::Yaml,
 };
 use crate::{
-    metadata::{ConfigMetadata, DescribeConfig, PrimitiveType, SchemaType},
-    parsing::ValueDeserializer,
+    de::{DeserializeConfig, ValueDeserializer},
+    metadata::{ConfigMetadata, PrimitiveType, SchemaType},
     schema::{Alias, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
 };
@@ -92,12 +91,34 @@ impl<'a> ConfigRepository<'a> {
             }
         }
 
-        // Copy all aliased values.
+        // Copy all globally aliased values.
         for (prefix, config_data) in self.schema.iter() {
             for alias in &config_data.aliases {
                 self.merged.merge_alias(prefix, alias);
             }
         }
+
+        // Copy all locally aliased values.
+        for (prefix, config_data) in self.schema.iter() {
+            let config_object = self.merged.get_mut(prefix).unwrap();
+            let Value::Object(config_object) = &mut config_object.inner else {
+                unreachable!();
+            };
+
+            for param in &config_data.metadata.params {
+                if config_object.contains_key(param.name) {
+                    continue;
+                }
+
+                for &alias in param.aliases {
+                    if let Some(alias_value) = config_object.get(alias).cloned() {
+                        config_object.insert(param.name.to_owned(), alias_value);
+                        break;
+                    }
+                }
+            }
+        }
+
         // Normalize types of all copied values. At this point we only care about canonical names,
         // since any aliases were copied on the previous step.
         for (prefix, config_data) in self.schema.iter() {
@@ -118,7 +139,7 @@ impl<'a> ConfigRepository<'a> {
     /// Parses a configuration.
     pub fn parse<C>(&self) -> anyhow::Result<C>
     where
-        C: DescribeConfig + DeserializeOwned,
+        C: DeserializeConfig,
     {
         let metadata = C::describe_config();
         let config_ref = self.schema.single(metadata)?;
@@ -131,8 +152,8 @@ impl<'a> ConfigRepository<'a> {
             "Unexpected value at {prefix:?}: {config_map:?}"
         );
 
-        let deserializer = ValueDeserializer::new(config_map);
-        C::deserialize(deserializer)
+        let deserializer = ValueDeserializer::new(config_map, prefix.to_owned());
+        C::deserialize_config(deserializer)
             .with_context(|| {
                 let summary = if let Some(header) = metadata.help_header() {
                     format!(" ({})", header.trim().to_lowercase())

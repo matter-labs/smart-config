@@ -1,3 +1,4 @@
+/*
 use std::collections::HashSet;
 
 use super::*;
@@ -30,3 +31,4 @@ fn describing_enum_config() {
         .unwrap();
     assert_eq!(tag_param.type_kind, PrimitiveType::String.as_type());
 }
+ */

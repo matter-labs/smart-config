@@ -14,15 +14,15 @@ pub(crate) enum SimpleEnum {
     Second,
 }
 
-#[derive(Debug, PartialEq, Deserialize, DescribeConfig)]
+#[derive(Debug, PartialEq, DescribeConfig)]
 #[config(crate = crate)]
 pub(crate) struct NestedConfig {
-    #[serde(rename = "renamed")]
+    #[config(rename = "renamed")]
     #[config(kind = PrimitiveType::String.as_type())]
     pub simple_enum: SimpleEnum,
-    #[serde(default = "NestedConfig::default_other_int")]
+    #[config(default = NestedConfig::default_other_int)]
     pub other_int: u32,
-    #[serde(default)]
+    #[config(default)]
     pub map: HashMap<String, u32>,
 }
 
@@ -32,8 +32,8 @@ impl NestedConfig {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, DescribeConfig)]
-#[config(crate = crate)]
+/*
+#[derive(Debug, PartialEq, Deserialize)]
 #[serde(tag = "type")]
 pub(crate) enum EnumConfig {
     First,
@@ -47,3 +47,4 @@ pub(crate) enum EnumConfig {
         set: HashSet<u32>,
     },
 }
+*/

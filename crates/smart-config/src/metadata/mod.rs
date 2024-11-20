@@ -4,7 +4,6 @@ use std::{any, fmt};
 
 #[doc(hidden)] // used in the derive macro
 pub use once_cell::sync::Lazy;
-use serde::de::DeserializeOwned;
 pub use smart_config_derive::DescribeConfig;
 
 #[cfg(test)]
@@ -13,7 +12,7 @@ mod tests;
 pub mod validation;
 
 /// Describes a configuration (i.e., a group of related parameters).
-pub trait DescribeConfig: 'static + DeserializeOwned {
+pub trait DescribeConfig: 'static {
     /// Provides the description.
     fn describe_config() -> &'static ConfigMetadata;
 }

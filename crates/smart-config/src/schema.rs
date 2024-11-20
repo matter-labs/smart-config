@@ -9,7 +9,6 @@ use std::{
 };
 
 use anyhow::Context;
-use serde::de::DeserializeOwned;
 
 use crate::{
     metadata::{ConfigMetadata, DescribeConfig, NestedConfigMetadata, ParamMetadata},
@@ -207,7 +206,7 @@ impl ConfigSchema {
     #[must_use]
     pub fn insert<C>(self, prefix: &'static str) -> Self
     where
-        C: DescribeConfig + DeserializeOwned,
+        C: DescribeConfig,
     {
         self.insert_aliased::<C>(prefix, [])
     }
@@ -220,7 +219,7 @@ impl ConfigSchema {
         aliases: impl IntoIterator<Item = Alias<C>>,
     ) -> Self
     where
-        C: DescribeConfig + DeserializeOwned,
+        C: DescribeConfig,
     {
         let metadata = C::describe_config();
         self.insert_inner(
@@ -345,8 +344,6 @@ impl ConfigSchema {
 
 #[cfg(test)]
 mod tests {
-    use serde::Deserialize;
-
     use super::*;
     use crate::{
         metadata::{DescribeConfig, PrimitiveType},
@@ -357,14 +354,14 @@ mod tests {
     /// # Test configuration
     ///
     /// Extended description.
-    #[derive(Debug, Default, PartialEq, Deserialize, DescribeConfig)]
+    #[derive(Debug, Default, PartialEq, DescribeConfig)]
     #[config(crate = crate)]
     struct TestConfig {
         /// String value.
-        #[serde(alias = "string", default = "TestConfig::default_str")]
+        #[config(alias = "string", default = TestConfig::default_str)]
         str: String,
         /// Optional value.
-        #[serde(rename = "optional")]
+        #[config(rename = "optional")]
         optional_int: Option<u32>,
     }
 
@@ -374,17 +371,15 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Default, PartialEq, Deserialize, DescribeConfig)]
+    #[derive(Debug, Default, PartialEq, DescribeConfig)]
     #[config(crate = crate)]
     struct NestingConfig {
-        #[serde(default)]
+        #[config(default)]
         bool_value: bool,
         /// Hierarchical nested config.
-        #[serde(default)]
-        #[config(nested)]
+        #[config(default, nest)]
         hierarchical: TestConfig,
-        #[serde(flatten, default)]
-        #[config(nested)]
+        #[config(default, flatten)]
         flattened: TestConfig,
     }
 
@@ -543,7 +538,7 @@ optional
         );
         assert_eq!(
             repo.merged()
-                .get(Pointer("hierarchical.string"))
+                .get(Pointer("hierarchical.str"))
                 .unwrap()
                 .inner,
             Value::String("???".into())

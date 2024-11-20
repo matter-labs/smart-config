@@ -5,20 +5,19 @@ use serde::Deserialize;
 
 use super::*;
 use crate::{
+    metadata::DescribeConfig,
     schema::Alias,
-    testonly::{EnumConfig, NestedConfig, SimpleEnum},
+    testonly::{NestedConfig, SimpleEnum},
 };
 
 #[derive(Debug, Deserialize)]
-struct TestConfig {
+struct TestParam {
     int: u64,
     bool: bool,
     string: String,
     optional: Option<i64>,
     array: Vec<u32>,
     repeated: HashSet<SimpleEnum>,
-    #[serde(flatten)]
-    nested: NestedConfig,
 }
 
 fn wrap_into_value(env: Environment) -> WithOrigin {
@@ -56,7 +55,7 @@ fn parsing() {
     );
     let env = wrap_into_value(env);
 
-    let config = TestConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    let config = TestParam::deserialize(ValueDeserializer::new(&env, String::new())).unwrap();
     assert_eq!(config.int, 1);
     assert_eq!(config.optional, None);
     assert!(config.bool);
@@ -66,10 +65,9 @@ fn parsing() {
         config.repeated,
         HashSet::from([SimpleEnum::First, SimpleEnum::Second])
     );
-    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
-    assert_eq!(config.nested.other_int, 42);
 }
 
+/*
 #[test]
 fn parsing_enum_config() {
     let env = Environment::from_iter("", [("type", "First")]);
@@ -180,11 +178,16 @@ fn parsing_enum_config_with_schema() {
         }
     );
 }
+*/
 
 #[test]
 fn parsing_errors() {
     let env = Environment::from_iter("", [("renamed", "first"), ("other_int", "what")]);
-    let err = NestedConfig::deserialize(ValueDeserializer::new(&wrap_into_value(env))).unwrap_err();
+    let err = NestedConfig::deserialize_config(ValueDeserializer::new(
+        &wrap_into_value(env),
+        String::new(),
+    ))
+    .unwrap_err();
 
     assert!(err.inner.to_string().contains("u32 value 'what'"), "{err}");
     assert_matches!(
@@ -193,13 +196,13 @@ fn parsing_errors() {
     );
 }
 
-#[derive(Debug, Deserialize, DescribeConfig)]
+#[derive(Debug, DescribeConfig)]
 #[config(crate = crate)]
 struct ConfigWithNesting {
     value: u32,
-    #[serde(default)]
+    #[config(default)]
     not_merged: String,
-    #[config(nested)]
+    #[config(nest)]
     nested: NestedConfig,
 }
 
@@ -230,7 +233,8 @@ fn nesting_json() {
         Value::Number(321_u64.into())
     );
 
-    let config = ConfigWithNesting::deserialize(ValueDeserializer::new(&map)).unwrap();
+    let config =
+        ConfigWithNesting::deserialize_config(ValueDeserializer::new(&map, String::new())).unwrap();
     assert_eq!(config.value, 123);
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 321);

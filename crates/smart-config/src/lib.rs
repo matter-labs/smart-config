@@ -1,5 +1,5 @@
+pub mod de;
 pub mod metadata;
-mod parsing;
 mod schema;
 mod source;
 #[cfg(test)]
