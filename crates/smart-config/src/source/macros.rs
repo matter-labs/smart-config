@@ -1,3 +1,4 @@
+// TODO: validate paths
 #[macro_export]
 macro_rules! config {
     ($($path:tt : $value:expr),* $(,)?) => {

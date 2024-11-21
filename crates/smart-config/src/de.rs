@@ -1,6 +1,6 @@
 //! Schema-guided parsing of configurations.
 
-use std::{collections::HashMap, fmt, iter::empty, sync::Arc};
+use std::{collections::HashMap, iter::empty, sync::Arc};
 
 use serde::{
     de::{
@@ -11,73 +11,15 @@ use serde::{
     Deserialize,
 };
 
+pub use crate::error::ParseError;
 use crate::{
-    metadata::DescribeConfig,
+    error::LocationInConfig,
+    metadata::{ConfigMetadata, DescribeConfig},
     value::{Pointer, Value, ValueOrigin, WithOrigin},
 };
 
 pub trait DeserializeConfig: DescribeConfig + Sized {
     fn deserialize_config(deserializer: ValueDeserializer<'_>) -> Result<Self, ParseError>;
-}
-
-#[derive(Debug)]
-pub struct ParseError {
-    pub(crate) inner: serde_json::Error,
-    pub(crate) origin: Option<Arc<ValueOrigin>>,
-    pub(crate) path: Option<String>,
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (from, origin) = if let Some(origin) = &self.origin {
-            (" from ", origin as &dyn fmt::Display)
-        } else {
-            ("", &"" as &dyn fmt::Display)
-        };
-        let (at, path) = if let Some(path) = &self.path {
-            (" at ", path.as_str())
-        } else {
-            ("", "")
-        };
-
-        write!(
-            formatter,
-            "error parsing configuration value{from}{origin}{at}{path}: {err}",
-            err = self.inner
-        )
-    }
-}
-
-impl std::error::Error for ParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.inner)
-    }
-}
-
-impl DeError for ParseError {
-    fn custom<T: fmt::Display>(msg: T) -> Self {
-        Self {
-            inner: DeError::custom(msg),
-            origin: None,
-            path: None,
-        }
-    }
-}
-
-impl ParseError {
-    fn with_origin(mut self, origin: Option<&Arc<ValueOrigin>>) -> Self {
-        if self.origin.is_none() {
-            self.origin = origin.cloned();
-        }
-        self
-    }
-
-    fn with_path(mut self, path: &str) -> Self {
-        if self.path.is_none() {
-            self.path = Some(path.to_owned());
-        }
-        self
-    }
 }
 
 macro_rules! parse_int_value {
@@ -90,15 +32,11 @@ macro_rules! parse_int_value {
                         Ok(val) => val.into_deserializer().$method(visitor),
                         Err(err) => {
                             let err = ParseError::custom(format_args!("{err} while parsing {} value '{s}'", stringify!($ty)));
-                            Err(err.with_origin(self.origin()).with_path(&self.path))
+                            Err(self.enrich_err(err))
                         }
                     }
                 }
-                Value::Number(number) => number.deserialize_any(visitor).map_err(|err| ParseError {
-                    inner: err,
-                    origin: self.origin().cloned(),
-                    path: Some(self.path),
-                }),
+                Value::Number(number) => number.deserialize_any(visitor).map_err(|err| self.enrich_err(err.into())),
                 _ => Err(self.invalid_type(&format!("{} number", stringify!($ty))))
             }
         }
@@ -143,15 +81,19 @@ fn parse_object<'de, V: de::Visitor<'de>>(
 #[derive(Debug, Clone)]
 pub struct ValueDeserializer<'a> {
     value: Option<&'a WithOrigin>,
+    /// Absolute path that `value` corresponds to.
     path: String,
-    // TODO: options, e.g. mapping variants?
+    /// Metadata of the config currently being deserialized. Set by derived `DeserializeConfig` impls.
+    config: Option<&'static ConfigMetadata>,
+    // TODO: options, e.g. mapping enum variants?
 }
 
 impl<'a> ValueDeserializer<'a> {
-    pub fn new(value: &'a WithOrigin, path: String) -> Self {
+    pub(crate) fn new(value: &'a WithOrigin, path: String) -> Self {
         Self {
             value: Some(value),
             path,
+            config: None,
         }
     }
 
@@ -167,6 +109,7 @@ impl<'a> ValueDeserializer<'a> {
         self.value.map(|val| &val.origin)
     }
 
+    #[cold]
     fn invalid_type(&self, expected: &str) -> ParseError {
         let actual = match self.value() {
             Value::Null => de::Unexpected::Unit,
@@ -186,9 +129,14 @@ impl<'a> ValueDeserializer<'a> {
             Value::Array(_) => de::Unexpected::Seq,
             Value::Object(_) => de::Unexpected::Map,
         };
-        ParseError::invalid_type(actual, &expected)
-            .with_origin(self.origin())
+        self.enrich_err(ParseError::invalid_type(actual, &expected))
+    }
+
+    #[cold]
+    fn enrich_err(&self, err: ParseError) -> ParseError {
+        err.with_origin(self.origin())
             .with_path(&self.path)
+            .for_config(self.config)
     }
 
     /// Gets a deserializer for a child at the specified path.
@@ -199,29 +147,51 @@ impl<'a> ValueDeserializer<'a> {
         } else {
             None
         };
-        Self { value: child, path }
+        Self {
+            value: child,
+            path,
+            config: None,
+        }
     }
+}
 
-    #[doc(hidden)] // used in proc macros
-    pub fn deserialize_param<T: DeserializeOwned>(
-        &self,
-        path: &'static str,
-        default_fn: Option<fn() -> T>,
-    ) -> Result<T, ParseError> {
-        let deserialized = Option::<T>::deserialize(self.child_deserializer(path))?;
-        if let Some(default_fn) = default_fn {
-            Ok(deserialized.unwrap_or_else(default_fn))
-        } else {
-            deserialized.ok_or_else(|| ParseError::missing_field(path).with_origin(self.origin()))
+/// Methods used in proc macros. Not a part of public API.
+#[doc(hidden)]
+impl ValueDeserializer<'_> {
+    pub fn for_config<T: DescribeConfig>(self) -> Self {
+        Self {
+            config: Some(T::describe_config()),
+            ..self
         }
     }
 
-    #[doc(hidden)] // used in proc macros
-    pub fn deserialize_nested_config<T: DeserializeConfig>(
+    pub fn deserialize_param<T: DeserializeOwned>(
         &self,
+        index: usize,
         path: &'static str,
         default_fn: Option<fn() -> T>,
     ) -> Result<T, ParseError> {
+        let location = LocationInConfig::Param(index);
+        let deserialized = Option::<T>::deserialize(self.child_deserializer(path))
+            .map_err(|err| self.enrich_err(err).for_location(self.config, location))?;
+        if let Some(default_fn) = default_fn {
+            Ok(deserialized.unwrap_or_else(default_fn))
+        } else {
+            deserialized.ok_or_else(|| {
+                self.enrich_err(DeError::missing_field(path))
+                    .for_location(self.config, location)
+            })
+        }
+    }
+
+    // FIXME: defaults don't work correctly with pre-processing (adding empty objects at mounting points)
+    pub fn deserialize_nested_config<T: DeserializeConfig>(
+        &self,
+        index: usize,
+        path: &'static str,
+        default_fn: Option<fn() -> T>,
+    ) -> Result<T, ParseError> {
+        let location = LocationInConfig::Nested(index);
         let child_deserializer = self.child_deserializer(path);
 
         let child_value = if let Some(value) = child_deserializer.value {
@@ -229,12 +199,19 @@ impl<'a> ValueDeserializer<'a> {
         } else if let Some(default_fn) = default_fn {
             return Ok(default_fn());
         } else {
-            return Err(ParseError::missing_field(path).with_origin(self.origin()));
+            let err = DeError::missing_field(path);
+            return Err(self.enrich_err(err).for_location(self.config, location));
         };
         if !matches!(&child_value.inner, Value::Object(_)) {
-            return Err(child_deserializer.invalid_type("configuration object"));
+            return Err(self
+                .invalid_type("configuration object")
+                .for_location(self.config, location));
         }
         T::deserialize_config(child_deserializer)
+    }
+
+    pub fn for_flattened_config(&self) -> Self {
+        self.clone()
     }
 }
 
@@ -245,11 +222,9 @@ impl<'de> de::Deserializer<'de> for ValueDeserializer<'_> {
         match self.value() {
             Value::Null => visitor.visit_none(),
             Value::Bool(value) => visitor.visit_bool(*value),
-            Value::Number(value) => value.deserialize_any(visitor).map_err(|err| ParseError {
-                inner: err,
-                origin: self.origin().cloned(),
-                path: Some(self.path),
-            }),
+            Value::Number(value) => value
+                .deserialize_any(visitor)
+                .map_err(|err| self.enrich_err(err.into())),
             Value::String(value) => visitor.visit_str(value),
             Value::Array(array) => parse_array(self.path(), array, visitor, self.origin()),
             Value::Object(object) => parse_object(self.path(), object, visitor, self.origin()),
@@ -348,7 +323,11 @@ impl<'de> de::Deserializer<'de> for ValueDeserializer<'_> {
         };
         visitor.visit_enum(EnumDeserializer {
             variant,
-            inner: Self { value, path },
+            inner: Self {
+                value,
+                path,
+                config: None,
+            },
         })
     }
 

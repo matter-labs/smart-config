@@ -181,7 +181,7 @@ fn parsing_enum_config_with_schema() {
 */
 
 #[test]
-fn parsing_errors() {
+fn type_mismatch_parsing_error() {
     let env = Environment::from_iter("", [("renamed", "first"), ("other_int", "what")]);
     let err = NestedConfig::deserialize_config(ValueDeserializer::new(
         &wrap_into_value(env),
@@ -189,11 +189,56 @@ fn parsing_errors() {
     ))
     .unwrap_err();
 
-    assert!(err.inner.to_string().contains("u32 value 'what'"), "{err}");
+    assert!(
+        err.inner().to_string().contains("u32 value 'what'"),
+        "{err}"
+    );
     assert_matches!(
-        err.origin.as_ref().unwrap().as_ref(),
+        err.origin().unwrap(),
         ValueOrigin::EnvVar(name) if name == "other_int"
     );
+    assert_eq!(
+        err.config().unwrap() as *const _,
+        NestedConfig::describe_config()
+    );
+    assert_eq!(err.param().unwrap().name, "other_int");
+}
+
+#[test]
+fn missing_parameter_parsing_error() {
+    let env = Environment::from_iter("", [("other_int", "12")]);
+    let err = NestedConfig::deserialize_config(ValueDeserializer::new(
+        &wrap_into_value(env),
+        String::new(),
+    ))
+    .unwrap_err();
+
+    let inner = err.inner().to_string();
+    assert!(inner.contains("missing field"), "{inner}");
+    assert_eq!(
+        err.config().unwrap() as *const _,
+        NestedConfig::describe_config()
+    );
+    assert_eq!(err.param().unwrap().name, "renamed");
+}
+
+#[test]
+fn missing_nested_config_parsing_error() {
+    let json = config!("value": 123);
+    let err =
+        ConfigWithNesting::deserialize_config(ValueDeserializer::new(&json.inner(), String::new()))
+            .unwrap_err();
+
+    let inner = err.inner().to_string();
+    assert!(inner.contains("missing field"), "{inner}");
+    assert_eq!(err.path().unwrap(), "");
+    assert_matches!(err.origin().unwrap(), ValueOrigin::Json { .. });
+    assert_eq!(
+        err.config().unwrap() as *const _,
+        ConfigWithNesting::describe_config()
+    );
+    assert!(err.param().is_none());
+    assert_eq!(err.nested_config().unwrap().name, "nested");
 }
 
 #[derive(Debug, DescribeConfig)]

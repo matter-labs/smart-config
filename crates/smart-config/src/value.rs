@@ -29,10 +29,10 @@ impl fmt::Display for ValueOrigin {
             Self::EnvVar(name) => write!(formatter, "env variable '{name}'"),
             Self::Map { map_name, key } => write!(formatter, "value '{key}' from {map_name}"),
             Self::Json { filename, path } => {
-                write!(formatter, "variable at {path} in JSON file '{filename}'")
+                write!(formatter, "variable at '{path}' in JSON file '{filename}'")
             }
             Self::Yaml { filename, path } => {
-                write!(formatter, "variable at {path} in YAML file '{filename}'")
+                write!(formatter, "variable at '{path}' in YAML file '{filename}'")
             }
         }
     }

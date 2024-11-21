@@ -98,10 +98,16 @@ impl UnitOfMeasurement {
 }
 
 /// Representation of a Rust type.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct RustType {
     id: any::TypeId,
     name_in_code: &'static str,
+}
+
+impl fmt::Debug for RustType {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.name_in_code)
+    }
 }
 
 impl RustType {

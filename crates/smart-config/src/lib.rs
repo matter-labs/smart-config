@@ -1,4 +1,5 @@
 pub mod de;
+mod error;
 pub mod metadata;
 mod schema;
 mod source;

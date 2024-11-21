@@ -370,7 +370,11 @@ impl ConfigField {
         }
     }
 
-    fn deserialize_param(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    fn deserialize_param(
+        &self,
+        cr: &proc_macro2::TokenStream,
+        index: usize,
+    ) -> proc_macro2::TokenStream {
         let ConfigFieldData::Ordinary { name, ty } = &self.data else {
             unreachable!("enum tags are not deserialized using this method");
         };
@@ -390,17 +394,19 @@ impl ConfigField {
         let value = if !self.attrs.nest {
             quote_spanned! {name_span=>
                 deserializer.deserialize_param(
+                    #index,
                     #param_name,
                     #default_fallback,
                 )?
             }
         } else if self.attrs.flatten {
             quote_spanned! {name_span=>
-                #cr::DeserializeConfig::deserialize_config(deserializer)?
+                #cr::DeserializeConfig::deserialize_config(deserializer.for_flattened_config())?
             }
         } else {
             quote_spanned! {name_span=>
                 deserializer.deserialize_nested_config(
+                    #index,
                     #param_name,
                     #default_fallback,
                 )?
@@ -584,13 +590,26 @@ impl DescribeConfigImpl {
         let cr = self.de_mod();
         let name = &self.name;
 
-        let fields = self.fields.iter().map(|field| field.deserialize_param(&cr));
+        let mut param_index = 0;
+        let mut nested_index = 0;
+        let fields = self.fields.iter().map(|field| {
+            let index;
+            if field.attrs.nest {
+                index = param_index;
+                param_index += 1;
+            } else {
+                index = nested_index;
+                nested_index += 1;
+            };
+            field.deserialize_param(&cr, index)
+        });
 
         quote! {
             impl #cr::DeserializeConfig for #name {
                 fn deserialize_config(
                     deserializer: #cr::ValueDeserializer<'_>,
                 ) -> ::core::result::Result<Self, #cr::ParseError> {
+                    let deserializer = deserializer.for_config::<Self>();
                     ::core::result::Result::Ok(Self {
                         #(#fields,)*
                     })

@@ -107,6 +107,11 @@ impl Json {
             }),
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn inner(&self) -> &WithOrigin {
+        &self.inner
+    }
 }
 
 impl ConfigSource for Json {
