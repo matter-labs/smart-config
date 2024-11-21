@@ -2,9 +2,30 @@
 
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::{spanned::Spanned, DeriveInput};
+use syn::{spanned::Spanned, DeriveInput, Type};
 
-use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigField};
+use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigField, DefaultValue};
+
+impl DefaultValue {
+    fn boxed(
+        this: Option<&Self>,
+        span: proc_macro2::Span,
+        ty: &Type,
+    ) -> Option<proc_macro2::TokenStream> {
+        match this {
+            None if !ConfigField::is_option(ty) => None,
+            Some(Self::DefaultTrait) | None => Some(quote_spanned! {span=>
+                <::std::boxed::Box<#ty> as ::core::default::Default>::default()
+            }),
+            Some(Self::Path(path)) => {
+                Some(quote_spanned!(span=> ::std::boxed::Box::<#ty>::new(#path())))
+            }
+            Some(Self::Expr(expr)) => {
+                Some(quote_spanned!(span=> ::std::boxed::Box::<#ty>::new(#expr)))
+            }
+        }
+    }
+}
 
 impl ConfigField {
     fn describe_param(
@@ -24,15 +45,7 @@ impl ConfigField {
         };
         let type_kind = self.type_kind(meta_mod, ty)?;
 
-        let default_value = match &self.attrs.default {
-            None if !Self::is_option(ty) => None,
-            Some(None) | None => Some(quote_spanned! {name_span=>
-                <::std::boxed::Box<#ty> as ::core::default::Default>::default()
-            }),
-            Some(Some(path)) => {
-                Some(quote_spanned!(name_span=> ::std::boxed::Box::<#ty>::new(#path())))
-            }
-        };
+        let default_value = DefaultValue::boxed(self.attrs.default.as_ref(), name_span, ty);
         let default_value = if let Some(value) = default_value {
             quote_spanned!(name_span=> ::core::option::Option::Some(|| #value))
         } else {

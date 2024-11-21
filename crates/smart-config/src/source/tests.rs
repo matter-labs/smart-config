@@ -112,8 +112,8 @@ fn parsing_enum_config() {
         config,
         EnumConfig::WithFields {
             string: None,
-            flag: false,
-            set: HashSet::new(),
+            flag: true,
+            set: HashSet::from([23, 42]),
         }
     );
 
@@ -123,6 +123,8 @@ fn parsing_enum_config() {
             ("type", "WithFields"),
             ("renamed", "second"),
             ("string", "???"),
+            ("flag", "false"),
+            ("set", "12"),
         ],
     );
     let env = wrap_into_value(env);
@@ -132,7 +134,7 @@ fn parsing_enum_config() {
         EnumConfig::WithFields {
             string: Some("???".to_owned()),
             flag: false,
-            set: HashSet::new(),
+            set: HashSet::from([12]),
         }
     );
 }
@@ -264,7 +266,7 @@ fn parsing_enum_config_with_schema() {
         "type": "Fields",
         "string": "???",
         "flag": true,
-        "set": [42, 23],
+        "set": [42],
     );
     let repo = ConfigRepository::new(&schema).with(json);
     let config: EnumConfig = repo.parse().unwrap();
@@ -273,7 +275,7 @@ fn parsing_enum_config_with_schema() {
         EnumConfig::WithFields {
             string: Some("???".to_owned()),
             flag: true,
-            set: HashSet::from([42, 23]),
+            set: HashSet::from([42]),
         }
     );
 
@@ -283,13 +285,13 @@ fn parsing_enum_config_with_schema() {
             ("type", "With"),
             ("renamed", "second"),
             ("string", "???"),
-            ("flag", "true"),
+            ("flag", "false"),
         ],
     );
     let repo = ConfigRepository::new(&schema).with(env);
     assert_eq!(
         repo.merged().get(Pointer("flag")).unwrap().inner,
-        Value::Bool(true)
+        Value::Bool(false)
     );
 
     let config: EnumConfig = repo.parse().unwrap();
@@ -297,8 +299,8 @@ fn parsing_enum_config_with_schema() {
         config,
         EnumConfig::WithFields {
             string: Some("???".to_owned()),
-            flag: true,
-            set: HashSet::new(),
+            flag: false,
+            set: HashSet::from([23, 42]),
         }
     );
 }

@@ -164,11 +164,17 @@ impl ConfigVariantAttrs {
     }
 }
 
+pub(crate) enum DefaultValue {
+    DefaultTrait,
+    Path(Path),
+    Expr(Expr),
+}
+
 #[derive(Default)]
 pub(crate) struct ConfigFieldAttrs {
     pub rename: Option<String>,
     pub aliases: Vec<String>,
-    pub default: Option<Option<Path>>,
+    pub default: Option<DefaultValue>,
     pub flatten: bool,
     pub nest: bool,
     pub kind: Option<Expr>,
@@ -197,10 +203,13 @@ impl ConfigFieldAttrs {
                     Ok(())
                 } else if meta.path.is_ident("default") {
                     default = Some(if meta.input.peek(syn::Token![=]) {
-                        Some(meta.value()?.parse()?)
+                        DefaultValue::Path(meta.value()?.parse()?)
                     } else {
-                        None
+                        DefaultValue::DefaultTrait
                     });
+                    Ok(())
+                } else if meta.path.is_ident("default_t") {
+                    default = Some(DefaultValue::Expr(meta.value()?.parse()?));
                     Ok(())
                 } else if meta.path.is_ident("flatten") {
                     flatten = true;

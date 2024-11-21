@@ -23,6 +23,14 @@ fn describing_enum_config() {
         HashSet::from(["string", "flag", "set", "type"])
     );
 
+    let set_param = metadata
+        .params
+        .iter()
+        .find(|param| param.name == "set")
+        .unwrap();
+    let set_param_default = format!("{:?}", set_param.default_value().unwrap());
+    assert!(set_param_default == "{42, 23}" || set_param_default == "{23, 42}");
+
     let tag_param = metadata
         .params
         .iter()

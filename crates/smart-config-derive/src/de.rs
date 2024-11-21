@@ -4,7 +4,30 @@ use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, LitStr};
 
-use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField};
+use crate::utils::{
+    ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField, DefaultValue,
+};
+
+impl DefaultValue {
+    fn fallback_fn(
+        this: Option<&Self>,
+        span: proc_macro2::Span,
+        is_option: bool,
+    ) -> proc_macro2::TokenStream {
+        match this {
+            None if !is_option => {
+                quote_spanned!(span=> ::core::option::Option::None)
+            }
+            Some(Self::DefaultTrait) | None => {
+                quote_spanned!(span=> ::core::option::Option::Some(::core::default::Default::default))
+            }
+            Some(Self::Path(def_fn)) => {
+                quote_spanned!(span=> ::core::option::Option::Some(#def_fn))
+            }
+            Some(Self::Expr(expr)) => quote_spanned!(span=> ::core::option::Option::Some(|| #expr)),
+        }
+    }
+}
 
 impl ConfigField {
     fn deserialize_param(
@@ -14,16 +37,9 @@ impl ConfigField {
     ) -> proc_macro2::TokenStream {
         let name_span = self.name.span();
         let param_name = self.param_name();
-
-        let default_fallback = match &self.attrs.default {
-            None if !Self::is_option(&self.ty) => {
-                quote_spanned!(name_span=> ::core::option::Option::None)
-            }
-            Some(None) | None => {
-                quote_spanned!(name_span=> ::core::option::Option::Some(::core::default::Default::default))
-            }
-            Some(Some(def_fn)) => quote_spanned!(name_span=> ::core::option::Option::Some(#def_fn)),
-        };
+        let is_option = Self::is_option(&self.ty);
+        let default_fallback =
+            DefaultValue::fallback_fn(self.attrs.default.as_ref(), name_span, is_option);
 
         if !self.attrs.nest {
             quote_spanned! {name_span=>

@@ -19,17 +19,13 @@ pub(crate) struct NestedConfig {
     #[config(rename = "renamed")]
     #[config(kind = PrimitiveType::String.as_type())]
     pub simple_enum: SimpleEnum,
-    #[config(default = NestedConfig::default_other_int)]
+    #[config(default_t = 42)]
     pub other_int: u32,
     #[config(default)]
     pub map: HashMap<String, u32>,
 }
 
 impl NestedConfig {
-    const fn default_other_int() -> u32 {
-        42
-    }
-
     pub fn default_nested() -> Self {
         Self {
             simple_enum: SimpleEnum::First,
@@ -47,10 +43,11 @@ pub(crate) enum EnumConfig {
     Nested(NestedConfig),
     #[config(alias = "Fields", alias = "With")]
     WithFields {
+        #[config(default)]
         string: Option<String>,
-        #[config(default)]
+        #[config(default_t = true)]
         flag: bool,
-        #[config(default)]
+        #[config(default_t = HashSet::from([23, 42]))]
         set: HashSet<u32>,
     },
 }
