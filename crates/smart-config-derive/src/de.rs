@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::DeriveInput;
 
-use crate::utils::{ConfigContainer, ConfigField, ConfigFieldData};
+use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigField};
 
 impl ConfigField {
     fn deserialize_param(
@@ -10,14 +10,12 @@ impl ConfigField {
         cr: &proc_macro2::TokenStream,
         index: usize,
     ) -> proc_macro2::TokenStream {
-        let ConfigFieldData::Ordinary { name, ty } = &self.data else {
-            unreachable!("enum tags are not deserialized using this method");
-        };
-        let name_span = name.span();
+        let name = &self.name;
+        let name_span = self.name.span();
         let param_name = self.param_name();
 
         let default_fallback = match &self.attrs.default {
-            None if !Self::is_option(ty) => {
+            None if !Self::is_option(&self.ty) => {
                 quote_spanned!(name_span=> ::core::option::Option::None)
             }
             Some(None) | None => {
@@ -58,17 +56,23 @@ impl ConfigContainer {
 
         let mut param_index = 0;
         let mut nested_index = 0;
-        let fields = self.fields.iter().map(|field| {
-            let index;
-            if field.attrs.nest {
-                index = param_index;
-                param_index += 1;
-            } else {
-                index = nested_index;
-                nested_index += 1;
-            };
-            field.deserialize_param(&cr, index)
-        });
+        let instance = match &self.fields {
+            ConfigContainerFields::Struct(fields) => {
+                let fields = fields.iter().map(|field| {
+                    let index;
+                    if field.attrs.nest {
+                        index = param_index;
+                        param_index += 1;
+                    } else {
+                        index = nested_index;
+                        nested_index += 1;
+                    };
+                    field.deserialize_param(&cr, index)
+                });
+                quote!(Self { #(#fields,)* })
+            }
+            ConfigContainerFields::Enum { .. } => todo!(),
+        };
 
         quote! {
             impl #cr::DeserializeConfig for #name {
@@ -76,9 +80,7 @@ impl ConfigContainer {
                     deserializer: #cr::ValueDeserializer<'_>,
                 ) -> ::core::result::Result<Self, #cr::ParseError> {
                     let deserializer = deserializer.for_config::<Self>();
-                    ::core::result::Result::Ok(Self {
-                        #(#fields,)*
-                    })
+                    ::core::result::Result::Ok(#instance)
                 }
             }
         }

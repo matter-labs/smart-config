@@ -4,26 +4,19 @@ use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput};
 
-use crate::utils::{ConfigContainer, ConfigField, ConfigFieldData};
+use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigField};
 
 impl ConfigField {
     fn describe_param(
         &self,
         meta_mod: &proc_macro2::TokenStream,
     ) -> syn::Result<proc_macro2::TokenStream> {
-        let name_span = self.data.name_span();
+        let name_span = self.name.span();
         let aliases = self.attrs.aliases.iter();
         let help = &self.docs;
         let param_name = self.param_name();
 
-        let string_type;
-        let ty = match &self.data {
-            ConfigFieldData::Ordinary { ty, .. } => ty,
-            ConfigFieldData::EnumTag(tag) => {
-                string_type = syn::parse_quote_spanned!(tag.span()=> ::std::string::String);
-                &string_type
-            }
-        };
+        let ty = &self.ty;
         let ty_in_code = if let Some(text) = ty.span().source_text() {
             quote!(#text)
         } else {
@@ -69,16 +62,14 @@ impl ConfigField {
     }
 
     fn describe_nested_config(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-        let ConfigFieldData::Ordinary { name, ty } = &self.data else {
-            unreachable!("enum tags are never nested");
-        };
+        let ty = &self.ty;
         let config_name = if self.attrs.flatten {
             String::new()
         } else {
             self.param_name()
         };
 
-        quote_spanned! {name.span()=>
+        quote_spanned! {self.name.span()=>
             #cr::metadata::NestedConfigMetadata {
                 name: #config_name,
                 meta: <#ty as #cr::DescribeConfig>::describe_config(),
@@ -95,15 +86,22 @@ impl ConfigContainer {
         let name_str = name.to_string();
         let help = &self.help;
 
-        let params = self.fields.iter().filter_map(|field| {
+        let all_fields = self.fields.all_fields();
+        let params = all_fields.iter().filter_map(|field| {
             if !field.attrs.nest {
                 return Some(field.describe_param(&meta_mod));
             }
             None
         });
-        let params = params.collect::<syn::Result<Vec<_>>>()?;
+        let mut params = params.collect::<syn::Result<Vec<_>>>()?;
 
-        let nested_configs = self.fields.iter().filter_map(|field| {
+        if let ConfigContainerFields::Enum { tag: Some(tag), .. } = &self.fields {
+            // Add the tag field description
+            let tag = ConfigField::from_tag(tag);
+            params.push(tag.describe_param(&meta_mod)?);
+        }
+
+        let nested_configs = all_fields.iter().filter_map(|field| {
             if field.attrs.nest {
                 return Some(field.describe_nested_config(&cr));
             }

@@ -252,31 +252,11 @@ impl ConfigFieldAttrs {
     }
 }
 
-pub(crate) enum ConfigFieldData {
-    Ordinary { name: Ident, ty: Type },
-    EnumTag(LitStr),
-}
-
-impl ConfigFieldData {
-    fn name(&self) -> String {
-        match self {
-            Self::Ordinary { name, .. } => name.to_string(),
-            Self::EnumTag(tag) => tag.value(),
-        }
-    }
-
-    pub fn name_span(&self) -> proc_macro2::Span {
-        match self {
-            Self::Ordinary { name, .. } => name.span(),
-            Self::EnumTag(tag) => tag.span(),
-        }
-    }
-}
-
 pub(crate) struct ConfigField {
     pub attrs: ConfigFieldAttrs,
     pub docs: String,
-    pub data: ConfigFieldData,
+    pub name: Ident,
+    pub ty: Type,
 }
 
 impl ConfigField {
@@ -307,15 +287,17 @@ impl ConfigField {
         Ok(Self {
             attrs,
             docs: parse_docs(&raw.attrs),
-            data: ConfigFieldData::Ordinary { name, ty },
+            name,
+            ty,
         })
     }
 
-    fn from_tag(tag: LitStr) -> Self {
+    pub fn from_tag(tag: &LitStr) -> Self {
         Self {
             attrs: ConfigFieldAttrs::default(),
             docs: "Tag for the enum config".to_owned(),
-            data: ConfigFieldData::EnumTag(tag),
+            name: Ident::new(&tag.value(), tag.span()),
+            ty: syn::parse_quote_spanned!(tag.span()=> ::std::string::String),
         }
     }
 
@@ -369,7 +351,7 @@ impl ConfigField {
         self.attrs
             .rename
             .clone()
-            .unwrap_or_else(|| self.data.name())
+            .unwrap_or_else(|| self.name.to_string())
     }
 
     pub fn type_kind(
@@ -412,11 +394,37 @@ impl ConfigContainerAttrs {
     }
 }
 
+pub(crate) struct ConfigEnumVariant {
+    #[allow(dead_code)] // FIXME
+    name: Ident,
+    fields: Vec<ConfigField>,
+}
+
+pub(crate) enum ConfigContainerFields {
+    Struct(Vec<ConfigField>),
+    Enum {
+        tag: Option<LitStr>,
+        variants: Vec<ConfigEnumVariant>,
+    },
+}
+
+impl ConfigContainerFields {
+    pub fn all_fields(&self) -> Vec<&ConfigField> {
+        match self {
+            Self::Struct(fields) => fields.iter().collect(),
+            Self::Enum { variants, .. } => variants
+                .iter()
+                .flat_map(|variant| &variant.fields)
+                .collect(),
+        }
+    }
+}
+
 pub(crate) struct ConfigContainer {
     pub attrs: ConfigContainerAttrs,
     pub name: Ident,
     pub help: String,
-    pub fields: Vec<ConfigField>,
+    pub fields: ConfigContainerFields,
 }
 
 impl ConfigContainer {
@@ -433,7 +441,7 @@ impl ConfigContainer {
         let fields = match &raw.data {
             Data::Struct(data) => {
                 serde_attrs.validate_for_struct()?;
-                Self::extract_struct_fields(data)?
+                ConfigContainerFields::Struct(Self::extract_struct_fields(data)?)
             }
             Data::Enum(data) => Self::extract_enum_fields(data, &serde_attrs)?,
             _ => {
@@ -459,11 +467,12 @@ impl ConfigContainer {
     fn extract_enum_fields(
         data: &DataEnum,
         serde_attrs: &ContainerAttrs,
-    ) -> syn::Result<Vec<ConfigField>> {
-        let mut merged_fields = vec![];
+    ) -> syn::Result<ConfigContainerFields> {
+        let mut variants = vec![];
         let mut merged_fields_by_name = HashSet::new();
 
         for variant in &data.variants {
+            let mut variant_fields = vec![];
             match &variant.fields {
                 Fields::Named(fields) => {
                     for field in &fields.named {
@@ -473,7 +482,7 @@ impl ConfigContainer {
                                 this may lead to unexpected config merge results and thus not supported";
                             return Err(syn::Error::new_spanned(field, msg));
                         }
-                        merged_fields.push(new_field);
+                        variant_fields.push(new_field);
                     }
                 }
                 Fields::Unnamed(fields) => {
@@ -482,14 +491,19 @@ impl ConfigContainer {
                         return Err(syn::Error::new(variant.ident.span(), msg));
                     } else if fields.unnamed.len() == 1 {
                         let field = fields.unnamed.first().unwrap();
-                        merged_fields.push(ConfigField::from_newtype_variant(field)?);
+                        variant_fields.push(ConfigField::from_newtype_variant(field)?);
                     }
                 }
                 Fields::Unit => { /* no fields to add */ }
             }
+            variants.push(ConfigEnumVariant {
+                name: variant.ident.clone(),
+                fields: variant_fields,
+            });
         }
 
-        if !merged_fields.is_empty() {
+        let has_fields = variants.iter().any(|variant| !variant.fields.is_empty());
+        let tag = if has_fields {
             let tag = serde_attrs.tag.clone().ok_or_else(|| {
                 let msg = "Only tagged enums are supported as configs. Please add #[serde(tag = ..)] to the enum";
                 syn::Error::new_spanned(&data.variants, msg)
@@ -498,11 +512,12 @@ impl ConfigContainer {
                 let msg = "Tag name coincides with an existing param name";
                 return Err(syn::Error::new(tag.span(), msg));
             }
+            Some(tag)
+        } else {
+            None
+        };
 
-            merged_fields.push(ConfigField::from_tag(tag));
-        }
-
-        Ok(merged_fields)
+        Ok(ConfigContainerFields::Enum { tag, variants })
     }
 
     pub fn cr(&self) -> proc_macro2::TokenStream {
