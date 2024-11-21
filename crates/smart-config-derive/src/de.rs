@@ -1,6 +1,7 @@
 use std::iter;
 
 use proc_macro::TokenStream;
+use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, LitStr};
 
@@ -30,6 +31,7 @@ impl DefaultValue {
 }
 
 impl ConfigField {
+    /// Returns `Option<_>`.
     fn deserialize_param(
         &self,
         cr: &proc_macro2::TokenStream,
@@ -43,23 +45,33 @@ impl ConfigField {
 
         if !self.attrs.nest {
             quote_spanned! {name_span=>
-                deserializer.deserialize_param(
+                match deserializer.deserialize_param(
                     #index,
                     #param_name,
                     #default_fallback,
-                )?
+                ) {
+                    ::core::result::Result::Ok(value) => ::core::option::Option::Some(value),
+                    ::core::result::Result::Err(err) => {
+                        errors.push(err);
+                        ::core::option::Option::None
+                    }
+                }
             }
         } else if self.attrs.flatten {
             quote_spanned! {name_span=>
-                #cr::DeserializeConfig::deserialize_config(deserializer.for_flattened_config())?
+                #cr::DeserializeConfig::deserialize_config_full(
+                    deserializer.for_flattened_config(),
+                    errors,
+                )
             }
         } else {
             quote_spanned! {name_span=>
                 deserializer.deserialize_nested_config(
+                    errors,
                     #index,
                     #param_name,
                     #default_fallback,
-                )?
+                )
             }
         }
     }
@@ -85,8 +97,9 @@ impl ConfigContainer {
         cr: &'a proc_macro2::TokenStream,
         param_index: &'a mut usize,
         nested_index: &'a mut usize,
-    ) -> impl Iterator<Item = proc_macro2::TokenStream> + 'a {
-        fields.iter().map(move |field| {
+    ) -> (proc_macro2::TokenStream, Vec<proc_macro2::TokenStream>) {
+        let mut init = proc_macro2::TokenStream::default();
+        let fields = fields.iter().enumerate().map(|(i, field)| {
             let index;
             if field.attrs.nest {
                 index = *nested_index;
@@ -98,8 +111,14 @@ impl ConfigContainer {
 
             let name = &field.name;
             let value = field.deserialize_param(cr, index);
-            quote_spanned!(name.span()=> #name: #value)
-        })
+            let local_var = Ident::new(&format!("__{i}"), name.span());
+            init.extend(quote_spanned! {name.span()=>
+                let #local_var = #value;
+            });
+            quote_spanned!(name.span()=> #name: #local_var?)
+        });
+        let fields = fields.collect();
+        (init, fields)
     }
 
     fn derive_deserialize_config(&self) -> proc_macro2::TokenStream {
@@ -110,20 +129,27 @@ impl ConfigContainer {
         let mut nested_index = 0;
         let instance = match &self.fields {
             ConfigContainerFields::Struct(fields) => {
-                let fields = Self::process_fields(fields, &cr, &mut param_index, &mut nested_index);
-                quote!(Self { #(#fields,)* })
+                let (init, fields) =
+                    Self::process_fields(fields, &cr, &mut param_index, &mut nested_index);
+                quote!({
+                    #init
+                    Self { #(#fields,)* }
+                })
             }
             ConfigContainerFields::Enum { tag, variants } => {
                 let match_hands = variants.iter().map(|variant| {
                     let name = &variant.name;
                     let matches = variant.matches();
-                    let variant_fields = Self::process_fields(
+                    let (init, variant_fields) = Self::process_fields(
                         &variant.fields,
                         &cr,
                         &mut param_index,
                         &mut nested_index,
                     );
-                    quote!(#matches => Self::#name { #(#variant_fields,)* })
+                    quote!(#matches => {
+                        #init
+                        Self::#name { #(#variant_fields,)* }
+                    })
                 });
                 let match_hands: Vec<_> = match_hands.collect();
 
@@ -142,13 +168,20 @@ impl ConfigContainer {
 
                 quote! {{
                     const EXPECTED_VARIANTS: &[&str] = &[#(#expected_variants,)*];
-                    match deserializer.deserialize_tag(
+                    let __tag = match deserializer.deserialize_tag(
                         #param_index,
                         #tag_name,
                         EXPECTED_VARIANTS,
                         #default,
-                    )? {
-                        #(#match_hands,)*
+                    ) {
+                        ::core::result::Result::Ok(tag) => tag,
+                        ::core::result::Result::Err(err) => {
+                            errors.push(err);
+                            return ::core::option::Option::None;
+                        }
+                    };
+                    match __tag {
+                        #(#match_hands)*
                         _ => ::core::unreachable!(),
                     }
                 }}
@@ -157,11 +190,12 @@ impl ConfigContainer {
 
         quote! {
             impl #cr::DeserializeConfig for #name {
-                fn deserialize_config(
+                fn deserialize_config_full(
                     deserializer: #cr::ValueDeserializer<'_>,
-                ) -> ::core::result::Result<Self, #cr::ParseError> {
+                    errors: &mut #cr::ParseErrors,
+                ) -> ::core::option::Option<Self> {
                     let deserializer = deserializer.for_config::<Self>();
-                    ::core::result::Result::Ok(#instance)
+                    ::core::option::Option::Some(#instance)
                 }
             }
         }

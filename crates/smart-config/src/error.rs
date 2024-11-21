@@ -168,3 +168,38 @@ impl ParseError {
         self
     }
 }
+
+#[derive(Debug, Default)]
+pub struct ParseErrors {
+    errors: Vec<ParseError>,
+}
+
+impl ParseErrors {
+    #[doc(hidden)]
+    pub fn push(&mut self, err: ParseError) {
+        self.errors.push(err);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &ParseError> + '_ {
+        self.errors.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.errors.len()
+    }
+
+    pub fn first(&self) -> &ParseError {
+        self.errors.first().expect("no errors")
+    }
+}
+
+impl fmt::Display for ParseErrors {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for err in &self.errors {
+            writeln!(formatter, "{err}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for ParseErrors {}

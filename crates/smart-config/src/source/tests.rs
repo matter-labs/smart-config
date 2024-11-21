@@ -146,8 +146,9 @@ fn parsing_enum_config() {
 fn parsing_enum_config_missing_tag() {
     let env = Environment::from_iter("", [("renamed", "second")]);
     let env = wrap_into_value(env);
-    let err: crate::ParseError =
-        EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap_err();
+    let deserializer = ValueDeserializer::new(&env, "".into());
+    let errors = EnumConfig::deserialize_config(deserializer).unwrap_err();
+    let err = errors.first();
 
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
@@ -163,7 +164,9 @@ fn parsing_enum_config_missing_tag() {
 fn parsing_enum_config_unknown_tag() {
     let env = Environment::from_iter("", [("type", "Unknown")]);
     let env = wrap_into_value(env);
-    let err = EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap_err();
+    let errors =
+        EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap_err();
+    let err = errors.first();
 
     let inner = err.inner().to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
@@ -236,12 +239,42 @@ fn parsing_compound_config_missing_nested_value() {
         "renamed": "second",
     );
     let deserializer = ValueDeserializer::new(json.inner(), "".into());
-    let err = CompoundConfig::deserialize_config(deserializer).unwrap_err();
+    let errors = CompoundConfig::deserialize_config(deserializer).unwrap_err();
+
+    let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
     assert_eq!(err.path().unwrap(), "nested");
     assert_eq!(err.config().unwrap().ty, NestedConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "renamed");
+}
+
+#[test]
+fn parsing_compound_config_with_multiple_errors() {
+    let json = config!("other_int": "what?");
+    let deserializer = ValueDeserializer::new(json.inner(), "".into());
+    let errors = CompoundConfig::deserialize_config(deserializer).unwrap_err();
+    assert_eq!(errors.len(), 3, "{errors:#?}");
+    assert!(
+        errors
+            .iter()
+            .filter_map(|err| err.nested_config())
+            .any(|nested| nested.name == "nested"),
+        "{errors:#?}"
+    );
+    assert!(
+        errors
+            .iter()
+            .filter_map(|err| err.param())
+            .any(|param| param.name == "renamed"),
+        "{errors:#?}"
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|err| err.inner().to_string().contains("what?") && err.path() == Some("other_int")),
+        "{errors:#?}"
+    );
 }
 
 #[test]
@@ -360,7 +393,8 @@ fn parsing_defaulting_enum_config_from_missing_tag() {
 
     let json = config!("kind": "Third", "int": 42);
     let deserializer = ValueDeserializer::new(json.inner(), "".into());
-    let err = DefaultingEnumConfig::deserialize_config(deserializer).unwrap_err();
+    let errors = DefaultingEnumConfig::deserialize_config(deserializer).unwrap_err();
+    let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
 }
@@ -398,11 +432,10 @@ fn parsing_compound_config_with_schema() {
 #[test]
 fn type_mismatch_parsing_error() {
     let env = Environment::from_iter("", [("renamed", "first"), ("other_int", "what")]);
-    let err = NestedConfig::deserialize_config(ValueDeserializer::new(
-        &wrap_into_value(env),
-        String::new(),
-    ))
-    .unwrap_err();
+    let env = wrap_into_value(env);
+    let deserializer = ValueDeserializer::new(&env, String::new());
+    let errors = NestedConfig::deserialize_config(deserializer).unwrap_err();
+    let err = errors.first();
 
     assert!(
         err.inner().to_string().contains("u32 value 'what'"),
@@ -422,12 +455,11 @@ fn type_mismatch_parsing_error() {
 #[test]
 fn missing_parameter_parsing_error() {
     let env = Environment::from_iter("", [("other_int", "12")]);
-    let err = NestedConfig::deserialize_config(ValueDeserializer::new(
-        &wrap_into_value(env),
-        String::new(),
-    ))
-    .unwrap_err();
+    let env = wrap_into_value(env);
+    let deserializer = ValueDeserializer::new(&env, String::new());
+    let errors = NestedConfig::deserialize_config(deserializer).unwrap_err();
 
+    let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
     assert_eq!(
@@ -440,9 +472,9 @@ fn missing_parameter_parsing_error() {
 #[test]
 fn missing_nested_config_parsing_error() {
     let json = config!("value": 123);
-    let err =
-        ConfigWithNesting::deserialize_config(ValueDeserializer::new(json.inner(), String::new()))
-            .unwrap_err();
+    let deserializer = ValueDeserializer::new(json.inner(), String::new());
+    let errors = ConfigWithNesting::deserialize_config(deserializer).unwrap_err();
+    let err = errors.first();
 
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");

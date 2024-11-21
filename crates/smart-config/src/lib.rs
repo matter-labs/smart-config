@@ -5,7 +5,7 @@ pub use smart_config_derive::{DescribeConfig, DeserializeConfig};
 use self::metadata::ConfigMetadata;
 pub use self::{
     de::ValueDeserializer,
-    error::ParseError,
+    error::{ParseError, ParseErrors},
     source::{ConfigRepository, ConfigSource, Environment, Json, KeyValueMap, Yaml},
 };
 
@@ -25,5 +25,17 @@ pub trait DescribeConfig: 'static {
 }
 
 pub trait DeserializeConfig: DescribeConfig + Sized {
-    fn deserialize_config(deserializer: ValueDeserializer<'_>) -> Result<Self, ParseError>;
+    fn deserialize_config_full(
+        deserializer: ValueDeserializer<'_>,
+        errors: &mut ParseErrors,
+    ) -> Option<Self>;
+
+    fn deserialize_config(deserializer: ValueDeserializer<'_>) -> Result<Self, ParseErrors> {
+        let mut errors = ParseErrors::default();
+        if let Some(config) = Self::deserialize_config_full(deserializer, &mut errors) {
+            Ok(config)
+        } else {
+            Err(errors)
+        }
+    }
 }

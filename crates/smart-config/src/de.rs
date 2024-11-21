@@ -16,7 +16,7 @@ use crate::{
     error::LocationInConfig,
     metadata::ConfigMetadata,
     value::{Pointer, Value, ValueOrigin, WithOrigin},
-    DescribeConfig, DeserializeConfig,
+    DescribeConfig, DeserializeConfig, ParseErrors,
 };
 
 macro_rules! parse_int_value {
@@ -224,27 +224,31 @@ impl<'a> ValueDeserializer<'a> {
 
     pub fn deserialize_nested_config<T: DeserializeConfig>(
         &self,
+        errors: &mut ParseErrors,
         index: usize,
         path: &'static str,
         default_fn: Option<fn() -> T>,
-    ) -> Result<T, ParseError> {
+    ) -> Option<T> {
         let location = LocationInConfig::Nested(index);
         let child_deserializer = self.child_deserializer(path);
 
         let child_value = if let Some(value) = child_deserializer.value {
             value
         } else if let Some(default_fn) = default_fn {
-            return Ok(default_fn());
+            return Some(default_fn());
         } else {
             let err = DeError::missing_field(path);
-            return Err(self.enrich_err(err).with_location(self.config, location));
+            errors.push(self.enrich_err(err).with_location(self.config, location));
+            return None;
         };
         if !matches!(&child_value.inner, Value::Object(_)) {
-            return Err(self
+            let err = self
                 .invalid_type("configuration object")
-                .with_location(self.config, location));
+                .with_location(self.config, location);
+            errors.push(err);
+            return None;
         }
-        T::deserialize_config(child_deserializer)
+        T::deserialize_config_full(child_deserializer, errors)
     }
 
     pub fn for_flattened_config(&self) -> Self {
