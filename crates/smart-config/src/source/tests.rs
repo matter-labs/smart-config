@@ -6,7 +6,7 @@ use serde::Deserialize;
 use super::*;
 use crate::{
     schema::Alias,
-    testonly::{NestedConfig, SimpleEnum},
+    testonly::{EnumConfig, NestedConfig, SimpleEnum},
     DescribeConfig,
 };
 
@@ -67,17 +67,16 @@ fn parsing() {
     );
 }
 
-/*
 #[test]
 fn parsing_enum_config() {
     let env = Environment::from_iter("", [("type", "First")]);
     let env = wrap_into_value(env);
-    let config = EnumConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    let config = EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap();
     assert_eq!(config, EnumConfig::First);
 
     let env = Environment::from_iter("", [("type", "Nested"), ("renamed", "second")]);
     let env = wrap_into_value(env);
-    let config = EnumConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    let config = EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap();
     assert_eq!(
         config,
         EnumConfig::Nested(NestedConfig {
@@ -89,7 +88,7 @@ fn parsing_enum_config() {
 
     let env = Environment::from_iter("", [("type", "WithFields")]);
     let env = wrap_into_value(env);
-    let config = EnumConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    let config = EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap();
     assert_eq!(
         config,
         EnumConfig::WithFields {
@@ -101,10 +100,14 @@ fn parsing_enum_config() {
 
     let env = Environment::from_iter(
         "",
-        [("type", "Fields"), ("renamed", "second"), ("string", "???")],
+        [
+            ("type", "WithFields"),
+            ("renamed", "second"),
+            ("string", "???"),
+        ],
     );
     let env = wrap_into_value(env);
-    let config = EnumConfig::deserialize(ValueDeserializer::new(&env)).unwrap();
+    let config = EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap();
     assert_eq!(
         config,
         EnumConfig::WithFields {
@@ -137,7 +140,7 @@ fn parsing_enum_config_with_schema() {
     );
 
     let json = config!(
-        "type": "Fields",
+        "type": "WithFields", // FIXME: test aliases / renaming
         "string": "???",
         "flag": true,
         "set": [42, 23],
@@ -156,7 +159,7 @@ fn parsing_enum_config_with_schema() {
     let env = Environment::from_iter(
         "",
         [
-            ("type", "Fields"),
+            ("type", "WithFields"),
             ("renamed", "second"),
             ("string", "???"),
             ("flag", "true"),
@@ -178,7 +181,6 @@ fn parsing_enum_config_with_schema() {
         }
     );
 }
-*/
 
 #[test]
 fn type_mismatch_parsing_error() {

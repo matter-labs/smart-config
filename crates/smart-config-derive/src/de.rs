@@ -1,8 +1,10 @@
+use std::iter;
+
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::DeriveInput;
+use syn::{spanned::Spanned, DeriveInput};
 
-use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigField};
+use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField};
 
 impl ConfigField {
     fn deserialize_param(
@@ -10,7 +12,6 @@ impl ConfigField {
         cr: &proc_macro2::TokenStream,
         index: usize,
     ) -> proc_macro2::TokenStream {
-        let name = &self.name;
         let name_span = self.name.span();
         let param_name = self.param_name();
 
@@ -24,7 +25,7 @@ impl ConfigField {
             Some(Some(def_fn)) => quote_spanned!(name_span=> ::core::option::Option::Some(#def_fn)),
         };
 
-        let value = if !self.attrs.nest {
+        if !self.attrs.nest {
             quote_spanned! {name_span=>
                 deserializer.deserialize_param(
                     #index,
@@ -44,12 +45,46 @@ impl ConfigField {
                     #default_fallback,
                 )?
             }
-        };
-        quote_spanned!(name_span=> #name: #value)
+        }
+    }
+}
+
+impl ConfigEnumVariant {
+    // FIXME: support rename_all = "snake_case", rename = .., alias = ..
+    fn matches(&self) -> proc_macro2::TokenStream {
+        let name = self.name.to_string();
+        let name_span = self.name.span();
+        quote_spanned!(name_span=> #name)
+    }
+
+    fn expected_variants(&self) -> impl Iterator<Item = String> + '_ {
+        iter::once(self.name.to_string())
     }
 }
 
 impl ConfigContainer {
+    fn process_fields<'a>(
+        fields: &'a [ConfigField],
+        cr: &'a proc_macro2::TokenStream,
+        param_index: &'a mut usize,
+        nested_index: &'a mut usize,
+    ) -> impl Iterator<Item = proc_macro2::TokenStream> + 'a {
+        fields.iter().map(move |field| {
+            let index;
+            if field.attrs.nest {
+                index = *nested_index;
+                *nested_index += 1;
+            } else {
+                index = *param_index;
+                *param_index += 1;
+            };
+
+            let name = &field.name;
+            let value = field.deserialize_param(cr, index);
+            quote_spanned!(name.span()=> #name: #value)
+        })
+    }
+
     fn derive_deserialize_config(&self) -> proc_macro2::TokenStream {
         let cr = self.cr();
         let name = &self.name;
@@ -58,20 +93,35 @@ impl ConfigContainer {
         let mut nested_index = 0;
         let instance = match &self.fields {
             ConfigContainerFields::Struct(fields) => {
-                let fields = fields.iter().map(|field| {
-                    let index;
-                    if field.attrs.nest {
-                        index = param_index;
-                        param_index += 1;
-                    } else {
-                        index = nested_index;
-                        nested_index += 1;
-                    };
-                    field.deserialize_param(&cr, index)
-                });
+                let fields = Self::process_fields(fields, &cr, &mut param_index, &mut nested_index);
                 quote!(Self { #(#fields,)* })
             }
-            ConfigContainerFields::Enum { .. } => todo!(),
+            ConfigContainerFields::Enum { tag, variants } => {
+                let match_hands = variants.iter().map(|variant| {
+                    let name = &variant.name;
+                    let matches = variant.matches();
+                    let variant_fields = Self::process_fields(
+                        &variant.fields,
+                        &cr,
+                        &mut param_index,
+                        &mut nested_index,
+                    );
+                    quote!(#matches => Self::#name { #(#variant_fields,)* })
+                });
+                let match_hands: Vec<_> = match_hands.collect();
+                let tag_name = tag.value();
+                let expected_variants = variants
+                    .iter()
+                    .flat_map(ConfigEnumVariant::expected_variants);
+
+                quote! {{
+                    const EXPECTED_VARIANTS: &[&str] = &[#(#expected_variants,)*];
+                    match deserializer.deserialize_tag(#param_index, #tag_name, EXPECTED_VARIANTS)? {
+                        #(#match_hands,)*
+                        _ => ::core::unreachable!(),
+                    }
+                }}
+            }
         };
 
         quote! {

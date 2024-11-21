@@ -95,7 +95,7 @@ impl ConfigContainer {
         });
         let mut params = params.collect::<syn::Result<Vec<_>>>()?;
 
-        if let ConfigContainerFields::Enum { tag: Some(tag), .. } = &self.fields {
+        if let ConfigContainerFields::Enum { tag, .. } = &self.fields {
             // Add the tag field description
             let tag = ConfigField::from_tag(tag);
             params.push(tag.describe_param(&meta_mod)?);

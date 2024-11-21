@@ -6,7 +6,7 @@ use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{
     spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Field, Fields,
-    GenericArgument, Lit, LitStr, Path, PathArguments, Type, TypePath,
+    GenericArgument, Index, Lit, LitStr, Member, Path, PathArguments, Type, TypePath,
 };
 
 /// Corresponds to the type kind in the main crate. Necessary because `TypeId::of()` is not a `const fn`
@@ -136,47 +136,6 @@ fn parse_docs(attrs: &[Attribute]) -> String {
     docs
 }
 
-pub(crate) struct ContainerAttrs {
-    pub rename_all: Option<LitStr>,
-    pub tag: Option<LitStr>,
-}
-
-impl ContainerAttrs {
-    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
-        let serde_attrs = attrs.iter().filter(|attr| attr.path().is_ident("serde"));
-
-        let mut rename_all = None;
-        let mut tag = None;
-        for attr in serde_attrs {
-            attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("rename_all") {
-                    rename_all = Some(meta.value()?.parse()?);
-                    Ok(())
-                } else if meta.path.is_ident("tag") {
-                    tag = Some(meta.value()?.parse()?);
-                    Ok(())
-                } else {
-                    Err(meta
-                        .error("Unsupported attribute; only `rename_all` and `tag` are supported`"))
-                }
-            })?;
-        }
-        Ok(Self { rename_all, tag })
-    }
-
-    fn validate_for_struct(&self) -> syn::Result<()> {
-        if let Some(rename_all) = &self.rename_all {
-            let msg = "`rename_all` attribute must not be used on struct configs";
-            return Err(syn::Error::new(rename_all.span(), msg));
-        }
-        if let Some(tag) = &self.tag {
-            let msg = "`tag` attribute must not be used on struct configs";
-            return Err(syn::Error::new(tag.span(), msg));
-        }
-        Ok(())
-    }
-}
-
 #[derive(Default)]
 pub(crate) struct ConfigFieldAttrs {
     pub rename: Option<String>,
@@ -255,7 +214,7 @@ impl ConfigFieldAttrs {
 pub(crate) struct ConfigField {
     pub attrs: ConfigFieldAttrs,
     pub docs: String,
-    pub name: Ident,
+    pub name: Member,
     pub ty: Type,
 }
 
@@ -274,9 +233,12 @@ impl ConfigField {
 
     fn new_inner(raw: &Field, support_unnamed: bool) -> syn::Result<Self> {
         let name = if let Some(name) = raw.ident.clone() {
-            name
+            Member::Named(name)
         } else if support_unnamed {
-            Ident::new("_", raw.ty.span()) // This name will not be used
+            Member::Unnamed(Index {
+                index: 0,
+                span: raw.ty.span(),
+            })
         } else {
             let message = "Only named fields are supported";
             return Err(syn::Error::new_spanned(raw, message));
@@ -296,7 +258,7 @@ impl ConfigField {
         Self {
             attrs: ConfigFieldAttrs::default(),
             docs: "Tag for the enum config".to_owned(),
-            name: Ident::new(&tag.value(), tag.span()),
+            name: Ident::new(&tag.value(), tag.span()).into(),
             ty: syn::parse_quote_spanned!(tag.span()=> ::std::string::String),
         }
     }
@@ -351,7 +313,10 @@ impl ConfigField {
         self.attrs
             .rename
             .clone()
-            .unwrap_or_else(|| self.name.to_string())
+            .unwrap_or_else(|| match &self.name {
+                Member::Named(ident) => ident.to_string(),
+                Member::Unnamed(idx) => idx.index.to_string(),
+            })
     }
 
     pub fn type_kind(
@@ -373,6 +338,8 @@ impl ConfigField {
 
 pub(crate) struct ConfigContainerAttrs {
     pub cr: Option<Path>,
+    pub rename_all: Option<LitStr>,
+    pub tag: Option<LitStr>,
 }
 
 impl ConfigContainerAttrs {
@@ -380,30 +347,53 @@ impl ConfigContainerAttrs {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut cr = None;
+        let mut rename_all = None;
+        let mut tag = None;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("crate") {
                     cr = Some(meta.value()?.parse()?);
                     Ok(())
+                } else if meta.path.is_ident("rename_all") {
+                    rename_all = Some(meta.value()?.parse()?);
+                    Ok(())
+                } else if meta.path.is_ident("tag") {
+                    tag = Some(meta.value()?.parse()?);
+                    Ok(())
                 } else {
-                    Err(meta.error("Unsupported attribute; only `crate` is supported`"))
+                    Err(meta.error("Unsupported attribute; only `crate`, `rename_all` and `tag` are supported`"))
                 }
             })?;
         }
-        Ok(Self { cr })
+        Ok(Self {
+            cr,
+            rename_all,
+            tag,
+        })
+    }
+
+    fn validate_for_struct(&self) -> syn::Result<()> {
+        if let Some(rename_all) = &self.rename_all {
+            let msg = "`rename_all` attribute must not be used on struct configs";
+            return Err(syn::Error::new(rename_all.span(), msg));
+        }
+        if let Some(tag) = &self.tag {
+            let msg = "`tag` attribute must not be used on struct configs";
+            return Err(syn::Error::new(tag.span(), msg));
+        }
+        Ok(())
     }
 }
 
 pub(crate) struct ConfigEnumVariant {
-    #[allow(dead_code)] // FIXME
-    name: Ident,
-    fields: Vec<ConfigField>,
+    pub name: Ident,
+    pub fields: Vec<ConfigField>,
 }
 
 pub(crate) enum ConfigContainerFields {
     Struct(Vec<ConfigField>),
     Enum {
-        tag: Option<LitStr>,
+        tag: LitStr,
         variants: Vec<ConfigEnumVariant>,
     },
 }
@@ -437,13 +427,13 @@ impl ConfigContainer {
             return Err(syn::Error::new_spanned(&raw.generics, message));
         }
 
-        let serde_attrs = ContainerAttrs::new(&raw.attrs)?;
+        let attrs = ConfigContainerAttrs::new(&raw.attrs)?;
         let fields = match &raw.data {
             Data::Struct(data) => {
-                serde_attrs.validate_for_struct()?;
+                attrs.validate_for_struct()?;
                 ConfigContainerFields::Struct(Self::extract_struct_fields(data)?)
             }
-            Data::Enum(data) => Self::extract_enum_fields(data, &serde_attrs)?,
+            Data::Enum(data) => Self::extract_enum_fields(data, &attrs)?,
             _ => {
                 let message = "#[derive(DescribeConfig)] can only be placed on structs or enums";
                 return Err(syn::Error::new_spanned(raw, message));
@@ -451,7 +441,7 @@ impl ConfigContainer {
         };
 
         let name = raw.ident.clone();
-        let attrs = ConfigContainerAttrs::new(&raw.attrs)?;
+
         Ok(Self {
             attrs,
             name,
@@ -466,7 +456,7 @@ impl ConfigContainer {
 
     fn extract_enum_fields(
         data: &DataEnum,
-        serde_attrs: &ContainerAttrs,
+        container_attrs: &ConfigContainerAttrs,
     ) -> syn::Result<ConfigContainerFields> {
         let mut variants = vec![];
         let mut merged_fields_by_name = HashSet::new();
@@ -503,19 +493,18 @@ impl ConfigContainer {
         }
 
         let has_fields = variants.iter().any(|variant| !variant.fields.is_empty());
-        let tag = if has_fields {
-            let tag = serde_attrs.tag.clone().ok_or_else(|| {
-                let msg = "Only tagged enums are supported as configs. Please add #[serde(tag = ..)] to the enum";
-                syn::Error::new_spanned(&data.variants, msg)
-            })?;
-            if merged_fields_by_name.contains(&tag.value()) {
-                let msg = "Tag name coincides with an existing param name";
-                return Err(syn::Error::new(tag.span(), msg));
-            }
-            Some(tag)
-        } else {
-            None
-        };
+        if !has_fields {
+            let msg = "Cannot use an enum without fields as a config; this is useless";
+            return Err(syn::Error::new_spanned(&data.variants, msg));
+        }
+        let tag = container_attrs.tag.clone().ok_or_else(|| {
+            let msg = "Only tagged enums are supported as configs. Please add #[config(tag = ..)] to the enum";
+            syn::Error::new_spanned(&data.variants, msg)
+        })?;
+        if merged_fields_by_name.contains(&tag.value()) {
+            let msg = "Tag name coincides with an existing param name";
+            return Err(syn::Error::new(tag.span(), msg));
+        }
 
         Ok(ConfigContainerFields::Enum { tag, variants })
     }

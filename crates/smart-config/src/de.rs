@@ -154,7 +154,7 @@ impl<'a> ValueDeserializer<'a> {
 
 /// Methods used in proc macros. Not a part of public API.
 #[doc(hidden)]
-impl ValueDeserializer<'_> {
+impl<'a> ValueDeserializer<'a> {
     pub fn for_config<T: DescribeConfig>(self) -> Self {
         Self {
             config: Some(T::describe_config()),
@@ -170,15 +170,32 @@ impl ValueDeserializer<'_> {
     ) -> Result<T, ParseError> {
         let location = LocationInConfig::Param(index);
         let deserialized = Option::<T>::deserialize(self.child_deserializer(path))
-            .map_err(|err| self.enrich_err(err).for_location(self.config, location))?;
+            .map_err(|err| self.enrich_err(err).with_location(self.config, location))?;
         if let Some(default_fn) = default_fn {
             Ok(deserialized.unwrap_or_else(default_fn))
         } else {
             deserialized.ok_or_else(|| {
                 self.enrich_err(DeError::missing_field(path))
-                    .for_location(self.config, location)
+                    .with_location(self.config, location)
             })
         }
+    }
+
+    pub fn deserialize_tag(
+        &self,
+        index: usize,
+        path: &'static str,
+        expected: &'static [&'static str],
+    ) -> Result<&'a str, ParseError> {
+        let tag_value: String = self.deserialize_param(index, path, None)?;
+        let matching_tag = expected
+            .iter()
+            .copied()
+            .find(|&variant| variant == tag_value);
+        matching_tag.ok_or_else(|| {
+            self.enrich_err(DeError::unknown_variant(&tag_value, expected))
+                .with_location(self.config, LocationInConfig::Param(index))
+        })
     }
 
     // FIXME: defaults don't work correctly with pre-processing (adding empty objects at mounting points)
@@ -197,12 +214,12 @@ impl ValueDeserializer<'_> {
             return Ok(default_fn());
         } else {
             let err = DeError::missing_field(path);
-            return Err(self.enrich_err(err).for_location(self.config, location));
+            return Err(self.enrich_err(err).with_location(self.config, location));
         };
         if !matches!(&child_value.inner, Value::Object(_)) {
             return Err(self
                 .invalid_type("configuration object")
-                .for_location(self.config, location));
+                .with_location(self.config, location));
         }
         T::deserialize_config(child_deserializer)
     }

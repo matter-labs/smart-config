@@ -156,7 +156,7 @@ impl ParseError {
         self
     }
 
-    pub(crate) fn for_location(
+    pub(crate) fn with_location(
         mut self,
         metadata: Option<&'static ConfigMetadata>,
         location: LocationInConfig,

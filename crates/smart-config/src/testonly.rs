@@ -31,19 +31,17 @@ impl NestedConfig {
     }
 }
 
-/*
-#[derive(Debug, PartialEq, Deserialize)]
-#[serde(tag = "type")]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate, tag = "type")]
 pub(crate) enum EnumConfig {
     First,
     Nested(NestedConfig),
-    #[serde(alias = "Fields")]
+    #[config(alias = "Fields")]
     WithFields {
         string: Option<String>,
-        #[serde(default)]
+        #[config(default)]
         flag: bool,
-        #[serde(default)]
+        #[config(default)]
         set: HashSet<u32>,
     },
 }
-*/
