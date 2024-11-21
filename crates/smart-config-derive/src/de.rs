@@ -2,7 +2,7 @@ use std::iter;
 
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::{spanned::Spanned, DeriveInput};
+use syn::{spanned::Spanned, DeriveInput, LitStr};
 
 use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField};
 
@@ -49,16 +49,23 @@ impl ConfigField {
     }
 }
 
+// FIXME: support rename_all = "snake_case"
 impl ConfigEnumVariant {
-    // FIXME: support rename_all = "snake_case", rename = .., alias = ..
     fn matches(&self) -> proc_macro2::TokenStream {
-        let name = self.name.to_string();
+        let mut all_names = self.expected_variants();
+        let name = all_names.next().unwrap();
         let name_span = self.name.span();
-        quote_spanned!(name_span=> #name)
+        quote_spanned!(name_span=> #name #(| #all_names)*)
     }
 
     fn expected_variants(&self) -> impl Iterator<Item = String> + '_ {
-        iter::once(self.name.to_string())
+        let name = self
+            .attrs
+            .rename
+            .as_ref()
+            .map(LitStr::value)
+            .unwrap_or_else(|| self.name.to_string());
+        iter::once(name).chain(self.attrs.aliases.iter().map(LitStr::value))
     }
 }
 

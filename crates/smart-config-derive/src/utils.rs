@@ -136,6 +136,34 @@ fn parse_docs(attrs: &[Attribute]) -> String {
     docs
 }
 
+pub(crate) struct ConfigVariantAttrs {
+    pub rename: Option<LitStr>,
+    pub aliases: Vec<LitStr>,
+}
+
+impl ConfigVariantAttrs {
+    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
+        let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
+
+        let mut rename = None;
+        let mut aliases = vec![];
+        for attr in config_attrs {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("rename") {
+                    rename = Some(meta.value()?.parse()?);
+                    Ok(())
+                } else if meta.path.is_ident("alias") {
+                    aliases.push(meta.value()?.parse()?);
+                    Ok(())
+                } else {
+                    Err(meta.error("Unsupported attribute"))
+                }
+            })?;
+        }
+        Ok(Self { rename, aliases })
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct ConfigFieldAttrs {
     pub rename: Option<String>,
@@ -386,6 +414,7 @@ impl ConfigContainerAttrs {
 }
 
 pub(crate) struct ConfigEnumVariant {
+    pub attrs: ConfigVariantAttrs,
     pub name: Ident,
     pub fields: Vec<ConfigField>,
 }
@@ -460,8 +489,23 @@ impl ConfigContainer {
     ) -> syn::Result<ConfigContainerFields> {
         let mut variants = vec![];
         let mut merged_fields_by_name = HashSet::new();
+        let mut variants_with_aliases = HashSet::new();
 
         for variant in &data.variants {
+            let attrs = ConfigVariantAttrs::new(&variant.attrs)?;
+            if let Some(rename) = &attrs.rename {
+                if !variants_with_aliases.insert(rename.value()) {
+                    let msg = "Tag value is redefined";
+                    return Err(syn::Error::new(rename.span(), msg));
+                }
+            }
+            for alias in &attrs.aliases {
+                if !variants_with_aliases.insert(alias.value()) {
+                    let msg = "Tag value is redefined";
+                    return Err(syn::Error::new(alias.span(), msg));
+                }
+            }
+
             let mut variant_fields = vec![];
             match &variant.fields {
                 Fields::Named(fields) => {
@@ -487,6 +531,7 @@ impl ConfigContainer {
                 Fields::Unit => { /* no fields to add */ }
             }
             variants.push(ConfigEnumVariant {
+                attrs,
                 name: variant.ident.clone(),
                 fields: variant_fields,
             });

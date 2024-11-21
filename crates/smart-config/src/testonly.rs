@@ -34,9 +34,10 @@ impl NestedConfig {
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate, tag = "type")]
 pub(crate) enum EnumConfig {
+    #[config(rename = "first")]
     First,
     Nested(NestedConfig),
-    #[config(alias = "Fields")]
+    #[config(alias = "Fields", alias = "With")]
     WithFields {
         string: Option<String>,
         #[config(default)]

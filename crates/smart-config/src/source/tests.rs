@@ -69,7 +69,7 @@ fn parsing() {
 
 #[test]
 fn parsing_enum_config() {
-    let env = Environment::from_iter("", [("type", "First")]);
+    let env = Environment::from_iter("", [("type", "first")]);
     let env = wrap_into_value(env);
     let config = EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap();
     assert_eq!(config, EnumConfig::First);
@@ -119,6 +119,39 @@ fn parsing_enum_config() {
 }
 
 #[test]
+fn parsing_enum_config_missing_tag() {
+    let env = Environment::from_iter("", [("renamed", "second")]);
+    let env = wrap_into_value(env);
+    let err: crate::ParseError =
+        EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap_err();
+
+    let inner = err.inner().to_string();
+    assert!(inner.contains("missing field"), "{inner}");
+    assert_eq!(err.path().unwrap(), "");
+    assert_eq!(
+        err.config().unwrap() as *const _,
+        EnumConfig::describe_config()
+    );
+    assert_eq!(err.param().unwrap().name, "type");
+}
+
+#[test]
+fn parsing_enum_config_unknown_tag() {
+    let env = Environment::from_iter("", [("type", "Unknown")]);
+    let env = wrap_into_value(env);
+    let err = EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap_err();
+
+    let inner = err.inner().to_string();
+    assert!(inner.contains("unknown variant"), "{inner}");
+    assert_eq!(err.path().unwrap(), "");
+    assert_eq!(
+        err.config().unwrap() as *const _,
+        EnumConfig::describe_config()
+    );
+    assert_eq!(err.param().unwrap().name, "type");
+}
+
+#[test]
 fn parsing_enum_config_with_schema() {
     let schema = ConfigSchema::default().insert::<EnumConfig>("");
 
@@ -140,7 +173,7 @@ fn parsing_enum_config_with_schema() {
     );
 
     let json = config!(
-        "type": "WithFields", // FIXME: test aliases / renaming
+        "type": "Fields",
         "string": "???",
         "flag": true,
         "set": [42, 23],
@@ -159,7 +192,7 @@ fn parsing_enum_config_with_schema() {
     let env = Environment::from_iter(
         "",
         [
-            ("type", "WithFields"),
+            ("type", "With"),
             ("renamed", "second"),
             ("string", "???"),
             ("flag", "true"),
