@@ -116,9 +116,12 @@ impl ConfigContainer {
         });
         let mut params = params.collect::<syn::Result<Vec<_>>>()?;
 
-        if let ConfigContainerFields::Enum { tag, .. } = &self.fields {
+        if let ConfigContainerFields::Enum { tag, variants } = &self.fields {
             // Add the tag field description
-            let tag = ConfigField::from_tag(tag);
+            let default = variants
+                .iter()
+                .find_map(|variant| variant.attrs.default.then(|| variant.name()));
+            let tag = ConfigField::from_tag(tag, default.as_deref());
             params.push(tag.describe_param(&meta_mod)?);
         }
 
@@ -149,7 +152,7 @@ impl ConfigContainer {
             let name = &field.name;
             let name_span = field.name.span();
             let default = field.attrs.default.as_ref().ok_or_else(|| {
-                let msg = "field does not have a default value";
+                let msg = "Cannot derive(Default): field does not have a default value";
                 syn::Error::new(name_span, msg)
             })?;
             let field_instance = default.instance(name_span);
@@ -169,7 +172,7 @@ impl ConfigContainer {
                     .iter()
                     .find(|variant| variant.attrs.default)
                     .ok_or_else(|| {
-                        let msg = "enum does not have a variant marked with #[config(default)]";
+                        let msg = "Cannot derive(Default): enum does not have a variant marked with #[config(default)]";
                         syn::Error::new(self.name.span(), msg)
                     })?;
                 let fields = Self::default_fields(&default_variant.fields)?;

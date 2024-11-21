@@ -6,7 +6,10 @@ use serde::Deserialize;
 use super::*;
 use crate::{
     schema::Alias,
-    testonly::{CompoundConfig, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum},
+    testonly::{
+        CompoundConfig, DefaultingConfig, DefaultingEnumConfig, EnumConfig, NestedConfig,
+        SimpleEnum,
+    },
     DescribeConfig,
 };
 
@@ -334,6 +337,32 @@ fn parsing_defaulting_config_from_missing_value_with_schema() {
     let repo = ConfigRepository::new(&schema).with(json);
     let config: DefaultingConfig = repo.parse().unwrap();
     assert_eq!(config, DefaultingConfig::default());
+}
+
+#[test]
+fn parsing_defaulting_enum_config_from_missing_value() {
+    let deserializer = ValueDeserializer::missing("".into());
+    let config = DefaultingEnumConfig::deserialize_config(deserializer).unwrap();
+    assert_eq!(config, DefaultingEnumConfig::default());
+}
+
+#[test]
+fn parsing_defaulting_enum_config_from_missing_tag() {
+    let json = config!("int": 42);
+    let deserializer = ValueDeserializer::new(json.inner(), "".into());
+    let config = DefaultingEnumConfig::deserialize_config(deserializer).unwrap();
+    assert_eq!(config, DefaultingEnumConfig::Second { int: 42 });
+
+    let json = config!("kind": "First", "int": 42);
+    let deserializer = ValueDeserializer::new(json.inner(), "".into());
+    let config = DefaultingEnumConfig::deserialize_config(deserializer).unwrap();
+    assert_eq!(config, DefaultingEnumConfig::First);
+
+    let json = config!("kind": "Third", "int": 42);
+    let deserializer = ValueDeserializer::new(json.inner(), "".into());
+    let err = DefaultingEnumConfig::deserialize_config(deserializer).unwrap_err();
+    let inner = err.inner().to_string();
+    assert!(inner.contains("unknown variant"), "{inner}");
 }
 
 #[test]

@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 
 use super::*;
-use crate::{testonly::EnumConfig, DescribeConfig};
+use crate::{
+    testonly::{DefaultingEnumConfig, EnumConfig},
+    DescribeConfig,
+};
 
 #[test]
 fn describing_enum_config() {
@@ -37,4 +40,16 @@ fn describing_enum_config() {
         .find(|param| param.name == "type")
         .unwrap();
     assert_eq!(tag_param.type_kind, PrimitiveType::String.as_type());
+}
+
+#[test]
+fn describing_defaulting_enum_config() {
+    let metadata: &ConfigMetadata = DefaultingEnumConfig::describe_config();
+    let tag_param = metadata
+        .params
+        .iter()
+        .find(|param| param.name == "kind")
+        .unwrap();
+    let default = format!("{:?}", tag_param.default_value().unwrap());
+    assert_eq!(default, "\"Second\"");
 }

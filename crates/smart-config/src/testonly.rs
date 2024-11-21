@@ -74,6 +74,17 @@ pub(crate) struct DefaultingConfig {
     pub set: HashSet<SimpleEnum>,
 }
 
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate, tag = "kind", derive(Default))]
+pub(crate) enum DefaultingEnumConfig {
+    First,
+    #[config(default)]
+    Second {
+        #[config(default_t = 123)]
+        int: u32,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,5 +95,8 @@ mod tests {
         assert_eq!(config.int, 12);
         assert_eq!(config.url.unwrap(), "https://example.com/");
         assert!(config.set.is_empty());
+
+        let config = DefaultingEnumConfig::default();
+        assert_eq!(config, DefaultingEnumConfig::Second { int: 123 });
     }
 }

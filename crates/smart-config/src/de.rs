@@ -176,6 +176,15 @@ impl<'a> ValueDeserializer<'a> {
         path: &'static str,
         default_fn: Option<fn() -> T>,
     ) -> Result<T, ParseError> {
+        self.deserialize_param_inner(index, path, default_fn)
+    }
+
+    fn deserialize_param_inner<T: DeserializeOwned>(
+        &self,
+        index: usize,
+        path: &'static str,
+        default_fn: Option<impl FnOnce() -> T>,
+    ) -> Result<T, ParseError> {
         let location = LocationInConfig::Param(index);
         let child_deserializer = self.child_deserializer(path);
         if child_deserializer.value.is_none() {
@@ -190,13 +199,19 @@ impl<'a> ValueDeserializer<'a> {
         T::deserialize(child_deserializer)
             .map_err(|err| self.enrich_err(err).with_location(self.config, location))
     }
+
     pub fn deserialize_tag(
         &self,
         index: usize,
         path: &'static str,
         expected: &'static [&'static str],
+        default: Option<&'static str>,
     ) -> Result<&'a str, ParseError> {
-        let tag_value: String = self.deserialize_param(index, path, None)?;
+        let tag_value: String = self.deserialize_param_inner(
+            index,
+            path,
+            default.map(|default| || default.to_owned()),
+        )?;
         let matching_tag = expected
             .iter()
             .copied()

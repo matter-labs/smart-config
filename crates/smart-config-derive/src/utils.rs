@@ -300,9 +300,14 @@ impl ConfigField {
         })
     }
 
-    pub fn from_tag(tag: &LitStr) -> Self {
+    pub fn from_tag(tag: &LitStr, default: Option<&str>) -> Self {
         Self {
-            attrs: ConfigFieldAttrs::default(),
+            attrs: ConfigFieldAttrs {
+                default: default.map(|s| {
+                    DefaultValue::Expr(syn::parse_quote_spanned!(tag.span() => #s.into()))
+                }),
+                ..ConfigFieldAttrs::default()
+            },
             docs: "Tag for the enum config".to_owned(),
             name: Ident::new(&tag.value(), tag.span()).into(),
             ty: syn::parse_quote_spanned!(tag.span()=> ::std::string::String),
@@ -449,6 +454,16 @@ pub(crate) struct ConfigEnumVariant {
     pub attrs: ConfigVariantAttrs,
     pub name: Ident,
     pub fields: Vec<ConfigField>,
+}
+
+impl ConfigEnumVariant {
+    pub fn name(&self) -> String {
+        self.attrs
+            .rename
+            .as_ref()
+            .map(LitStr::value)
+            .unwrap_or_else(|| self.name.to_string())
+    }
 }
 
 pub(crate) enum ConfigContainerFields {

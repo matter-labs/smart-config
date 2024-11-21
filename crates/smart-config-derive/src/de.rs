@@ -75,13 +75,7 @@ impl ConfigEnumVariant {
     }
 
     fn expected_variants(&self) -> impl Iterator<Item = String> + '_ {
-        let name = self
-            .attrs
-            .rename
-            .as_ref()
-            .map(LitStr::value)
-            .unwrap_or_else(|| self.name.to_string());
-        iter::once(name).chain(self.attrs.aliases.iter().map(LitStr::value))
+        iter::once(self.name()).chain(self.attrs.aliases.iter().map(LitStr::value))
     }
 }
 
@@ -132,14 +126,28 @@ impl ConfigContainer {
                     quote!(#matches => Self::#name { #(#variant_fields,)* })
                 });
                 let match_hands: Vec<_> = match_hands.collect();
+
                 let tag_name = tag.value();
                 let expected_variants = variants
                     .iter()
                     .flat_map(ConfigEnumVariant::expected_variants);
+                let default = variants
+                    .iter()
+                    .find_map(|variant| variant.attrs.default.then(|| variant.name()));
+                let default = if let Some(val) = default {
+                    quote!(::core::option::Option::Some(#val))
+                } else {
+                    quote!(::core::option::Option::None)
+                };
 
                 quote! {{
                     const EXPECTED_VARIANTS: &[&str] = &[#(#expected_variants,)*];
-                    match deserializer.deserialize_tag(#param_index, #tag_name, EXPECTED_VARIANTS)? {
+                    match deserializer.deserialize_tag(
+                        #param_index,
+                        #tag_name,
+                        EXPECTED_VARIANTS,
+                        #default,
+                    )? {
                         #(#match_hands,)*
                         _ => ::core::unreachable!(),
                     }
