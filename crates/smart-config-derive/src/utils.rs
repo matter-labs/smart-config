@@ -139,6 +139,7 @@ fn parse_docs(attrs: &[Attribute]) -> String {
 pub(crate) struct ConfigVariantAttrs {
     pub rename: Option<LitStr>,
     pub aliases: Vec<LitStr>,
+    pub default: bool,
 }
 
 impl ConfigVariantAttrs {
@@ -147,6 +148,7 @@ impl ConfigVariantAttrs {
 
         let mut rename = None;
         let mut aliases = vec![];
+        let mut default = false;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("rename") {
@@ -155,12 +157,19 @@ impl ConfigVariantAttrs {
                 } else if meta.path.is_ident("alias") {
                     aliases.push(meta.value()?.parse()?);
                     Ok(())
+                } else if meta.path.is_ident("default") {
+                    default = true;
+                    Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))
                 }
             })?;
         }
-        Ok(Self { rename, aliases })
+        Ok(Self {
+            rename,
+            aliases,
+            default,
+        })
     }
 }
 
@@ -377,6 +386,7 @@ pub(crate) struct ConfigContainerAttrs {
     pub cr: Option<Path>,
     pub rename_all: Option<LitStr>,
     pub tag: Option<LitStr>,
+    pub derive_default: bool,
 }
 
 impl ConfigContainerAttrs {
@@ -386,6 +396,7 @@ impl ConfigContainerAttrs {
         let mut cr = None;
         let mut rename_all = None;
         let mut tag = None;
+        let mut derive_default = false;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("crate") {
@@ -397,8 +408,19 @@ impl ConfigContainerAttrs {
                 } else if meta.path.is_ident("tag") {
                     tag = Some(meta.value()?.parse()?);
                     Ok(())
+                } else if meta.path.is_ident("derive") {
+                    let content;
+                    syn::parenthesized!(content in meta.input);
+                    let tr: Ident = content.parse()?;
+                    if tr == "Default" {
+                        derive_default = true;
+                    } else {
+                        let msg = "Can only derive(Default) yet";
+                        return Err(syn::Error::new(tr.span(), msg));
+                    }
+                    Ok(())
                 } else {
-                    Err(meta.error("Unsupported attribute; only `crate`, `rename_all` and `tag` are supported`"))
+                    Err(meta.error("Unsupported attribute"))
                 }
             })?;
         }
@@ -406,6 +428,7 @@ impl ConfigContainerAttrs {
             cr,
             rename_all,
             tag,
+            derive_default,
         })
     }
 
@@ -499,6 +522,7 @@ impl ConfigContainer {
         let mut variants = vec![];
         let mut merged_fields_by_name = HashSet::new();
         let mut variants_with_aliases = HashSet::new();
+        let mut has_default_variant = false;
 
         for variant in &data.variants {
             let attrs = ConfigVariantAttrs::new(&variant.attrs)?;
@@ -513,6 +537,13 @@ impl ConfigContainer {
                     let msg = "Tag value is redefined";
                     return Err(syn::Error::new(alias.span(), msg));
                 }
+            }
+            if attrs.default {
+                if has_default_variant {
+                    let msg = "Only one variant can be marked as default";
+                    return Err(syn::Error::new(variant.ident.span(), msg));
+                }
+                has_default_variant = true;
             }
 
             let mut variant_fields = vec![];

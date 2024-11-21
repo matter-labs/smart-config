@@ -6,7 +6,7 @@ use serde::Deserialize;
 use super::*;
 use crate::{
     schema::Alias,
-    testonly::{CompoundConfig, EnumConfig, NestedConfig, SimpleEnum},
+    testonly::{CompoundConfig, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum},
     DescribeConfig,
 };
 
@@ -303,6 +303,37 @@ fn parsing_enum_config_with_schema() {
             set: HashSet::from([23, 42]),
         }
     );
+}
+
+#[test]
+fn parsing_defaulting_config_from_missing_value() {
+    let deserializer = ValueDeserializer::missing("".into());
+    let config = DefaultingConfig::deserialize_config(deserializer).unwrap();
+    assert_eq!(config, DefaultingConfig::default());
+}
+
+#[test]
+fn parsing_defaulting_config_with_null_override() {
+    let json = config!("url": ());
+    assert_eq!(json.inner().get(Pointer("url")).unwrap().inner, Value::Null);
+    let deserializer = ValueDeserializer::new(json.inner(), "".into());
+    let config = DefaultingConfig::deserialize_config(deserializer).unwrap();
+    assert_eq!(
+        config,
+        DefaultingConfig {
+            url: None,
+            ..DefaultingConfig::default()
+        }
+    );
+}
+
+#[test]
+fn parsing_defaulting_config_from_missing_value_with_schema() {
+    let schema = ConfigSchema::default().insert::<DefaultingConfig>("test");
+    let json = config!("unrelated": 123);
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: DefaultingConfig = repo.parse().unwrap();
+    assert_eq!(config, DefaultingConfig::default());
 }
 
 #[test]

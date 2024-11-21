@@ -177,18 +177,19 @@ impl<'a> ValueDeserializer<'a> {
         default_fn: Option<fn() -> T>,
     ) -> Result<T, ParseError> {
         let location = LocationInConfig::Param(index);
-        let deserialized = Option::<T>::deserialize(self.child_deserializer(path))
-            .map_err(|err| self.enrich_err(err).with_location(self.config, location))?;
-        if let Some(default_fn) = default_fn {
-            Ok(deserialized.unwrap_or_else(default_fn))
-        } else {
-            deserialized.ok_or_else(|| {
-                self.enrich_err(DeError::missing_field(path))
-                    .with_location(self.config, location)
-            })
+        let child_deserializer = self.child_deserializer(path);
+        if child_deserializer.value.is_none() {
+            return if let Some(default_fn) = default_fn {
+                Ok(default_fn())
+            } else {
+                let err = DeError::missing_field(path);
+                Err(self.enrich_err(err).with_location(self.config, location))
+            };
         }
-    }
 
+        T::deserialize(child_deserializer)
+            .map_err(|err| self.enrich_err(err).with_location(self.config, location))
+    }
     pub fn deserialize_tag(
         &self,
         index: usize,

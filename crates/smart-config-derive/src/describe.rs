@@ -25,6 +25,14 @@ impl DefaultValue {
             }
         }
     }
+
+    fn instance(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
+        match self {
+            Self::DefaultTrait => quote_spanned!(span=> ::core::default::Default::default()),
+            Self::Path(path) => quote_spanned!(span=> #path()),
+            Self::Expr(expr) => quote_spanned!(span=> #expr),
+        }
+    }
 }
 
 impl ConfigField {
@@ -135,6 +143,60 @@ impl ConfigContainer {
             }
         })
     }
+
+    fn default_fields(fields: &[ConfigField]) -> syn::Result<Vec<proc_macro2::TokenStream>> {
+        let fields = fields.iter().map(|field| {
+            let name = &field.name;
+            let name_span = field.name.span();
+            let default = field.attrs.default.as_ref().ok_or_else(|| {
+                let msg = "field does not have a default value";
+                syn::Error::new(name_span, msg)
+            })?;
+            let field_instance = default.instance(name_span);
+            Ok(quote_spanned!(name_span=> #name: #field_instance))
+        });
+        fields.collect()
+    }
+
+    fn derive_default(&self) -> syn::Result<proc_macro2::TokenStream> {
+        let instance = match &self.fields {
+            ConfigContainerFields::Struct(fields) => {
+                let fields = Self::default_fields(fields)?;
+                quote!(Self { #(#fields,)* })
+            }
+            ConfigContainerFields::Enum { variants, .. } => {
+                let default_variant = variants
+                    .iter()
+                    .find(|variant| variant.attrs.default)
+                    .ok_or_else(|| {
+                        let msg = "enum does not have a variant marked with #[config(default)]";
+                        syn::Error::new(self.name.span(), msg)
+                    })?;
+                let fields = Self::default_fields(&default_variant.fields)?;
+                let variant_name = &default_variant.name;
+                quote!(Self::#variant_name { #(#fields,)* })
+            }
+        };
+
+        let name = &self.name;
+        Ok(quote! {
+            impl ::core::default::Default for #name {
+                fn default() -> Self {
+                    #instance
+                }
+            }
+        })
+    }
+
+    fn derive_all(&self) -> syn::Result<proc_macro2::TokenStream> {
+        let describe_impl = self.derive_describe_config()?;
+        let default_impl = if self.attrs.derive_default {
+            Some(self.derive_default()?)
+        } else {
+            None
+        };
+        Ok(quote!(#describe_impl #default_impl))
+    }
 }
 
 pub(crate) fn impl_describe_config(input: TokenStream) -> TokenStream {
@@ -143,7 +205,7 @@ pub(crate) fn impl_describe_config(input: TokenStream) -> TokenStream {
         Ok(trait_impl) => trait_impl,
         Err(err) => return err.into_compile_error().into(),
     };
-    match trait_impl.derive_describe_config() {
+    match trait_impl.derive_all() {
         Ok(derived) => derived.into(),
         Err(err) => err.into_compile_error().into(),
     }

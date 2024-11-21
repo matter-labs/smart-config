@@ -62,3 +62,27 @@ pub(crate) struct CompoundConfig {
     #[config(flatten)]
     pub flat: NestedConfig,
 }
+
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate, derive(Default))]
+pub(crate) struct DefaultingConfig {
+    #[config(default_t = 12)]
+    pub int: u32,
+    #[config(default_t = Some("https://example.com/".into()))]
+    pub url: Option<String>,
+    #[config(default)]
+    pub set: HashSet<SimpleEnum>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_is_derived_as_expected() {
+        let config = DefaultingConfig::default();
+        assert_eq!(config.int, 12);
+        assert_eq!(config.url.unwrap(), "https://example.com/");
+        assert!(config.set.is_empty());
+    }
+}
