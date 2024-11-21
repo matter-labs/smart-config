@@ -29,6 +29,14 @@ impl NestedConfig {
     const fn default_other_int() -> u32 {
         42
     }
+
+    pub fn default_nested() -> Self {
+        Self {
+            simple_enum: SimpleEnum::First,
+            other_int: 23,
+            map: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
@@ -45,4 +53,15 @@ pub(crate) enum EnumConfig {
         #[config(default)]
         set: HashSet<u32>,
     },
+}
+
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct CompoundConfig {
+    #[config(nest)]
+    pub nested: NestedConfig,
+    #[config(rename = "default", nest, default = NestedConfig::default_nested)]
+    pub nested_default: NestedConfig,
+    #[config(flatten)]
+    pub flat: NestedConfig,
 }

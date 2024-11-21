@@ -48,34 +48,22 @@ pub struct ConfigRepository<'a> {
 
 impl<'a> ConfigRepository<'a> {
     pub fn new(schema: &'a ConfigSchema) -> Self {
-        let (all_prefixes_with_aliases, merged) = Self::initialize_object(schema);
-        Self {
-            schema,
-            all_prefixes_with_aliases,
-            merged,
-        }
-    }
-
-    fn initialize_object(schema: &'a ConfigSchema) -> (BTreeSet<Pointer<'a>>, WithOrigin) {
-        let synthetic_origin = Arc::<ValueOrigin>::default();
-        let mut map = WithOrigin {
-            inner: Value::Object(Map::default()),
-            origin: synthetic_origin.clone(),
-        };
-
         let all_prefixes_with_aliases: BTreeSet<_> = schema
             .prefixes_with_aliases()
             .flat_map(Pointer::with_ancestors)
             .chain([Pointer("")])
             .collect();
-        for &object_ptr in &all_prefixes_with_aliases {
-            map.ensure_object(object_ptr, || synthetic_origin.clone());
+        Self {
+            schema,
+            all_prefixes_with_aliases,
+            merged: WithOrigin {
+                inner: Value::Object(Map::default()),
+                origin: Arc::default(),
+            },
         }
-        (all_prefixes_with_aliases, map)
     }
 
     /// Extends this environment with a new configuration source.
-    // FIXME: is it possible to break invariants (e.g., overwrite objects at mounting points)?
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
         match source.into_contents() {
             ConfigContents::KeyValue(mut kv) => {
@@ -86,7 +74,7 @@ impl<'a> ConfigRepository<'a> {
             ConfigContents::Hierarchical(map) => {
                 self.merged.merge(WithOrigin {
                     inner: Value::Object(map),
-                    origin: Arc::default(),
+                    origin: Arc::default(), // will not be used
                 });
             }
         }
@@ -100,8 +88,11 @@ impl<'a> ConfigRepository<'a> {
 
         // Copy all locally aliased values.
         for (prefix, config_data) in self.schema.iter() {
-            let config_object = self.merged.get_mut(prefix).unwrap();
+            let Some(config_object) = self.merged.get_mut(prefix) else {
+                continue;
+            };
             let Value::Object(config_object) = &mut config_object.inner else {
+                // FIXME: is it possible to break invariants (e.g., overwrite objects at mounting points)?
                 unreachable!();
             };
 
@@ -144,15 +135,11 @@ impl<'a> ConfigRepository<'a> {
         let metadata = C::describe_config();
         let config_ref = self.schema.single(metadata)?;
         let prefix = config_ref.prefix();
+        let deserializer = match self.merged.get(Pointer(prefix)) {
+            Some(config_value) => ValueDeserializer::new(config_value, prefix.to_owned()),
+            None => ValueDeserializer::missing(prefix.to_owned()),
+        };
 
-        // `unwrap()` is safe due to preparations when constructing the repo; all config prefixes have objects
-        let config_map = self.merged.get(Pointer(prefix)).unwrap();
-        debug_assert!(
-            matches!(&config_map.inner, Value::Object(_)),
-            "Unexpected value at {prefix:?}: {config_map:?}"
-        );
-
-        let deserializer = ValueDeserializer::new(config_map, prefix.to_owned());
         C::deserialize_config(deserializer)
             .with_context(|| {
                 let summary = if let Some(header) = metadata.help_header() {
@@ -171,7 +158,26 @@ impl<'a> ConfigRepository<'a> {
 
 impl WithOrigin {
     /// Ensures that there is an object (possibly empty) at the specified location.
-    fn ensure_object(&mut self, at: Pointer<'_>, create_origin: impl FnOnce() -> Arc<ValueOrigin>) {
+    fn ensure_object(
+        &mut self,
+        at: Pointer<'_>,
+        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
+    ) -> &mut Map {
+        for ancestor_path in at.with_ancestors() {
+            self.ensure_object_step(ancestor_path, &mut create_origin);
+        }
+
+        let Value::Object(map) = &mut self.get_mut(at).unwrap().inner else {
+            unreachable!(); // Ensured by calls above
+        };
+        map
+    }
+
+    fn ensure_object_step(
+        &mut self,
+        at: Pointer<'_>,
+        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
+    ) {
         let Some((parent, last_segment)) = at.split_last() else {
             // Nothing to do.
             return;
@@ -191,29 +197,31 @@ impl WithOrigin {
                 last_segment.to_owned(),
                 WithOrigin {
                     inner: Value::Object(Map::new()),
-                    origin: create_origin(),
+                    origin: create_origin(at),
                 },
             );
         }
     }
 
     fn copy_key_value_entries(&mut self, at: Pointer<'_>, entries: &mut Map<String>) {
-        let Value::Object(map) = &mut self.get_mut(at).unwrap().inner else {
-            unreachable!("expected object at {at:?}"); // Should be ensured by calling `ensure_object()`
-        };
-        let matching_entries =
-            Self::take_matching_kv_entries(entries, at)
-                .into_iter()
-                .map(|(key, value)| {
-                    (
-                        key,
-                        WithOrigin {
-                            inner: Value::String(value.inner),
-                            origin: value.origin,
-                        },
-                    )
-                });
-        map.extend(matching_entries);
+        let matching_entries: Vec<_> = Self::take_matching_kv_entries(entries, at)
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key,
+                    WithOrigin {
+                        inner: Value::String(value.inner),
+                        origin: value.origin,
+                    },
+                )
+            })
+            .collect();
+
+        if matching_entries.is_empty() {
+            return;
+        }
+        self.ensure_object(at, |_| Arc::new(ValueOrigin::Unknown))
+            .extend(matching_entries);
     }
 
     fn take_matching_kv_entries(
@@ -244,11 +252,11 @@ impl WithOrigin {
     }
 
     fn merge_alias(&mut self, target_prefix: Pointer<'_>, alias: &Alias<()>) {
-        let Value::Object(map) = &self.get(target_prefix).unwrap().inner else {
-            unreachable!("expected object at {target_prefix:?}"); // Should be ensured by calling `ensure_object()`
-        };
+        let map = self
+            .get(target_prefix)
+            .and_then(|val| val.inner.as_object());
         let new_entries = alias.param_names.iter().filter_map(|&param_name| {
-            if map.contains_key(param_name) {
+            if map.map_or(false, |map| map.contains_key(param_name)) {
                 None // Variable is already set
             } else {
                 let value = self.get(Pointer(&alias.prefix.join(param_name))).cloned()?;
@@ -256,11 +264,13 @@ impl WithOrigin {
             }
         });
         let new_entries: Vec<_> = new_entries.collect();
+        if new_entries.is_empty() {
+            return;
+        }
 
-        let Value::Object(map) = &mut self.get_mut(target_prefix).unwrap().inner else {
-            unreachable!("expected object at {target_prefix:?}"); // Should be ensured by calling `ensure_object()`
-        };
-        map.extend(new_entries);
+        // TODO: use better origin
+        self.ensure_object(target_prefix, |_| Arc::new(ValueOrigin::Unknown))
+            .extend(new_entries);
     }
 
     /// This is necessary to prevent `deserialize_any` errors

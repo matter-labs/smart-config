@@ -1,8 +1,7 @@
-/*
 use std::collections::HashSet;
 
 use super::*;
-use crate::testonly::EnumConfig;
+use crate::{testonly::EnumConfig, DescribeConfig};
 
 #[test]
 fn describing_enum_config() {
@@ -31,4 +30,3 @@ fn describing_enum_config() {
         .unwrap();
     assert_eq!(tag_param.type_kind, PrimitiveType::String.as_type());
 }
- */

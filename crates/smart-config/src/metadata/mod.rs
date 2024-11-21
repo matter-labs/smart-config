@@ -100,6 +100,12 @@ impl fmt::Debug for RustType {
     }
 }
 
+impl PartialEq for RustType {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
 impl RustType {
     pub fn of<T: 'static>(name_in_code: &'static str) -> Self {
         Self {

@@ -94,6 +94,14 @@ impl<'a> ValueDeserializer<'a> {
         }
     }
 
+    pub(crate) fn missing(path: String) -> Self {
+        Self {
+            value: None,
+            path,
+            config: None,
+        }
+    }
+
     fn value(&self) -> &'a Value {
         self.value.map_or(&Value::Null, |val| &val.inner)
     }
@@ -198,7 +206,6 @@ impl<'a> ValueDeserializer<'a> {
         })
     }
 
-    // FIXME: defaults don't work correctly with pre-processing (adding empty objects at mounting points)
     pub fn deserialize_nested_config<T: DeserializeConfig>(
         &self,
         index: usize,

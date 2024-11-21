@@ -6,7 +6,7 @@ use serde::Deserialize;
 use super::*;
 use crate::{
     schema::Alias,
-    testonly::{EnumConfig, NestedConfig, SimpleEnum},
+    testonly::{CompoundConfig, EnumConfig, NestedConfig, SimpleEnum},
     DescribeConfig,
 };
 
@@ -86,6 +86,25 @@ fn parsing_enum_config() {
         })
     );
 
+    let env = Environment::from_iter(
+        "",
+        [
+            ("type", "Nested"),
+            ("renamed", "first"),
+            ("other_int", "123"),
+        ],
+    );
+    let env = wrap_into_value(env);
+    let config = EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap();
+    assert_eq!(
+        config,
+        EnumConfig::Nested(NestedConfig {
+            simple_enum: SimpleEnum::First,
+            other_int: 123,
+            map: HashMap::new(),
+        })
+    );
+
     let env = Environment::from_iter("", [("type", "WithFields")]);
     let env = wrap_into_value(env);
     let config = EnumConfig::deserialize_config(ValueDeserializer::new(&env, "".into())).unwrap();
@@ -152,6 +171,75 @@ fn parsing_enum_config_unknown_tag() {
 }
 
 #[test]
+fn parsing_compound_config() {
+    let json = config!(
+        "nested.renamed": "first",
+        "renamed": "second",
+        "other_int": 123,
+    );
+    let deserializer = ValueDeserializer::new(json.inner(), "".into());
+    let config = CompoundConfig::deserialize_config(deserializer).unwrap();
+    assert_eq!(
+        config.nested,
+        NestedConfig {
+            simple_enum: SimpleEnum::First,
+            other_int: 42,
+            map: HashMap::new(),
+        }
+    );
+    assert_eq!(config.nested_default, NestedConfig::default_nested());
+    assert_eq!(
+        config.flat,
+        NestedConfig {
+            simple_enum: SimpleEnum::Second,
+            other_int: 123,
+            map: HashMap::new(),
+        }
+    );
+
+    let json = config!(
+        "nested.renamed": "first",
+        "nested.other_int": "321",
+        "default.renamed": "second",
+        "default.map": HashMap::from([("foo", 3)]),
+        "renamed": "second",
+    );
+    let deserializer = ValueDeserializer::new(json.inner(), "".into());
+    let config = CompoundConfig::deserialize_config(deserializer).unwrap();
+    assert_eq!(
+        config.nested,
+        NestedConfig {
+            simple_enum: SimpleEnum::First,
+            other_int: 321,
+            map: HashMap::new(),
+        }
+    );
+    assert_eq!(
+        config.nested_default,
+        NestedConfig {
+            simple_enum: SimpleEnum::Second,
+            other_int: 42,
+            map: HashMap::from([("foo".to_owned(), 3)]),
+        }
+    );
+}
+
+#[test]
+fn parsing_compound_config_missing_nested_value() {
+    let json = config!(
+        "nested.value": 1,
+        "renamed": "second",
+    );
+    let deserializer = ValueDeserializer::new(json.inner(), "".into());
+    let err = CompoundConfig::deserialize_config(deserializer).unwrap_err();
+    let inner = err.inner().to_string();
+    assert!(inner.contains("missing field"), "{inner}");
+    assert_eq!(err.path().unwrap(), "nested");
+    assert_eq!(err.config().unwrap().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.param().unwrap().name, "renamed");
+}
+
+#[test]
 fn parsing_enum_config_with_schema() {
     let schema = ConfigSchema::default().insert::<EnumConfig>("");
 
@@ -211,6 +299,36 @@ fn parsing_enum_config_with_schema() {
             string: Some("???".to_owned()),
             flag: true,
             set: HashSet::new(),
+        }
+    );
+}
+
+#[test]
+fn parsing_compound_config_with_schema() {
+    let json = config!(
+        "nested.renamed": "first",
+        "renamed": "second",
+        "other_int": 123,
+    );
+
+    let schema = ConfigSchema::default().insert::<CompoundConfig>("");
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: CompoundConfig = repo.parse().unwrap();
+    assert_eq!(
+        config.nested,
+        NestedConfig {
+            simple_enum: SimpleEnum::First,
+            other_int: 42,
+            map: HashMap::new(),
+        }
+    );
+    assert_eq!(config.nested_default, NestedConfig::default_nested());
+    assert_eq!(
+        config.flat,
+        NestedConfig {
+            simple_enum: SimpleEnum::Second,
+            other_int: 123,
+            map: HashMap::new(),
         }
     );
 }

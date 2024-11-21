@@ -50,6 +50,15 @@ pub enum Value {
     Object(Map),
 }
 
+impl Value {
+    pub fn as_object(&self) -> Option<&Map> {
+        match self {
+            Self::Object(map) => Some(map),
+            _ => None,
+        }
+    }
+}
+
 /// JSON object.
 pub type Map<V = Value> = HashMap<String, WithOrigin<V>>;
 

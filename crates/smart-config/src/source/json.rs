@@ -40,14 +40,12 @@ impl Json {
         let value = Self::map_value(value, &self.filename, at.to_owned());
 
         let merge_point = if let Some((parent, last_segment)) = Pointer(at).split_last() {
-            for ancestor_path in parent.with_ancestors() {
-                self.inner.ensure_object(ancestor_path, || {
-                    Arc::new(ValueOrigin::Json {
-                        filename: self.filename.clone(),
-                        path: ancestor_path.0.to_owned(),
-                    })
-                });
-            }
+            self.inner.ensure_object(parent, |path| {
+                Arc::new(ValueOrigin::Json {
+                    filename: self.filename.clone(),
+                    path: path.0.to_owned(),
+                })
+            });
 
             // Safe since the object has just been inserted.
             let parent = self.inner.get_mut(parent).unwrap();
