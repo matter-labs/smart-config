@@ -14,13 +14,10 @@ use serde::{
 pub use crate::error::ParseError;
 use crate::{
     error::LocationInConfig,
-    metadata::{ConfigMetadata, DescribeConfig},
+    metadata::ConfigMetadata,
     value::{Pointer, Value, ValueOrigin, WithOrigin},
+    DescribeConfig, DeserializeConfig,
 };
-
-pub trait DeserializeConfig: DescribeConfig + Sized {
-    fn deserialize_config(deserializer: ValueDeserializer<'_>) -> Result<Self, ParseError>;
-}
 
 macro_rules! parse_int_value {
     ($($ty:ident => $method:ident,)*) => {

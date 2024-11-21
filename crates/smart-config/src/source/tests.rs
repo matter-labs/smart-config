@@ -5,9 +5,9 @@ use serde::Deserialize;
 
 use super::*;
 use crate::{
-    metadata::DescribeConfig,
     schema::Alias,
     testonly::{NestedConfig, SimpleEnum},
+    DescribeConfig,
 };
 
 #[derive(Debug, Deserialize)]
@@ -226,7 +226,7 @@ fn missing_parameter_parsing_error() {
 fn missing_nested_config_parsing_error() {
     let json = config!("value": 123);
     let err =
-        ConfigWithNesting::deserialize_config(ValueDeserializer::new(&json.inner(), String::new()))
+        ConfigWithNesting::deserialize_config(ValueDeserializer::new(json.inner(), String::new()))
             .unwrap_err();
 
     let inner = err.inner().to_string();
@@ -241,7 +241,7 @@ fn missing_nested_config_parsing_error() {
     assert_eq!(err.nested_config().unwrap().name, "nested");
 }
 
-#[derive(Debug, DescribeConfig)]
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 struct ConfigWithNesting {
     value: u32,

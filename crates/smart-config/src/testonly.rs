@@ -3,9 +3,8 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
-use smart_config_derive::DescribeConfig;
 
-use crate::metadata::PrimitiveType;
+use crate::{metadata::PrimitiveType, DescribeConfig, DeserializeConfig};
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -14,7 +13,7 @@ pub(crate) enum SimpleEnum {
     Second,
 }
 
-#[derive(Debug, PartialEq, DescribeConfig)]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct NestedConfig {
     #[config(rename = "renamed")]

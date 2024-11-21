@@ -1,4 +1,15 @@
-pub mod de;
+#[doc(hidden)] // used in the derive macro
+pub use once_cell::sync::Lazy;
+pub use smart_config_derive::{DescribeConfig, DeserializeConfig};
+
+use self::metadata::ConfigMetadata;
+pub use self::{
+    de::ValueDeserializer,
+    error::ParseError,
+    source::{ConfigRepository, ConfigSource, Environment, Json, KeyValueMap, Yaml},
+};
+
+mod de;
 mod error;
 pub mod metadata;
 mod schema;
@@ -7,4 +18,12 @@ mod source;
 mod testonly;
 pub mod value;
 
-pub use self::source::{ConfigRepository, ConfigSource, Environment, Json, KeyValueMap, Yaml};
+/// Describes a configuration (i.e., a group of related parameters).
+pub trait DescribeConfig: 'static {
+    /// Provides the description.
+    fn describe_config() -> &'static ConfigMetadata;
+}
+
+pub trait DeserializeConfig: DescribeConfig + Sized {
+    fn deserialize_config(deserializer: ValueDeserializer<'_>) -> Result<Self, ParseError>;
+}

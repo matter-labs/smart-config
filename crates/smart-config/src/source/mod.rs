@@ -8,10 +8,10 @@ pub use self::{
     yaml::Yaml,
 };
 use crate::{
-    de::{DeserializeConfig, ValueDeserializer},
     metadata::{ConfigMetadata, PrimitiveType, SchemaType},
     schema::{Alias, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
+    DeserializeConfig, ValueDeserializer,
 };
 
 #[macro_use]

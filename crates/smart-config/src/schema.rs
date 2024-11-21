@@ -11,8 +11,9 @@ use std::{
 use anyhow::Context;
 
 use crate::{
-    metadata::{ConfigMetadata, DescribeConfig, NestedConfigMetadata, ParamMetadata},
+    metadata::{ConfigMetadata, NestedConfigMetadata, ParamMetadata},
     value::Pointer,
+    DescribeConfig,
 };
 
 const INDENT: &str = "    ";
@@ -346,15 +347,14 @@ impl ConfigSchema {
 mod tests {
     use super::*;
     use crate::{
-        metadata::{DescribeConfig, PrimitiveType},
-        value::Value,
-        ConfigRepository, Environment,
+        metadata::PrimitiveType, value::Value, ConfigRepository, DescribeConfig, DeserializeConfig,
+        Environment,
     };
 
     /// # Test configuration
     ///
     /// Extended description.
-    #[derive(Debug, Default, PartialEq, DescribeConfig)]
+    #[derive(Debug, Default, PartialEq, DescribeConfig, DeserializeConfig)]
     #[config(crate = crate)]
     struct TestConfig {
         /// String value.
@@ -371,7 +371,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Default, PartialEq, DescribeConfig)]
+    #[derive(Debug, Default, PartialEq, DescribeConfig, DeserializeConfig)]
     #[config(crate = crate)]
     struct NestingConfig {
         #[config(default)]

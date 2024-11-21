@@ -2,20 +2,10 @@
 
 use std::{any, fmt};
 
-#[doc(hidden)] // used in the derive macro
-pub use once_cell::sync::Lazy;
-pub use smart_config_derive::DescribeConfig;
-
 #[cfg(test)]
 mod tests;
 #[doc(hidden)] // used in the derive macro
 pub mod validation;
-
-/// Describes a configuration (i.e., a group of related parameters).
-pub trait DescribeConfig: 'static {
-    /// Provides the description.
-    fn describe_config() -> &'static ConfigMetadata;
-}
 
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]

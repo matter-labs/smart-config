@@ -1,7 +1,13 @@
 //! Miscellaneous utils.
 
-use quote::quote;
-use syn::{PathArguments, Type};
+use std::collections::HashSet;
+
+use proc_macro2::Ident;
+use quote::{quote, quote_spanned};
+use syn::{
+    spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Field, Fields,
+    GenericArgument, Lit, LitStr, Path, PathArguments, Type, TypePath,
+};
 
 /// Corresponds to the type kind in the main crate. Necessary because `TypeId::of()` is not a `const fn`
 /// and unlikely to get stabilized as one in the near future.
@@ -83,15 +89,428 @@ impl TypeKind {
         None
     }
 
-    pub fn to_tokens(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    pub fn to_tokens(&self, meta_mod: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         match self {
-            Self::Bool => quote!(#cr::PrimitiveType::Bool.as_type()),
-            Self::Integer => quote!(#cr::PrimitiveType::Integer.as_type()),
-            Self::Float => quote!(#cr::PrimitiveType::Float.as_type()),
-            Self::String => quote!(#cr::PrimitiveType::String.as_type()),
-            Self::Path => quote!(#cr::PrimitiveType::Path.as_type()),
-            Self::Array => quote!(#cr::SchemaType::Array),
-            Self::Object => quote!(#cr::SchemaType::Object),
+            Self::Bool => quote!(#meta_mod::PrimitiveType::Bool.as_type()),
+            Self::Integer => quote!(#meta_mod::PrimitiveType::Integer.as_type()),
+            Self::Float => quote!(#meta_mod::PrimitiveType::Float.as_type()),
+            Self::String => quote!(#meta_mod::PrimitiveType::String.as_type()),
+            Self::Path => quote!(#meta_mod::PrimitiveType::Path.as_type()),
+            Self::Array => quote!(#meta_mod::SchemaType::Array),
+            Self::Object => quote!(#meta_mod::SchemaType::Object),
+        }
+    }
+}
+
+fn parse_docs(attrs: &[Attribute]) -> String {
+    let doc_lines = attrs.iter().filter_map(|attr| {
+        if attr.meta.path().is_ident("doc") {
+            let name_value = attr.meta.require_name_value().ok()?;
+            let Expr::Lit(doc_literal) = &name_value.value else {
+                return None;
+            };
+            match &doc_literal.lit {
+                Lit::Str(doc_literal) => Some(doc_literal.value()),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    });
+
+    let mut docs = String::new();
+    for line in doc_lines {
+        let line = line.trim();
+        if line.is_empty() {
+            if !docs.is_empty() {
+                // New paragraph; convert it to a new line.
+                docs.push('\n');
+            }
+        } else {
+            if !docs.is_empty() && !docs.ends_with(|ch: char| ch.is_ascii_whitespace()) {
+                docs.push(' ');
+            }
+            docs.push_str(line);
+        }
+    }
+    docs
+}
+
+pub(crate) struct ContainerAttrs {
+    pub rename_all: Option<LitStr>,
+    pub tag: Option<LitStr>,
+}
+
+impl ContainerAttrs {
+    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
+        let serde_attrs = attrs.iter().filter(|attr| attr.path().is_ident("serde"));
+
+        let mut rename_all = None;
+        let mut tag = None;
+        for attr in serde_attrs {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("rename_all") {
+                    rename_all = Some(meta.value()?.parse()?);
+                    Ok(())
+                } else if meta.path.is_ident("tag") {
+                    tag = Some(meta.value()?.parse()?);
+                    Ok(())
+                } else {
+                    Err(meta
+                        .error("Unsupported attribute; only `rename_all` and `tag` are supported`"))
+                }
+            })?;
+        }
+        Ok(Self { rename_all, tag })
+    }
+
+    fn validate_for_struct(&self) -> syn::Result<()> {
+        if let Some(rename_all) = &self.rename_all {
+            let msg = "`rename_all` attribute must not be used on struct configs";
+            return Err(syn::Error::new(rename_all.span(), msg));
+        }
+        if let Some(tag) = &self.tag {
+            let msg = "`tag` attribute must not be used on struct configs";
+            return Err(syn::Error::new(tag.span(), msg));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct ConfigFieldAttrs {
+    pub rename: Option<String>,
+    pub aliases: Vec<String>,
+    pub default: Option<Option<Path>>,
+    pub flatten: bool,
+    pub nest: bool,
+    pub kind: Option<Expr>,
+}
+
+impl ConfigFieldAttrs {
+    fn new(attrs: &[Attribute], name_span: proc_macro2::Span) -> syn::Result<Self> {
+        let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
+
+        let mut rename = None;
+        let mut aliases = vec![];
+        let mut default = None;
+        let mut flatten = false;
+        let mut nest = false;
+        let mut nested_span = None;
+        let mut kind = None;
+        for attr in config_attrs {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("rename") {
+                    let s: LitStr = meta.value()?.parse()?;
+                    rename = Some(s.value());
+                    Ok(())
+                } else if meta.path.is_ident("alias") {
+                    let s: LitStr = meta.value()?.parse()?;
+                    aliases.push(s.value());
+                    Ok(())
+                } else if meta.path.is_ident("default") {
+                    default = Some(if meta.input.peek(syn::Token![=]) {
+                        Some(meta.value()?.parse()?)
+                    } else {
+                        None
+                    });
+                    Ok(())
+                } else if meta.path.is_ident("flatten") {
+                    flatten = true;
+                    Ok(())
+                } else if meta.path.is_ident("nest") {
+                    nest = true;
+                    nested_span = Some(meta.path.span());
+                    Ok(())
+                } else if meta.path.is_ident("kind") {
+                    kind = Some(meta.value()?.parse()?);
+                    Ok(())
+                } else {
+                    Err(meta.error("Unsupported attribute"))
+                }
+            })?;
+        }
+
+        if flatten {
+            // All flattened configs are nested, but not necessarily vice versa.
+            nest = true;
+        }
+        if kind.is_some() && nest {
+            let msg = "cannot specify `kind` for a `nest`ed / `flatten`ed configuration";
+            let err_span = nested_span.unwrap_or(name_span);
+            return Err(syn::Error::new(err_span, msg));
+        }
+
+        Ok(Self {
+            nest,
+            kind,
+            rename,
+            aliases,
+            default,
+            flatten,
+        })
+    }
+}
+
+pub(crate) enum ConfigFieldData {
+    Ordinary { name: Ident, ty: Type },
+    EnumTag(LitStr),
+}
+
+impl ConfigFieldData {
+    fn name(&self) -> String {
+        match self {
+            Self::Ordinary { name, .. } => name.to_string(),
+            Self::EnumTag(tag) => tag.value(),
+        }
+    }
+
+    pub fn name_span(&self) -> proc_macro2::Span {
+        match self {
+            Self::Ordinary { name, .. } => name.span(),
+            Self::EnumTag(tag) => tag.span(),
+        }
+    }
+}
+
+pub(crate) struct ConfigField {
+    pub attrs: ConfigFieldAttrs,
+    pub docs: String,
+    pub data: ConfigFieldData,
+}
+
+impl ConfigField {
+    fn new(raw: &Field) -> syn::Result<Self> {
+        Self::new_inner(raw, false)
+    }
+
+    fn from_newtype_variant(raw: &Field) -> syn::Result<Self> {
+        let mut this = Self::new_inner(raw, true)?;
+        // Emulate flattening which happens to newtype variants in tagged enums.
+        this.attrs.flatten = true;
+        this.attrs.nest = true;
+        Ok(this)
+    }
+
+    fn new_inner(raw: &Field, support_unnamed: bool) -> syn::Result<Self> {
+        let name = if let Some(name) = raw.ident.clone() {
+            name
+        } else if support_unnamed {
+            Ident::new("_", raw.ty.span()) // This name will not be used
+        } else {
+            let message = "Only named fields are supported";
+            return Err(syn::Error::new_spanned(raw, message));
+        };
+        let ty = raw.ty.clone();
+
+        let attrs = ConfigFieldAttrs::new(&raw.attrs, raw.span())?;
+        Ok(Self {
+            attrs,
+            docs: parse_docs(&raw.attrs),
+            data: ConfigFieldData::Ordinary { name, ty },
+        })
+    }
+
+    fn from_tag(tag: LitStr) -> Self {
+        Self {
+            attrs: ConfigFieldAttrs::default(),
+            docs: "Tag for the enum config".to_owned(),
+            data: ConfigFieldData::EnumTag(tag),
+        }
+    }
+
+    pub fn extract_base_type(mut ty: &Type) -> &Type {
+        loop {
+            ty = match ty {
+                Type::Array(array) => array.elem.as_ref(),
+                Type::Path(TypePath { path, .. }) => {
+                    if path.segments.len() != 1 {
+                        break;
+                    }
+                    let segment = &path.segments[0];
+                    if segment.ident != "Option" {
+                        break;
+                    }
+                    let PathArguments::AngleBracketed(angle_bracketed) = &segment.arguments else {
+                        break;
+                    };
+                    if angle_bracketed.args.len() != 1 {
+                        break;
+                    }
+                    match &angle_bracketed.args[0] {
+                        GenericArgument::Type(ty) => ty,
+                        _ => break,
+                    }
+                }
+                _ => break,
+            };
+        }
+        ty
+    }
+
+    pub fn is_option(ty: &Type) -> bool {
+        let Type::Path(TypePath { path, .. }) = ty else {
+            return false;
+        };
+        if path.segments.len() != 1 {
+            return false;
+        }
+        let segment = &path.segments[0];
+        if segment.ident != "Option" {
+            return false;
+        }
+        let PathArguments::AngleBracketed(angle_bracketed) = &segment.arguments else {
+            return false;
+        };
+        angle_bracketed.args.len() == 1
+    }
+
+    pub fn param_name(&self) -> String {
+        self.attrs
+            .rename
+            .clone()
+            .unwrap_or_else(|| self.data.name())
+    }
+
+    pub fn type_kind(
+        &self,
+        meta_mod: &proc_macro2::TokenStream,
+        ty: &Type,
+    ) -> syn::Result<proc_macro2::TokenStream> {
+        let base_type = Self::extract_base_type(ty);
+        Ok(if let Some(kind) = &self.attrs.kind {
+            quote!(#kind)
+        } else if let Some(kind) = TypeKind::detect(base_type) {
+            kind.to_tokens(meta_mod)
+        } else {
+            let msg = "Cannot auto-detect kind of this type; please add #[config(kind = ..)] attribute for the field";
+            return Err(syn::Error::new_spanned(base_type, msg));
+        })
+    }
+}
+
+pub(crate) struct ConfigContainerAttrs {
+    pub cr: Option<Path>,
+}
+
+impl ConfigContainerAttrs {
+    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
+        let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
+
+        let mut cr = None;
+        for attr in config_attrs {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("crate") {
+                    cr = Some(meta.value()?.parse()?);
+                    Ok(())
+                } else {
+                    Err(meta.error("Unsupported attribute; only `crate` is supported`"))
+                }
+            })?;
+        }
+        Ok(Self { cr })
+    }
+}
+
+pub(crate) struct ConfigContainer {
+    pub attrs: ConfigContainerAttrs,
+    pub name: Ident,
+    pub help: String,
+    pub fields: Vec<ConfigField>,
+}
+
+impl ConfigContainer {
+    pub fn new(raw: &DeriveInput) -> syn::Result<Self> {
+        if raw.generics.type_params().count() != 0
+            || raw.generics.const_params().count() != 0
+            || raw.generics.lifetimes().count() != 0
+        {
+            let message = "generics are not supported";
+            return Err(syn::Error::new_spanned(&raw.generics, message));
+        }
+
+        let serde_attrs = ContainerAttrs::new(&raw.attrs)?;
+        let fields = match &raw.data {
+            Data::Struct(data) => {
+                serde_attrs.validate_for_struct()?;
+                Self::extract_struct_fields(data)?
+            }
+            Data::Enum(data) => Self::extract_enum_fields(data, &serde_attrs)?,
+            _ => {
+                let message = "#[derive(DescribeConfig)] can only be placed on structs or enums";
+                return Err(syn::Error::new_spanned(raw, message));
+            }
+        };
+
+        let name = raw.ident.clone();
+        let attrs = ConfigContainerAttrs::new(&raw.attrs)?;
+        Ok(Self {
+            attrs,
+            name,
+            help: parse_docs(&raw.attrs),
+            fields,
+        })
+    }
+
+    fn extract_struct_fields(data: &DataStruct) -> syn::Result<Vec<ConfigField>> {
+        data.fields.iter().map(ConfigField::new).collect()
+    }
+
+    fn extract_enum_fields(
+        data: &DataEnum,
+        serde_attrs: &ContainerAttrs,
+    ) -> syn::Result<Vec<ConfigField>> {
+        let mut merged_fields = vec![];
+        let mut merged_fields_by_name = HashSet::new();
+
+        for variant in &data.variants {
+            match &variant.fields {
+                Fields::Named(fields) => {
+                    for field in &fields.named {
+                        let new_field = ConfigField::new(field)?;
+                        if !merged_fields_by_name.insert(new_field.param_name()) {
+                            let msg = "Parameter with this name is already defined in another enum variant; \
+                                this may lead to unexpected config merge results and thus not supported";
+                            return Err(syn::Error::new_spanned(field, msg));
+                        }
+                        merged_fields.push(new_field);
+                    }
+                }
+                Fields::Unnamed(fields) => {
+                    if fields.unnamed.len() >= 2 {
+                        let msg = "Variants with >=2 unnamed fields are not supported";
+                        return Err(syn::Error::new(variant.ident.span(), msg));
+                    } else if fields.unnamed.len() == 1 {
+                        let field = fields.unnamed.first().unwrap();
+                        merged_fields.push(ConfigField::from_newtype_variant(field)?);
+                    }
+                }
+                Fields::Unit => { /* no fields to add */ }
+            }
+        }
+
+        if !merged_fields.is_empty() {
+            let tag = serde_attrs.tag.clone().ok_or_else(|| {
+                let msg = "Only tagged enums are supported as configs. Please add #[serde(tag = ..)] to the enum";
+                syn::Error::new_spanned(&data.variants, msg)
+            })?;
+            if merged_fields_by_name.contains(&tag.value()) {
+                let msg = "Tag name coincides with an existing param name";
+                return Err(syn::Error::new(tag.span(), msg));
+            }
+
+            merged_fields.push(ConfigField::from_tag(tag));
+        }
+
+        Ok(merged_fields)
+    }
+
+    pub fn cr(&self) -> proc_macro2::TokenStream {
+        if let Some(cr) = &self.attrs.cr {
+            quote!(#cr)
+        } else {
+            let name = &self.name;
+            quote_spanned!(name.span()=> ::smart_config)
         }
     }
 }
