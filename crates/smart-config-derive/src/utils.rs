@@ -9,6 +9,13 @@ use syn::{
     GenericArgument, Index, Lit, LitStr, Member, Path, PathArguments, Type, TypePath,
 };
 
+pub(crate) fn wrap_in_option(val: Option<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
+    match val {
+        Some(val) => quote!(::core::option::Option::Some(#val)),
+        None => quote!(::core::option::Option::None),
+    }
+}
+
 /// Corresponds to the type kind in the main crate. Necessary because `TypeId::of()` is not a `const fn`
 /// and unlikely to get stabilized as one in the near future.
 #[derive(Debug)]

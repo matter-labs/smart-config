@@ -5,14 +5,13 @@ use std::{fmt, sync::Arc};
 use serde::de;
 
 use crate::{
-    metadata::{ConfigMetadata, NestedConfigMetadata, ParamMetadata},
+    metadata::{ConfigMetadata, ParamMetadata},
     value::{ValueOrigin, WithOrigin},
 };
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum LocationInConfig {
     Param(usize),
-    Nested(usize),
 }
 
 pub(crate) type ErrorWithOrigin = WithOrigin<serde_json::Error>;
@@ -68,10 +67,6 @@ impl fmt::Display for ParseError {
                 LocationInConfig::Param(idx) => {
                     let param = self.config?.params.get(idx)?;
                     format!("param `{}`", param.name)
-                }
-                LocationInConfig::Nested(idx) => {
-                    let nested = self.config?.nested_configs.get(idx)?;
-                    format!("nested config `{}`", nested.meta.ty.name_in_code())
                 }
             })
         });
@@ -138,21 +133,8 @@ impl ParseError {
     /// Returns metadata for the failing parameter if this error concerns a parameter. The parameter
     /// is guaranteed to be contained in [`Self::config()`].
     pub fn param(&self) -> Option<&'static ParamMetadata> {
-        if let LocationInConfig::Param(idx) = self.location_in_config? {
-            self.config?.params.get(idx)
-        } else {
-            None
-        }
-    }
-
-    /// Returns metadata for the failing nested config if this error concerns a nested config. The config
-    /// is guaranteed to be nested in [`Self::config()`].
-    pub fn nested_config(&self) -> Option<&'static NestedConfigMetadata> {
-        if let LocationInConfig::Nested(idx) = self.location_in_config? {
-            self.config?.nested_configs.get(idx)
-        } else {
-            None
-        }
+        let LocationInConfig::Param(idx) = self.location_in_config?;
+        self.config?.params.get(idx)
     }
 
     pub(crate) fn with_origin(mut self, origin: Option<&Arc<ValueOrigin>>) -> Self {

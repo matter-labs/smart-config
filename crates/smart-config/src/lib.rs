@@ -5,7 +5,7 @@ pub use smart_config_derive::{DescribeConfig, DeserializeConfig};
 use self::metadata::ConfigMetadata;
 pub use self::{
     de::ValueDeserializer,
-    de_new::{DeserializeConfig, DeserializeContext, DeserializeParam},
+    de_new::{DeserializeConfig, DeserializeContext, DeserializeParam, WithDefault},
     error::{ParseError, ParseErrors},
     source::{ConfigRepository, ConfigSource, Environment, Json, KeyValueMap, Yaml},
 };

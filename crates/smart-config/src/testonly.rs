@@ -1,12 +1,16 @@
 //! Test-only functionality shared among multiple test modules.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use serde::Deserialize;
 
 use crate::{
-    metadata::PrimitiveType, value::WithOrigin, DescribeConfig, DeserializeConfig,
-    DeserializeContext, ParseErrors,
+    metadata::PrimitiveType,
+    value::{Value, WithOrigin},
+    DescribeConfig, DeserializeConfig, DeserializeContext, ParseErrors,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
@@ -91,6 +95,17 @@ pub(crate) enum DefaultingEnumConfig {
 pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result<C, ParseErrors> {
     let mut errors = ParseErrors::default();
     let ctx = DeserializeContext::new(val, "".into(), C::describe_config(), &mut errors).unwrap();
+    match C::deserialize_config(ctx) {
+        Some(config) => Ok(config),
+        None => Err(errors),
+    }
+}
+
+pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, ParseErrors> {
+    let mut errors = ParseErrors::default();
+    let val = WithOrigin::new(Value::Null, Arc::default());
+    let ctx =
+        DeserializeContext::new(&val, "test".into(), C::describe_config(), &mut errors).unwrap();
     match C::deserialize_config(ctx) {
         Some(config) => Ok(config),
         None => Err(errors),

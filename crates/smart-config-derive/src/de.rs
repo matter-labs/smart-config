@@ -5,42 +5,52 @@ use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, LitStr};
 
-use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField};
+use crate::utils::{
+    wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
+    DefaultValue,
+};
+
+impl DefaultValue {
+    fn fallback_fn(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
+        match self {
+            Self::DefaultTrait => {
+                quote_spanned!(span=> ::core::default::Default::default)
+            }
+            Self::Path(def_fn) => quote!(#def_fn),
+            Self::Expr(expr) => quote_spanned!(span=> || #expr),
+        }
+    }
+}
 
 impl ConfigField {
     /// Returns `Option<_>`.
     fn deserialize_param(
         &self,
-        _cr: &proc_macro2::TokenStream, // will be required for `with = ..`
+        cr: &proc_macro2::TokenStream,
         index: usize,
     ) -> proc_macro2::TokenStream {
         let name_span = self.name.span();
-        let default_instance = if let Some(default) = &self.attrs.default {
-            Some(default.instance(name_span))
+        let default_fn = if let Some(default) = &self.attrs.default {
+            Some(default.fallback_fn(name_span))
         } else if Self::is_option(&self.ty) {
-            Some(quote_spanned!(name_span=> ::core::option::Option::None))
+            Some(quote_spanned!(name_span=> || ::core::option::Option::None))
         } else {
             None
         };
-        let err_if_missing = default_instance.is_none();
 
         if !self.attrs.nest {
-            let mut param_expr = quote_spanned! {name_span=>
-                ctx.deserialize_param(#index, #err_if_missing, &())
-            };
-            if let Some(default) = default_instance {
-                param_expr = quote!(#param_expr.or_else(|| ::core::option::Option::Some(#default)));
+            let mut with = quote!(());
+            if let Some(default_fn) = default_fn {
+                with = quote!(#cr::WithDefault::new(#with, #default_fn));
             }
-            param_expr
+            quote_spanned! {name_span=>
+                ctx.deserialize_param(#index, &#with)
+            }
         } else {
-            let mut config_expr = quote_spanned! {name_span=>
-                ctx.deserialize_nested_config(#index, #err_if_missing)
-            };
-            if let Some(default) = default_instance {
-                config_expr =
-                    quote!(#config_expr.or_else(|| ::core::option::Option::Some(#default)));
+            let default_fn = wrap_in_option(default_fn);
+            quote_spanned! {name_span=>
+                ctx.deserialize_nested_config(#index, #default_fn)
             }
-            config_expr
         }
     }
 }
@@ -127,15 +137,14 @@ impl ConfigContainer {
                 let default = variants
                     .iter()
                     .find_map(|variant| variant.attrs.default.then(|| variant.name()));
-                let err_if_missing_tag = default.is_none();
-                let mut tag_expr = quote! {
-                    ctx.deserialize_tag(#param_index, EXPECTED_VARIANTS, #err_if_missing_tag)
+                let default = if let Some(default) = default {
+                    quote!(::core::option::Option::Some(#default))
+                } else {
+                    quote!(::core::option::Option::None)
                 };
-                if let Some(default) = default {
-                    tag_expr = quote! {
-                        #tag_expr.or_else(|| ::core::option::Option::Some(#default))
-                    };
-                }
+                let tag_expr = quote! {
+                    ctx.deserialize_tag(#param_index, EXPECTED_VARIANTS, #default)
+                };
 
                 quote! {{
                     const EXPECTED_VARIANTS: &[&str] = &[#(#expected_variants,)*];

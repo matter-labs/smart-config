@@ -1,6 +1,6 @@
 //! Schema-guided parsing of configurations.
 
-use std::{collections::HashMap, iter::empty};
+use std::{collections::HashMap, iter::empty, sync::Arc};
 
 use serde::{
     de::{
@@ -13,7 +13,7 @@ use serde::{
 
 use crate::{
     error::ErrorWithOrigin,
-    value::{Value, WithOrigin},
+    value::{Value, ValueOrigin, WithOrigin},
 };
 
 macro_rules! parse_int_value {
@@ -42,8 +42,7 @@ fn parse_array<'de, V: de::Visitor<'de>>(
     array: &[WithOrigin],
     visitor: V,
 ) -> Result<V::Value, ErrorWithOrigin> {
-    let mut deserializer =
-        SeqDeserializer::new(array.iter().map(|value| ValueDeserializer::new(value)));
+    let mut deserializer = SeqDeserializer::new(array.iter().map(ValueDeserializer::new));
     let seq = visitor.visit_seq(&mut deserializer)?;
     deserializer.end()?;
     Ok(seq)
@@ -65,22 +64,21 @@ fn parse_object<'de, V: de::Visitor<'de>>(
 
 #[derive(Debug, Clone, Copy)]
 pub struct ValueDeserializer<'a> {
-    value: Option<&'a WithOrigin>,
+    value: &'a WithOrigin,
     // TODO: options, e.g. mapping enum variants?
 }
 
 impl<'a> ValueDeserializer<'a> {
     pub(crate) fn new(value: &'a WithOrigin) -> Self {
-        Self { value: Some(value) }
+        Self { value }
     }
 
     fn value(&self) -> &'a Value {
-        self.value.map_or(&Value::Null, |val| &val.inner)
+        &self.value.inner
     }
 
     fn enrich_err(&self, err: serde_json::Error) -> ErrorWithOrigin {
-        let origin = self.value.map(|val| val.origin.clone()).unwrap_or_default();
-        ErrorWithOrigin::new(err, origin)
+        ErrorWithOrigin::new(err, self.value.origin.clone())
     }
 
     #[cold]
@@ -144,14 +142,13 @@ impl<'de> de::Deserializer<'de> for ValueDeserializer<'_> {
                 if s.is_empty() {
                     SeqDeserializer::new(empty::<Self>()).deserialize_seq(visitor)
                 } else {
-                    // `unwrap()` is safe: `self.value` is a string
-                    let origin = &self.value.unwrap().origin;
+                    let origin = &self.value.origin;
                     let items = s.split(',').map(|item| WithOrigin {
                         inner: Value::String(item.to_owned()),
                         origin: origin.clone(),
                     });
                     let items: Vec<_> = items.collect();
-                    let items = items.iter().map(|value| ValueDeserializer::new(value));
+                    let items = items.iter().map(ValueDeserializer::new);
                     SeqDeserializer::new(items).deserialize_seq(visitor)
                 }
             }
@@ -213,7 +210,10 @@ impl<'de> de::Deserializer<'de> for ValueDeserializer<'_> {
         };
         visitor.visit_enum(EnumDeserializer {
             variant,
-            inner: Self { value },
+            inner: VariantDeserializer {
+                value,
+                parent_origin: self.value.origin.clone(),
+            },
         })
     }
 
@@ -321,12 +321,12 @@ impl<'de> IntoDeserializer<'de, ErrorWithOrigin> for ValueDeserializer<'_> {
 #[derive(Debug)]
 struct EnumDeserializer<'a> {
     variant: &'a str,
-    inner: ValueDeserializer<'a>,
+    inner: VariantDeserializer<'a>,
 }
 
 impl<'a, 'de> de::EnumAccess<'de> for EnumDeserializer<'a> {
     type Error = ErrorWithOrigin;
-    type Variant = ValueDeserializer<'a>;
+    type Variant = VariantDeserializer<'a>;
 
     fn variant_seed<V: DeserializeSeed<'de>>(
         self,
@@ -337,12 +337,18 @@ impl<'a, 'de> de::EnumAccess<'de> for EnumDeserializer<'a> {
     }
 }
 
-impl<'de> de::VariantAccess<'de> for ValueDeserializer<'_> {
+#[derive(Debug)]
+struct VariantDeserializer<'a> {
+    value: Option<&'a WithOrigin>,
+    parent_origin: Arc<ValueOrigin>,
+}
+
+impl<'de> de::VariantAccess<'de> for VariantDeserializer<'_> {
     type Error = ErrorWithOrigin;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
-        if self.value.is_some() {
-            Deserialize::deserialize(self)
+        if let Some(value) = self.value {
+            Deserialize::deserialize(ValueDeserializer::new(value))
         } else {
             Ok(())
         }
@@ -352,10 +358,11 @@ impl<'de> de::VariantAccess<'de> for ValueDeserializer<'_> {
     where
         T: DeserializeSeed<'de>,
     {
-        if self.value.is_some() {
-            seed.deserialize(self)
+        if let Some(value) = self.value {
+            seed.deserialize(ValueDeserializer::new(value))
         } else {
-            Err(self.invalid_type("newtype variant"))
+            let err = DeError::invalid_type(de::Unexpected::Unit, &"newtype variant");
+            Err(ErrorWithOrigin::new(err, self.parent_origin))
         }
     }
 
@@ -364,10 +371,11 @@ impl<'de> de::VariantAccess<'de> for ValueDeserializer<'_> {
         _len: usize,
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        if self.value.is_some() {
-            de::Deserializer::deserialize_seq(self, visitor)
+        if let Some(value) = self.value {
+            de::Deserializer::deserialize_seq(ValueDeserializer::new(value), visitor)
         } else {
-            Err(self.invalid_type("tuple variant"))
+            let err = DeError::invalid_type(de::Unexpected::Unit, &"tuple variant");
+            Err(ErrorWithOrigin::new(err, self.parent_origin))
         }
     }
 
@@ -376,10 +384,11 @@ impl<'de> de::VariantAccess<'de> for ValueDeserializer<'_> {
         _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        if self.value.is_some() {
-            de::Deserializer::deserialize_map(self, visitor)
+        if let Some(value) = self.value {
+            de::Deserializer::deserialize_map(ValueDeserializer::new(value), visitor)
         } else {
-            Err(self.invalid_type("struct variant"))
+            let err = DeError::invalid_type(de::Unexpected::Unit, &"struct variant");
+            Err(ErrorWithOrigin::new(err, self.parent_origin))
         }
     }
 }

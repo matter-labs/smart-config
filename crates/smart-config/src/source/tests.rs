@@ -7,8 +7,8 @@ use super::*;
 use crate::{
     schema::Alias,
     testonly::{
-        test_deserialize, CompoundConfig, DefaultingConfig, DefaultingEnumConfig, EnumConfig,
-        NestedConfig, SimpleEnum,
+        test_deserialize, test_deserialize_missing, CompoundConfig, DefaultingConfig,
+        DefaultingEnumConfig, EnumConfig, NestedConfig, SimpleEnum,
     },
     DescribeConfig, ValueDeserializer,
 };
@@ -151,7 +151,7 @@ fn parsing_enum_config_missing_tag() {
 
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
-    assert_eq!(err.path().unwrap(), "");
+    assert_eq!(err.path().unwrap(), "type");
     assert_eq!(
         err.config().unwrap() as *const _,
         EnumConfig::describe_config()
@@ -168,11 +168,8 @@ fn parsing_enum_config_unknown_tag() {
 
     let inner = err.inner().to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
-    assert_eq!(err.path().unwrap(), "");
-    assert_eq!(
-        err.config().unwrap() as *const _,
-        EnumConfig::describe_config()
-    );
+    assert_eq!(err.path().unwrap(), "type");
+    assert_eq!(err.config().unwrap().ty, EnumConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "type");
 }
 
@@ -239,7 +236,7 @@ fn parsing_compound_config_missing_nested_value() {
     let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
-    assert_eq!(err.path().unwrap(), "nested");
+    assert_eq!(err.path().unwrap(), "nested.renamed");
     assert_eq!(err.config().unwrap().ty, NestedConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
@@ -249,18 +246,13 @@ fn parsing_compound_config_with_multiple_errors() {
     let json = config!("other_int": "what?");
     let errors = test_deserialize::<CompoundConfig>(json.inner()).unwrap_err();
     assert_eq!(errors.len(), 3, "{errors:#?}");
-    assert!(
-        errors
-            .iter()
-            .filter_map(|err| err.nested_config())
-            .any(|nested| nested.name == "nested"),
-        "{errors:#?}"
-    );
-    assert!(
+    assert_eq!(
         errors
             .iter()
             .filter_map(|err| err.param())
-            .any(|param| param.name == "renamed"),
+            .filter(|param| param.name == "renamed")
+            .count(),
+        2,
         "{errors:#?}"
     );
     assert!(
@@ -335,14 +327,11 @@ fn parsing_enum_config_with_schema() {
     );
 }
 
-/* FIXME
 #[test]
 fn parsing_defaulting_config_from_missing_value() {
-    let deserializer = ValueDeserializer::missing("".into());
-    let config = DefaultingConfig::deserialize_config(deserializer).unwrap();
+    let config: DefaultingConfig = test_deserialize_missing().unwrap();
     assert_eq!(config, DefaultingConfig::default());
 }
- */
 
 #[test]
 fn parsing_defaulting_config_with_null_override() {
@@ -367,14 +356,11 @@ fn parsing_defaulting_config_from_missing_value_with_schema() {
     assert_eq!(config, DefaultingConfig::default());
 }
 
-/* FIXME
 #[test]
 fn parsing_defaulting_enum_config_from_missing_value() {
-    let deserializer = ValueDeserializer::missing("".into());
-    let config = DefaultingEnumConfig::deserialize_config(deserializer).unwrap();
+    let config: DefaultingEnumConfig = test_deserialize_missing().unwrap();
     assert_eq!(config, DefaultingEnumConfig::default());
 }
- */
 
 #[test]
 fn parsing_defaulting_enum_config_from_missing_tag() {
@@ -469,14 +455,9 @@ fn missing_nested_config_parsing_error() {
 
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
-    assert_eq!(err.path().unwrap(), "");
-    assert_matches!(err.origin().unwrap(), ValueOrigin::Json { .. });
-    assert_eq!(
-        err.config().unwrap() as *const _,
-        ConfigWithNesting::describe_config()
-    );
-    assert!(err.param().is_none());
-    assert_eq!(err.nested_config().unwrap().name, "nested");
+    assert_eq!(err.path().unwrap(), "nested.renamed");
+    assert_eq!(err.config().unwrap().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.param().unwrap().name, "renamed");
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
