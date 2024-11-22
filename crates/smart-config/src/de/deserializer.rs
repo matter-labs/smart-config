@@ -69,11 +69,11 @@ pub(super) struct ValueDeserializer<'a> {
 }
 
 impl<'a> ValueDeserializer<'a> {
-    pub(crate) fn new(value: &'a WithOrigin) -> Self {
+    pub fn new(value: &'a WithOrigin) -> Self {
         Self { value }
     }
 
-    fn value(&self) -> &'a Value {
+    pub fn value(&self) -> &'a Value {
         &self.value.inner
     }
 
@@ -82,7 +82,7 @@ impl<'a> ValueDeserializer<'a> {
     }
 
     #[cold]
-    fn invalid_type(&self, expected: &str) -> ErrorWithOrigin {
+    pub fn invalid_type(&self, expected: &str) -> ErrorWithOrigin {
         let actual = match self.value() {
             Value::Null => de::Unexpected::Unit,
             Value::Bool(value) => de::Unexpected::Bool(*value),

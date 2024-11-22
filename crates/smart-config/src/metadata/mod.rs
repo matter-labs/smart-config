@@ -95,16 +95,22 @@ pub enum BasicType {
     Object,
 }
 
+impl BasicType {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Bool => "Boolean",
+            Self::Integer => "integer",
+            Self::Float => "floating-point value",
+            Self::String => "string",
+            Self::Array => "array",
+            Self::Object => "object",
+        }
+    }
+}
+
 impl fmt::Display for BasicType {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Bool => formatter.write_str("Boolean"),
-            Self::Integer => formatter.write_str("integer"),
-            Self::Float => formatter.write_str("floating-point value"),
-            Self::String => formatter.write_str("string"),
-            Self::Array => formatter.write_str("array"),
-            Self::Object => formatter.write_str("object"),
-        }
+        formatter.write_str(self.as_str())
     }
 }
 

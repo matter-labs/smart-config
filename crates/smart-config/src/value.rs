@@ -2,6 +2,8 @@
 
 use std::{collections::HashMap, fmt, iter, sync::Arc};
 
+use crate::metadata::BasicType;
+
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub enum ValueOrigin {
@@ -51,6 +53,18 @@ pub enum Value {
 }
 
 impl Value {
+    pub(crate) fn basic_type(&self) -> Option<BasicType> {
+        Some(match self {
+            Self::Null => return None,
+            Self::Bool(_) => BasicType::Bool,
+            Self::Number(number) if number.is_u64() || number.is_i64() => BasicType::Integer,
+            Self::Number(_) => BasicType::Float,
+            Self::String(_) => BasicType::String,
+            Self::Array(_) => BasicType::Array,
+            Self::Object(_) => BasicType::Object,
+        })
+    }
+
     pub fn as_object(&self) -> Option<&Map> {
         match self {
             Self::Object(map) => Some(map),

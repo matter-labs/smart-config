@@ -9,11 +9,24 @@ use serde::Deserialize;
 
 use crate::{
     de::{self, DeserializeContext},
-    metadata::BasicType,
+    metadata::{BasicType, SchemaType},
     source::ConfigContents,
     value::{Value, WithOrigin},
     ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
+
+#[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum SimpleEnum {
+    First,
+    Second,
+}
+
+impl de::WellKnown for SimpleEnum {
+    const TYPE: SchemaType = SchemaType::new(BasicType::String);
+}
+
+// FIXME: test `Assume`; test `f32` / `f64`
 
 // FIXME: test embedding into config
 #[derive(Debug, Deserialize)]
@@ -26,18 +39,10 @@ pub(crate) struct TestParam {
     pub repeated: HashSet<SimpleEnum>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum SimpleEnum {
-    First,
-    Second,
-}
-
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct NestedConfig {
     #[config(rename = "renamed")]
-    #[config(with = de::Serde(BasicType::String))]
     pub simple_enum: SimpleEnum,
     #[config(default_t = 42)]
     pub other_int: u32,
