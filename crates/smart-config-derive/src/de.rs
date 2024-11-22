@@ -41,7 +41,7 @@ impl ConfigField {
         if !self.attrs.nest {
             let mut with = quote!(());
             if let Some(default_fn) = default_fn {
-                with = quote!(#cr::WithDefault::new(#with, #default_fn));
+                with = quote!(#cr::de::WithDefault::new(#with, #default_fn));
             }
             quote_spanned! {name_span=>
                 ctx.deserialize_param(#index, &#with)
@@ -160,7 +160,7 @@ impl ConfigContainer {
             impl #cr::DeserializeConfig for #name {
                 #[allow(unused_mut)]
                 fn deserialize_config(
-                    mut ctx: #cr::DeserializeContext<'_>,
+                    mut ctx: #cr::de::DeserializeContext<'_>,
                 ) -> ::core::option::Option<Self> {
                     ::core::option::Option::Some(#instance)
                 }

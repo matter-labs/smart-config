@@ -1,14 +1,19 @@
-use serde::{
+use ::serde::{
     de::{DeserializeOwned, Error as DeError},
     Deserialize,
 };
 
+use self::serde::ValueDeserializer;
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
     metadata::{ConfigMetadata, ParamMetadata},
     value::{Pointer, ValueOrigin, WithOrigin},
-    DescribeConfig, ParseError, ParseErrors, ValueDeserializer,
+    DescribeConfig, ParseError, ParseErrors,
 };
+
+mod serde;
+#[cfg(test)]
+mod tests;
 
 /// Context for deserializing a configuration.
 #[derive(Debug)]
@@ -25,13 +30,13 @@ impl<'a> DeserializeContext<'a> {
         path: String,
         current_config: &'static ConfigMetadata,
         errors: &'a mut ParseErrors,
-    ) -> Option<Self> {
-        Some(Self {
+    ) -> Self {
+        Self {
             root_value,
             path,
             current_config,
             errors,
-        })
+        }
     }
 
     fn child(&mut self, path: &str) -> DeserializeContext<'_> {

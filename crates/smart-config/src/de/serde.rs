@@ -1,4 +1,4 @@
-//! Schema-guided parsing of configurations.
+//! `serde`-compatible deserializer based on a value with origin.
 
 use std::{collections::HashMap, iter::empty, sync::Arc};
 
@@ -63,7 +63,7 @@ fn parse_object<'de, V: de::Visitor<'de>>(
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ValueDeserializer<'a> {
+pub(super) struct ValueDeserializer<'a> {
     value: &'a WithOrigin,
     // TODO: options, e.g. mapping enum variants?
 }

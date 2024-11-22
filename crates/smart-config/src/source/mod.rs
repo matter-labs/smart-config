@@ -8,10 +8,11 @@ pub use self::{
     yaml::Yaml,
 };
 use crate::{
+    de::DeserializeContext,
     metadata::{ConfigMetadata, PrimitiveType, SchemaType},
     schema::{Alias, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
-    DeserializeConfig, DeserializeContext, ParseErrors,
+    DeserializeConfig, ParseErrors,
 };
 
 #[macro_use]
@@ -138,7 +139,6 @@ impl<'a> ConfigRepository<'a> {
         let mut errors = ParseErrors::default();
         let context =
             DeserializeContext::new(&self.merged, prefix.to_owned(), metadata, &mut errors);
-        let context = context.unwrap(); // FIXME: allow deserializing w/ no context
 
         C::deserialize_config(context)
             .with_context(|| {

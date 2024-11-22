@@ -8,10 +8,23 @@ use std::{
 use serde::Deserialize;
 
 use crate::{
+    de::DeserializeContext,
     metadata::PrimitiveType,
+    source::ConfigContents,
     value::{Value, WithOrigin},
-    DescribeConfig, DeserializeConfig, DeserializeContext, ParseErrors,
+    ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
+
+// FIXME: test embedding into config
+#[derive(Debug, Deserialize)]
+pub(crate) struct TestParam {
+    pub int: u64,
+    pub bool: bool,
+    pub string: String,
+    pub optional: Option<i64>,
+    pub array: Vec<u32>,
+    pub repeated: HashSet<SimpleEnum>,
+}
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -40,6 +53,16 @@ impl NestedConfig {
             map: HashMap::new(),
         }
     }
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ConfigWithNesting {
+    pub value: u32,
+    #[config(default)]
+    pub not_merged: String,
+    #[config(nest)]
+    pub nested: NestedConfig,
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
@@ -92,9 +115,29 @@ pub(crate) enum DefaultingEnumConfig {
     },
 }
 
+pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
+    let ConfigContents::KeyValue(map) = env.into_contents() else {
+        unreachable!();
+    };
+    let map = map.into_iter().map(|(key, value)| {
+        (
+            key,
+            WithOrigin {
+                inner: Value::String(value.inner),
+                origin: value.origin,
+            },
+        )
+    });
+
+    WithOrigin {
+        inner: Value::Object(map.collect()),
+        origin: Arc::default(),
+    }
+}
+
 pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result<C, ParseErrors> {
     let mut errors = ParseErrors::default();
-    let ctx = DeserializeContext::new(val, "".into(), C::describe_config(), &mut errors).unwrap();
+    let ctx = DeserializeContext::new(val, "".into(), C::describe_config(), &mut errors);
     match C::deserialize_config(ctx) {
         Some(config) => Ok(config),
         None => Err(errors),
@@ -104,8 +147,7 @@ pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result
 pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, ParseErrors> {
     let mut errors = ParseErrors::default();
     let val = WithOrigin::new(Value::Null, Arc::default());
-    let ctx =
-        DeserializeContext::new(&val, "test".into(), C::describe_config(), &mut errors).unwrap();
+    let ctx = DeserializeContext::new(&val, "test".into(), C::describe_config(), &mut errors);
     match C::deserialize_config(ctx) {
         Some(config) => Ok(config),
         None => Err(errors),
