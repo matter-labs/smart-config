@@ -151,11 +151,8 @@ fn parsing_enum_config_missing_tag() {
 
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
-    assert_eq!(err.path().unwrap(), "type");
-    assert_eq!(
-        err.config().unwrap() as *const _,
-        EnumConfig::describe_config()
-    );
+    assert_eq!(err.path(), "type");
+    assert_eq!(err.config().ty, EnumConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "type");
 }
 
@@ -168,8 +165,8 @@ fn parsing_enum_config_unknown_tag() {
 
     let inner = err.inner().to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
-    assert_eq!(err.path().unwrap(), "type");
-    assert_eq!(err.config().unwrap().ty, EnumConfig::describe_config().ty);
+    assert_eq!(err.path(), "type");
+    assert_eq!(err.config().ty, EnumConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "type");
 }
 
@@ -236,8 +233,8 @@ fn parsing_compound_config_missing_nested_value() {
     let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
-    assert_eq!(err.path().unwrap(), "nested.renamed");
-    assert_eq!(err.config().unwrap().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.path(), "nested.renamed");
+    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
 
@@ -258,7 +255,7 @@ fn parsing_compound_config_with_multiple_errors() {
     assert!(
         errors
             .iter()
-            .any(|err| err.inner().to_string().contains("what?") && err.path() == Some("other_int")),
+            .any(|err| err.inner().to_string().contains("what?") && err.path() == "other_int"),
         "{errors:#?}"
     );
 }
@@ -421,13 +418,10 @@ fn type_mismatch_parsing_error() {
         "{err}"
     );
     assert_matches!(
-        err.origin().unwrap(),
+        err.origin(),
         ValueOrigin::EnvVar(name) if name == "other_int"
     );
-    assert_eq!(
-        err.config().unwrap() as *const _,
-        NestedConfig::describe_config()
-    );
+    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "other_int");
 }
 
@@ -440,10 +434,7 @@ fn missing_parameter_parsing_error() {
     let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
-    assert_eq!(
-        err.config().unwrap() as *const _,
-        NestedConfig::describe_config()
-    );
+    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
 
@@ -455,8 +446,8 @@ fn missing_nested_config_parsing_error() {
 
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
-    assert_eq!(err.path().unwrap(), "nested.renamed");
-    assert_eq!(err.config().unwrap().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.path(), "nested.renamed");
+    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
 

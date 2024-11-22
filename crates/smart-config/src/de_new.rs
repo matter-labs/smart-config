@@ -77,6 +77,7 @@ impl<'a> DeserializeContext<'a> {
         (self.child(param.name), param)
     }
 
+    #[cold]
     fn push_error(&mut self, err: ErrorWithOrigin, location: Option<LocationInConfig>) {
         let mut origin = err.origin;
         if matches!(origin.as_ref(), ValueOrigin::Unknown) {
@@ -86,21 +87,20 @@ impl<'a> DeserializeContext<'a> {
         }
 
         let path = if let Some(location) = location {
-            &Pointer(&self.path).join(match location {
+            Pointer(&self.path).join(match location {
                 LocationInConfig::Param(idx) => self.current_config.params[idx].name,
             })
         } else {
-            &self.path
+            self.path.clone()
         };
 
-        let mut err = ParseError::from(err.inner)
-            .with_path(path)
-            .with_origin(Some(&origin))
-            .for_config(Some(self.current_config));
-        if let Some(location) = location {
-            err = err.with_location(Some(self.current_config), location);
-        }
-        self.errors.push(err);
+        self.errors.push(ParseError {
+            inner: err.inner,
+            path,
+            origin,
+            config: self.current_config,
+            location_in_config: location,
+        });
     }
 }
 

@@ -39,12 +39,11 @@ impl std::error::Error for ErrorWithOrigin {
 
 /// Config deserialization errors.
 pub struct ParseError {
-    inner: serde_json::Error,
-    // FIXME: make mandatory
-    path: Option<String>,
-    origin: Option<Arc<ValueOrigin>>,
-    config: Option<&'static ConfigMetadata>,
-    location_in_config: Option<LocationInConfig>,
+    pub(crate) inner: serde_json::Error,
+    pub(crate) path: String,
+    pub(crate) origin: Arc<ValueOrigin>,
+    pub(crate) config: &'static ConfigMetadata,
+    pub(crate) location_in_config: Option<LocationInConfig>,
 }
 
 impl fmt::Debug for ParseError {
@@ -54,7 +53,7 @@ impl fmt::Debug for ParseError {
             .field("inner", &self.inner)
             .field("origin", &self.origin)
             .field("path", &self.path)
-            .field("config.ty", &self.config.map(|meta| meta.ty))
+            .field("config.ty", &self.config.ty)
             .field("location_in_config", &self.location_in_config)
             .finish_non_exhaustive()
     }
@@ -65,28 +64,25 @@ impl fmt::Display for ParseError {
         let field = self.location_in_config.and_then(|location| {
             Some(match location {
                 LocationInConfig::Param(idx) => {
-                    let param = self.config?.params.get(idx)?;
+                    let param = self.config.params.get(idx)?;
                     format!("param `{}`", param.name)
                 }
             })
         });
         let field = field.as_deref().unwrap_or("value");
-        let config = self.config.map_or_else(String::new, |config| {
-            format!(" in `{}`", config.ty.name_in_code())
-        });
-        let at = self
-            .path
-            .as_ref()
-            .map_or_else(String::new, |path| format!(" at `{path}`"));
-        let origin = self
-            .origin
-            .as_ref()
-            .map_or_else(String::new, |origin| format!(" [origin: {origin}]"));
+
+        let origin = if matches!(self.origin(), ValueOrigin::Unknown) {
+            String::new()
+        } else {
+            format!(" [origin: {}]", self.origin)
+        };
 
         write!(
             formatter,
-            "error parsing {field}{config}{at}{origin}: {err}",
-            err = self.inner
+            "error parsing {field} in `{config}` at `{path}`{origin}: {err}",
+            err = self.inner,
+            config = self.config.ty.name_in_code(),
+            path = self.path
         )
     }
 }
@@ -97,36 +93,24 @@ impl std::error::Error for ParseError {
     }
 }
 
-impl From<serde_json::Error> for ParseError {
-    fn from(err: serde_json::Error) -> Self {
-        Self {
-            inner: err,
-            origin: None,
-            path: None,
-            config: None,
-            location_in_config: None,
-        }
-    }
-}
-
 impl ParseError {
     /// Returns the wrapped error.
     pub fn inner(&self) -> &serde_json::Error {
         &self.inner
     }
 
-    /// Returns an absolute path on which this error has occurred, if any.
-    pub fn path(&self) -> Option<&str> {
-        self.path.as_deref()
+    /// Returns an absolute path on which this error has occurred.
+    pub fn path(&self) -> &str {
+        &self.path
     }
 
-    /// Returns an origin of the value deserialization of which failed, if any.
-    pub fn origin(&self) -> Option<&ValueOrigin> {
-        self.origin.as_deref()
+    /// Returns an origin of the value deserialization of which failed.
+    pub fn origin(&self) -> &ValueOrigin {
+        &self.origin
     }
 
-    /// Returns metadata for the failing config, if any.
-    pub fn config(&self) -> Option<&'static ConfigMetadata> {
+    /// Returns metadata for the failing config.
+    pub fn config(&self) -> &'static ConfigMetadata {
         self.config
     }
 
@@ -134,38 +118,7 @@ impl ParseError {
     /// is guaranteed to be contained in [`Self::config()`].
     pub fn param(&self) -> Option<&'static ParamMetadata> {
         let LocationInConfig::Param(idx) = self.location_in_config?;
-        self.config?.params.get(idx)
-    }
-
-    pub(crate) fn with_origin(mut self, origin: Option<&Arc<ValueOrigin>>) -> Self {
-        if self.origin.is_none() {
-            self.origin = origin.cloned();
-        }
-        self
-    }
-
-    pub(crate) fn with_path(mut self, path: &str) -> Self {
-        if self.path.is_none() {
-            self.path = Some(path.to_owned());
-        }
-        self
-    }
-
-    pub(crate) fn for_config(mut self, metadata: Option<&'static ConfigMetadata>) -> Self {
-        self.config = self.config.or(metadata);
-        self
-    }
-
-    pub(crate) fn with_location(
-        mut self,
-        metadata: Option<&'static ConfigMetadata>,
-        location: LocationInConfig,
-    ) -> Self {
-        if metadata.is_some() {
-            self.config = metadata;
-            self.location_in_config = Some(location);
-        }
-        self
+        self.config.params.get(idx)
     }
 }
 
