@@ -54,7 +54,7 @@ impl<'a> ValueDeserializer<'a> {
         &self.value.inner
     }
 
-    fn enrich_err(&self, err: serde_json::Error) -> ErrorWithOrigin {
+    pub fn enrich_err(&self, err: serde_json::Error) -> ErrorWithOrigin {
         ErrorWithOrigin::new(err, self.value.origin.clone())
     }
 

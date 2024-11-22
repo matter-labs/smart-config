@@ -12,6 +12,7 @@ use std::{
     },
     path::PathBuf,
     str::FromStr,
+    time::Duration,
 };
 
 use serde::{
@@ -22,7 +23,7 @@ use serde::{
 use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
-    metadata::{BasicType, ParamMetadata, SchemaType},
+    metadata::{BasicType, ParamMetadata, SchemaType, TimeUnit},
 };
 
 #[diagnostic::on_unimplemented(
@@ -80,7 +81,7 @@ impl WellKnown for String {
 }
 
 impl WellKnown for PathBuf {
-    const TYPE: SchemaType = SchemaType::new(BasicType::String);
+    const TYPE: SchemaType = SchemaType::new(BasicType::String).with_qualifier("filesystem path");
 }
 
 impl WellKnown for f32 {
@@ -134,19 +135,21 @@ where
 // (it'd be better to define either multiple params or a struct param).
 
 impl<T: WellKnown + Eq + Hash> WellKnown for HashSet<T> {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Array);
+    const TYPE: SchemaType = SchemaType::new(BasicType::Array).with_qualifier("set");
 }
 
 impl<T: WellKnown + Eq + Ord> WellKnown for BTreeSet<T> {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Array);
+    const TYPE: SchemaType = SchemaType::new(BasicType::Array).with_qualifier("set");
 }
 
+/// Keys are intentionally restricted by [`FromStr`] in order to prevent runtime errors when dealing with keys
+/// that do not serialize to strings.
 impl<K, V> WellKnown for HashMap<K, V>
 where
     K: 'static + DeserializeOwned + Eq + Hash + FromStr,
     V: WellKnown,
 {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Object);
+    const TYPE: SchemaType = SchemaType::new(BasicType::Object).with_qualifier("map");
 }
 
 impl<K, V> WellKnown for BTreeMap<K, V>
@@ -154,7 +157,7 @@ where
     K: 'static + DeserializeOwned + Eq + Ord + FromStr,
     V: WellKnown,
 {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Object);
+    const TYPE: SchemaType = SchemaType::new(BasicType::Object).with_qualifier("map");
 }
 
 /// Default [`DeserializeParam`] implementation used unless it is explicitly overwritten via `#[config(with = _)]`
@@ -171,7 +174,7 @@ impl<T: 'static> DefaultDeserializer<T> {
 impl<T: 'static> fmt::Debug for DefaultDeserializer<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("WellKnown")
+            .debug_struct("DefaultDeserializer")
             .field("type", &any::type_name::<T>())
             .finish()
     }
@@ -279,6 +282,58 @@ impl DeserializeParam<&'static str> for TagDeserializer {
                     .unwrap_or_default();
                 ErrorWithOrigin::new(err, origin)
             })
+    }
+}
+
+impl TimeUnit {
+    fn overflow_err(self, raw_val: u64) -> serde_json::Error {
+        let plural = self.plural();
+        DeError::custom(format!(
+            "{raw_val} {plural} does not fit into `u64` when converted to seconds"
+        ))
+    }
+}
+
+impl DeserializeParam<Duration> for TimeUnit {
+    fn expecting(&self) -> SchemaType {
+        SchemaType::new(BasicType::Integer)
+            .with_qualifier("time duration")
+            .with_unit((*self).into())
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Duration, ErrorWithOrigin> {
+        const SECONDS_IN_MINUTE: u64 = 60;
+        const SECONDS_IN_HOUR: u64 = 3_600;
+        const SECONDS_IN_DAY: u64 = 86_400;
+
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let raw_value = u64::deserialize(deserializer)?;
+        Ok(match self {
+            Self::Millis => Duration::from_millis(raw_value),
+            Self::Seconds => Duration::from_secs(raw_value),
+            Self::Minutes => {
+                let val = raw_value
+                    .checked_mul(SECONDS_IN_MINUTE)
+                    .ok_or_else(|| deserializer.enrich_err(self.overflow_err(raw_value)))?;
+                Duration::from_secs(val)
+            }
+            Self::Hours => {
+                let val = raw_value
+                    .checked_mul(SECONDS_IN_HOUR)
+                    .ok_or_else(|| deserializer.enrich_err(self.overflow_err(raw_value)))?;
+                Duration::from_secs(val)
+            }
+            Self::Days => {
+                let val = raw_value
+                    .checked_mul(SECONDS_IN_DAY)
+                    .ok_or_else(|| deserializer.enrich_err(self.overflow_err(raw_value)))?;
+                Duration::from_secs(val)
+            }
+        })
     }
 }
 

@@ -3,14 +3,16 @@
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
+    path::PathBuf,
     sync::Arc,
+    time::Duration,
 };
 
 use serde::Deserialize;
 
 use crate::{
     de::{self, DeserializeContext},
-    metadata::{BasicType, SchemaType},
+    metadata::{BasicType, SchemaType, TimeUnit},
     source::ConfigContents,
     value::{Value, WithOrigin},
     ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
@@ -127,6 +129,10 @@ pub(crate) struct ConfigWithComplexTypes {
     pub array: [NonZeroUsize; 2],
     #[config(with = de::Assume(BasicType::Float))]
     pub assumed: Option<serde_json::Value>,
+    #[config(default_t = Duration::from_millis(100), with = TimeUnit::Millis)]
+    pub short_dur: Duration,
+    #[config(default_t = "./test".into())]
+    pub path: PathBuf,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {

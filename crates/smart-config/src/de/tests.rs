@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
+    time::Duration,
 };
 
 use assert_matches::assert_matches;
@@ -333,10 +334,12 @@ fn parsing_complex_types() {
             float: 4.2,
             array: [NonZeroUsize::new(4).unwrap(), NonZeroUsize::new(5).unwrap()],
             assumed: None,
+            short_dur: Duration::from_millis(100),
+            path: "./test".into(),
         }
     );
 
-    let json = config!("array": [4, 5], "assumed": 24);
+    let json = config!("array": [4, 5], "assumed": 24, "short_dur": 200, "path": "/mnt");
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config,
@@ -344,10 +347,12 @@ fn parsing_complex_types() {
             float: 4.2,
             array: [NonZeroUsize::new(4).unwrap(), NonZeroUsize::new(5).unwrap()],
             assumed: Some(serde_json::json!(24)),
+            short_dur: Duration::from_millis(200),
+            path: "/mnt".into(),
         }
     );
 
-    let json = config!("array": [5, 6], "float": -3, "assumed": ());
+    let json = config!("array": [5, 6], "float": -3, "assumed": (), "short_dur": 1000);
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config,
@@ -355,6 +360,8 @@ fn parsing_complex_types() {
             float: -3.0,
             array: [NonZeroUsize::new(5).unwrap(), NonZeroUsize::new(6).unwrap()],
             assumed: None,
+            short_dur: Duration::from_secs(1),
+            path: "./test".into(),
         }
     );
 }

@@ -117,24 +117,55 @@ impl fmt::Display for BasicType {
 /// Human-readable kind for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SchemaType {
+    /// `None` means that arbitrary values are accepted.
     pub(crate) base: Option<BasicType>,
+    pub(crate) qualifier: Option<&'static str>,
+    pub(crate) unit: Option<UnitOfMeasurement>,
 }
 
 impl SchemaType {
-    pub const ANY: Self = Self { base: None };
+    pub const ANY: Self = Self {
+        base: None,
+        qualifier: None,
+        unit: None,
+    };
 
     pub const fn new(base: BasicType) -> Self {
-        Self { base: Some(base) }
+        Self {
+            base: Some(base),
+            ..Self::ANY
+        }
+    }
+
+    pub const fn with_qualifier(self, qualifier: &'static str) -> Self {
+        Self {
+            qualifier: Some(qualifier),
+            ..self
+        }
+    }
+
+    pub const fn with_unit(self, unit: UnitOfMeasurement) -> Self {
+        Self {
+            unit: Some(unit),
+            ..self
+        }
     }
 }
 
 impl fmt::Display for SchemaType {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(base) = &self.base {
-            fmt::Display::fmt(base, formatter)
+            fmt::Display::fmt(base, formatter)?;
         } else {
-            formatter.write_str("any")
+            formatter.write_str("any")?;
         }
+        if let Some(qualifier) = self.qualifier {
+            write!(formatter, ", {qualifier}")?;
+        }
+        if let Some(unit) = self.unit {
+            write!(formatter, " [unit: {unit}]")?;
+        }
+        Ok(())
     }
 }
 
@@ -143,4 +174,53 @@ impl fmt::Display for SchemaType {
 pub struct NestedConfigMetadata {
     pub name: &'static str,
     pub meta: &'static ConfigMetadata,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum TimeUnit {
+    Millis,
+    Seconds,
+    Minutes,
+    Hours,
+    Days,
+    // No larger units since they are less useful and may be ambiguous (e.g., is a month 30 days? is a year 365 days or 365.25...)
+}
+
+impl TimeUnit {
+    pub(crate) fn plural(self) -> &'static str {
+        match self {
+            TimeUnit::Millis => "milliseconds",
+            TimeUnit::Seconds => "seconds",
+            TimeUnit::Minutes => "minutes",
+            TimeUnit::Hours => "hours",
+            TimeUnit::Days => "days",
+        }
+    }
+}
+
+impl fmt::Display for TimeUnit {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.plural())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum UnitOfMeasurement {
+    Time(TimeUnit),
+}
+
+impl fmt::Display for UnitOfMeasurement {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Time(unit) => fmt::Display::fmt(unit, formatter),
+        }
+    }
+}
+
+impl From<TimeUnit> for UnitOfMeasurement {
+    fn from(unit: TimeUnit) -> Self {
+        Self::Time(unit)
+    }
 }
