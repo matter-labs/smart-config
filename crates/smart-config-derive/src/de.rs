@@ -39,12 +39,12 @@ impl ConfigField {
         };
 
         if !self.attrs.nest {
-            let mut with = quote!(());
+            let mut deserializer = self.deserializer(cr);
             if let Some(default_fn) = default_fn {
-                with = quote!(#cr::de::WithDefault::new(#with, #default_fn));
+                deserializer = quote!(#cr::de::WithDefault::new(#deserializer, #default_fn));
             }
             quote_spanned! {name_span=>
-                ctx.deserialize_param(#index, &#with)
+                ctx.deserialize_param(#index, &#deserializer)
             }
         } else {
             let default_fn = wrap_in_option(default_fn);

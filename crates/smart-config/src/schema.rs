@@ -320,19 +320,14 @@ impl ConfigSchema {
             writeln!(writer, "{prefix}{prefix_sep}{alias}")?;
         }
 
-        let kind = param.type_kind;
+        let kind = param.deserializer.expecting();
         let ty = format!("{kind} [Rust: {}]", param.ty.name_in_code());
         let default = if let Some(default) = param.default_value() {
             format!(", default: {default:?}")
         } else {
             String::new()
         };
-        let unit = if let Some(unit) = &param.unit {
-            format!(" [unit: {unit}]")
-        } else {
-            String::new()
-        };
-        writeln!(writer, "{INDENT}Type: {ty}{default}{unit}")?;
+        writeln!(writer, "{INDENT}Type: {ty}{default}")?;
 
         if !param.help.is_empty() {
             for line in param.help.lines() {
@@ -347,7 +342,7 @@ impl ConfigSchema {
 mod tests {
     use super::*;
     use crate::{
-        metadata::PrimitiveType, value::Value, ConfigRepository, DescribeConfig, DeserializeConfig,
+        metadata::BasicType, value::Value, ConfigRepository, DescribeConfig, DeserializeConfig,
         Environment,
     };
 
@@ -407,8 +402,8 @@ mod tests {
         assert_eq!(optional_metadata.help, "Optional value.");
         assert_eq!(optional_metadata.ty.name_in_code(), "Option"); // FIXME: does `Option<u32>` get printed only for nightly Rust?
         assert_eq!(
-            optional_metadata.type_kind,
-            PrimitiveType::Integer.as_type()
+            optional_metadata.deserializer.expecting().base,
+            Some(BasicType::Integer)
         );
     }
 

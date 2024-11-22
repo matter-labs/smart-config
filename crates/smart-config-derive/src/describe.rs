@@ -30,6 +30,7 @@ impl DefaultValue {
 impl ConfigField {
     fn describe_param(
         &self,
+        cr: &proc_macro2::TokenStream,
         meta_mod: &proc_macro2::TokenStream,
     ) -> syn::Result<proc_macro2::TokenStream> {
         let name_span = self.name.span();
@@ -43,7 +44,6 @@ impl ConfigField {
         } else {
             quote!(::core::stringify!(#ty))
         };
-        let type_kind = self.type_kind(meta_mod, ty)?;
 
         let default_value = DefaultValue::boxed(self.attrs.default.as_ref(), name_span, ty);
         let default_value = if let Some(value) = default_value {
@@ -55,6 +55,7 @@ impl ConfigField {
         let aliases_validation = aliases.clone().map(
             |alias| quote_spanned!(name_span=> #meta_mod::validation::assert_param_name(#alias);),
         );
+        let deserializer = self.deserializer(cr);
 
         Ok(quote_spanned! {name_span=> {
             const _: () = {
@@ -67,8 +68,7 @@ impl ConfigField {
                 aliases: &[#(#aliases,)*],
                 help: #help,
                 ty: #meta_mod::RustType::of::<#ty>(#ty_in_code),
-                type_kind: #type_kind,
-                unit: #meta_mod::UnitOfMeasurement::detect(#param_name, #type_kind),
+                deserializer: const { &#deserializer },
                 default_value: #default_value,
             }
         }})
@@ -102,7 +102,7 @@ impl ConfigContainer {
         let all_fields = self.fields.all_fields();
         let params = all_fields.iter().filter_map(|field| {
             if !field.attrs.nest {
-                return Some(field.describe_param(&meta_mod));
+                return Some(field.describe_param(&cr, &meta_mod));
             }
             None
         });
@@ -114,7 +114,7 @@ impl ConfigContainer {
                 .iter()
                 .find_map(|variant| variant.attrs.default.then(|| variant.name()));
             let tag = ConfigField::from_tag(tag, default.as_deref());
-            params.push(tag.describe_param(&meta_mod)?);
+            params.push(tag.describe_param(&cr, &meta_mod)?);
         }
 
         let nested_configs = all_fields.iter().filter_map(|field| {

@@ -9,7 +9,7 @@ pub use self::{
 };
 use crate::{
     de::DeserializeContext,
-    metadata::{ConfigMetadata, PrimitiveType, SchemaType},
+    metadata::{BasicType, ConfigMetadata},
     schema::{Alias, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseErrors,
@@ -286,13 +286,14 @@ impl WithOrigin {
                 };
 
                 // Attempt to transform the type to the expected type
-                match param.type_kind {
-                    SchemaType::Primitive(PrimitiveType::Bool) => {
+                let expecting = param.deserializer.expecting();
+                match expecting.base {
+                    Some(BasicType::Bool) => {
                         if let Ok(bool_value) = str.parse::<bool>() {
                             value.inner = Value::Bool(bool_value);
                         }
                     }
-                    SchemaType::Primitive(PrimitiveType::Integer | PrimitiveType::Float) => {
+                    Some(BasicType::Integer | BasicType::Float) => {
                         if let Ok(number) = str.parse::<serde_json::Number>() {
                             value.inner = Value::Number(number);
                         }

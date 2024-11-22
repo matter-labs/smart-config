@@ -39,7 +39,10 @@ fn describing_enum_config() {
         .iter()
         .find(|param| param.name == "type")
         .unwrap();
-    assert_eq!(tag_param.type_kind, PrimitiveType::String.as_type());
+    assert_eq!(
+        tag_param.deserializer.expecting().base,
+        Some(BasicType::String)
+    );
 }
 
 #[test]

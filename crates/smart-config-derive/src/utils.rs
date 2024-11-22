@@ -6,106 +6,13 @@ use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{
     spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Field, Fields,
-    GenericArgument, Index, Lit, LitStr, Member, Path, PathArguments, Type, TypePath,
+    Index, Lit, LitStr, Member, Path, PathArguments, Type, TypePath,
 };
 
 pub(crate) fn wrap_in_option(val: Option<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
     match val {
         Some(val) => quote!(::core::option::Option::Some(#val)),
         None => quote!(::core::option::Option::None),
-    }
-}
-
-/// Corresponds to the type kind in the main crate. Necessary because `TypeId::of()` is not a `const fn`
-/// and unlikely to get stabilized as one in the near future.
-#[derive(Debug)]
-pub(crate) enum TypeKind {
-    Bool,
-    Integer,
-    Float,
-    String,
-    Path,
-    Array,
-    Object,
-}
-
-const BUILTIN_INTEGER_TYPES: &[&str] = &[
-    "u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "u128", "i128", "usize", "isize",
-];
-const BUILTIN_FLOAT_TYPES: &[&str] = &["f32", "f64"];
-const STD_INTEGER_TYPES: &[&str] = &[
-    "NonZeroU8",
-    "NonZeroI8",
-    "NonZeroU16",
-    "NonZeroI16",
-    "NonZeroU32",
-    "NonZeroI32",
-    "NonZeroU64",
-    "NonZeroI64",
-    "NonZeroUsize",
-    "NonZeroIsize",
-];
-const STD_ARRAY_TYPES: &[&str] = &["Vec", "HashSet", "BTreeSet"];
-const STD_MAP_TYPES: &[&str] = &["HashMap", "BTreeMap"];
-
-impl TypeKind {
-    pub fn detect(ty: &Type) -> Option<Self> {
-        let ty = match ty {
-            Type::Path(ty) => ty,
-            Type::Array(_) => return Some(Self::Array),
-            _ => return None,
-        };
-
-        if let Some(ident) = ty.path.get_ident() {
-            // Only recognize built-in types if the type isn't qualified
-            if ident == "bool" {
-                return Some(Self::Bool);
-            } else if BUILTIN_INTEGER_TYPES.iter().any(|&name| ident == name) {
-                return Some(Self::Integer);
-            } else if BUILTIN_FLOAT_TYPES.iter().any(|&name| ident == name) {
-                return Some(Self::Float);
-            }
-        }
-
-        let last_segment = ty.path.segments.last()?;
-        let args_len = match &last_segment.arguments {
-            PathArguments::None => 0,
-            PathArguments::AngleBracketed(args) => args.args.len(),
-            PathArguments::Parenthesized(_) => return None,
-        };
-
-        if last_segment.ident == "String" && args_len == 0 {
-            return Some(Self::String);
-        } else if last_segment.ident == "PathBuf" && args_len == 0 {
-            return Some(Self::Path);
-        } else if args_len == 0
-            && STD_INTEGER_TYPES
-                .iter()
-                .any(|&name| last_segment.ident == name)
-        {
-            return Some(Self::Integer);
-        } else if args_len == 1
-            && STD_ARRAY_TYPES
-                .iter()
-                .any(|&name| last_segment.ident == name)
-        {
-            return Some(Self::Array);
-        } else if args_len == 2 && STD_MAP_TYPES.iter().any(|&name| last_segment.ident == name) {
-            return Some(Self::Object);
-        }
-        None
-    }
-
-    pub fn to_tokens(&self, meta_mod: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-        match self {
-            Self::Bool => quote!(#meta_mod::PrimitiveType::Bool.as_type()),
-            Self::Integer => quote!(#meta_mod::PrimitiveType::Integer.as_type()),
-            Self::Float => quote!(#meta_mod::PrimitiveType::Float.as_type()),
-            Self::String => quote!(#meta_mod::PrimitiveType::String.as_type()),
-            Self::Path => quote!(#meta_mod::PrimitiveType::Path.as_type()),
-            Self::Array => quote!(#meta_mod::SchemaType::Array),
-            Self::Object => quote!(#meta_mod::SchemaType::Object),
-        }
     }
 }
 
@@ -203,7 +110,7 @@ pub(crate) struct ConfigFieldAttrs {
     pub default: Option<DefaultValue>,
     pub flatten: bool,
     pub nest: bool,
-    pub kind: Option<Expr>,
+    pub with: Option<Expr>,
 }
 
 impl ConfigFieldAttrs {
@@ -216,7 +123,7 @@ impl ConfigFieldAttrs {
         let mut flatten = false;
         let mut nest = false;
         let mut nested_span = None;
-        let mut kind = None;
+        let mut with = None;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("rename") {
@@ -244,8 +151,8 @@ impl ConfigFieldAttrs {
                     nest = true;
                     nested_span = Some(meta.path.span());
                     Ok(())
-                } else if meta.path.is_ident("kind") {
-                    kind = Some(meta.value()?.parse()?);
+                } else if meta.path.is_ident("with") {
+                    with = Some(meta.value()?.parse()?);
                     Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))
@@ -257,15 +164,15 @@ impl ConfigFieldAttrs {
             // All flattened configs are nested, but not necessarily vice versa.
             nest = true;
         }
-        if kind.is_some() && nest {
-            let msg = "cannot specify `kind` for a `nest`ed / `flatten`ed configuration";
+        if with.is_some() && nest {
+            let msg = "cannot specify `with` for a `nest`ed / `flatten`ed configuration";
             let err_span = nested_span.unwrap_or(name_span);
             return Err(syn::Error::new(err_span, msg));
         }
 
         Ok(Self {
             nest,
-            kind,
+            with,
             rename,
             aliases,
             default,
@@ -331,35 +238,6 @@ impl ConfigField {
         }
     }
 
-    pub fn extract_base_type(mut ty: &Type) -> &Type {
-        loop {
-            ty = match ty {
-                Type::Array(array) => array.elem.as_ref(),
-                Type::Path(TypePath { path, .. }) => {
-                    if path.segments.len() != 1 {
-                        break;
-                    }
-                    let segment = &path.segments[0];
-                    if segment.ident != "Option" {
-                        break;
-                    }
-                    let PathArguments::AngleBracketed(angle_bracketed) = &segment.arguments else {
-                        break;
-                    };
-                    if angle_bracketed.args.len() != 1 {
-                        break;
-                    }
-                    match &angle_bracketed.args[0] {
-                        GenericArgument::Type(ty) => ty,
-                        _ => break,
-                    }
-                }
-                _ => break,
-            };
-        }
-        ty
-    }
-
     pub fn is_option(ty: &Type) -> bool {
         let Type::Path(TypePath { path, .. }) = ty else {
             return false;
@@ -387,20 +265,13 @@ impl ConfigField {
             })
     }
 
-    pub fn type_kind(
-        &self,
-        meta_mod: &proc_macro2::TokenStream,
-        ty: &Type,
-    ) -> syn::Result<proc_macro2::TokenStream> {
-        let base_type = Self::extract_base_type(ty);
-        Ok(if let Some(kind) = &self.attrs.kind {
-            quote!(#kind)
-        } else if let Some(kind) = TypeKind::detect(base_type) {
-            kind.to_tokens(meta_mod)
+    pub fn deserializer(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        if let Some(with) = &self.attrs.with {
+            quote!(#with)
         } else {
-            let msg = "Cannot auto-detect kind of this type; please add #[config(kind = ..)] attribute for the field";
-            return Err(syn::Error::new_spanned(base_type, msg));
-        })
+            let ty = &self.ty;
+            quote_spanned!(ty.span()=> #cr::de::WellKnown::<#ty>::new())
+        }
     }
 }
 

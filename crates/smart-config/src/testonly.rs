@@ -8,8 +8,8 @@ use std::{
 use serde::Deserialize;
 
 use crate::{
-    de::DeserializeContext,
-    metadata::PrimitiveType,
+    de::{self, DeserializeContext},
+    metadata::BasicType,
     source::ConfigContents,
     value::{Value, WithOrigin},
     ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
@@ -37,7 +37,7 @@ pub(crate) enum SimpleEnum {
 #[config(crate = crate)]
 pub(crate) struct NestedConfig {
     #[config(rename = "renamed")]
-    #[config(kind = PrimitiveType::String.as_type())]
+    #[config(with = de::Serde(BasicType::String))]
     pub simple_enum: SimpleEnum,
     #[config(default_t = 42)]
     pub other_int: u32,

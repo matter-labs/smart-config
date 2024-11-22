@@ -1,3 +1,5 @@
+use std::{any, fmt, marker::PhantomData};
+
 use ::serde::{
     de::{DeserializeOwned, Error as DeError},
     Deserialize,
@@ -6,7 +8,7 @@ use ::serde::{
 use self::serde::ValueDeserializer;
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
-    metadata::{ConfigMetadata, ParamMetadata},
+    metadata::{BasicType, ConfigMetadata, DeserializerBase, ParamMetadata, SchemaType},
     value::{Pointer, ValueOrigin, WithOrigin},
     DescribeConfig, ParseError, ParseErrors,
 };
@@ -161,7 +163,7 @@ pub trait DeserializeConfig: DescribeConfig + Sized {
     fn deserialize_config(ctx: DeserializeContext<'_>) -> Option<Self>;
 }
 
-pub trait DeserializeParam<T> {
+pub trait DeserializeParam<T>: DeserializerBase {
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -169,7 +171,16 @@ pub trait DeserializeParam<T> {
     ) -> Result<T, ErrorWithOrigin>;
 }
 
-impl<T: DeserializeOwned> DeserializeParam<T> for () {
+#[derive(Debug)]
+pub struct Serde(pub BasicType);
+
+impl DeserializerBase for Serde {
+    fn expecting(&self) -> SchemaType {
+        SchemaType::new(self.0)
+    }
+}
+
+impl<T: DeserializeOwned> DeserializeParam<T> for Serde {
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -179,19 +190,68 @@ impl<T: DeserializeOwned> DeserializeParam<T> for () {
     }
 }
 
-#[derive(Debug)]
+pub struct WellKnown<T>(PhantomData<fn(T)>);
+
+#[allow(clippy::new_without_default)] // won't make much sense, since it cannot be used in const contexts
+impl<T: 'static> WellKnown<T> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T: 'static> fmt::Debug for WellKnown<T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WellKnown")
+            .field("type", &any::type_name::<T>())
+            .finish()
+    }
+}
+
+impl<T: 'static + DeserializeOwned> DeserializerBase for WellKnown<T> {
+    fn expecting(&self) -> SchemaType {
+        SchemaType::ANY // FIXME
+    }
+}
+
+impl<T: 'static + DeserializeOwned> DeserializeParam<T> for WellKnown<T> {
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        T::deserialize(ctx.current_value_deserializer(param.name)?)
+    }
+}
+
 pub struct WithDefault<T, D> {
     inner: D,
     default: fn() -> T,
 }
 
-impl<T, D: DeserializeParam<T>> WithDefault<T, D> {
+impl<T: 'static, D: fmt::Debug> fmt::Debug for WithDefault<T, D> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WithDefault")
+            .field("inner", &self.inner)
+            .field("type", &any::type_name::<T>())
+            .finish()
+    }
+}
+
+impl<T: 'static, D: DeserializeParam<T>> WithDefault<T, D> {
     pub const fn new(inner: D, default: fn() -> T) -> Self {
         Self { inner, default }
     }
 }
 
-impl<T, D: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, D> {
+impl<T: 'static, D: DeserializeParam<T>> DeserializerBase for WithDefault<T, D> {
+    fn expecting(&self) -> SchemaType {
+        self.inner.expecting()
+    }
+}
+
+impl<T: 'static, D: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, D> {
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -209,6 +269,12 @@ impl<T, D: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, D> {
 struct TagDeserializer {
     expected: &'static [&'static str],
     default_value: Option<&'static str>,
+}
+
+impl DeserializerBase for TagDeserializer {
+    fn expecting(&self) -> SchemaType {
+        SchemaType::new(BasicType::String)
+    }
 }
 
 impl DeserializeParam<&'static str> for TagDeserializer {

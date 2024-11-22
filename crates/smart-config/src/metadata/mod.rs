@@ -7,6 +7,11 @@ mod tests;
 #[doc(hidden)] // used in the derive macro
 pub mod validation;
 
+/// Object-safe part of parameter deserializer.
+pub trait DeserializerBase: 'static + fmt::Debug + Send + Sync {
+    fn expecting(&self) -> SchemaType;
+}
+
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]
 pub struct ConfigMetadata {
@@ -35,8 +40,7 @@ pub struct ParamMetadata {
     pub help: &'static str,
     /// Type with a potential `Option<_>` wrapper stripped.
     pub ty: RustType,
-    pub type_kind: SchemaType,
-    pub unit: Option<UnitOfMeasurement>,
+    pub deserializer: &'static dyn DeserializerBase,
     #[doc(hidden)] // set by derive macro
     pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
 }
@@ -44,46 +48,6 @@ pub struct ParamMetadata {
 impl ParamMetadata {
     pub fn default_value(&self) -> Option<impl fmt::Debug + '_> {
         self.default_value.map(|value_fn| value_fn())
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-#[non_exhaustive]
-pub enum UnitOfMeasurement {
-    Seconds,
-    Milliseconds,
-    Bytes,
-    Megabytes,
-}
-
-impl fmt::Display for UnitOfMeasurement {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::Seconds => "seconds",
-            Self::Milliseconds => "milliseconds",
-            Self::Bytes => "bytes",
-            Self::Megabytes => "megabytes (IEC)",
-        })
-    }
-}
-
-impl UnitOfMeasurement {
-    pub fn detect(param_name: &str, base_type_kind: SchemaType) -> Option<Self> {
-        if base_type_kind != SchemaType::Primitive(PrimitiveType::Integer) {
-            return None;
-        }
-
-        if param_name.ends_with("_ms") {
-            Some(Self::Milliseconds)
-        } else if param_name.ends_with("_sec") {
-            Some(Self::Seconds)
-        } else if param_name.ends_with("_bytes") {
-            Some(Self::Bytes)
-        } else if param_name.ends_with("_mb") {
-            Some(Self::Megabytes)
-        } else {
-            None
-        }
     }
 }
 
@@ -125,47 +89,48 @@ impl RustType {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
-pub enum PrimitiveType {
+pub enum BasicType {
     Bool,
     Integer,
     Float,
     String,
-    Path,
+    Array,
+    Object,
 }
 
-impl fmt::Display for PrimitiveType {
+impl fmt::Display for BasicType {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Bool => formatter.write_str("Boolean"),
             Self::Integer => formatter.write_str("integer"),
             Self::Float => formatter.write_str("floating-point value"),
             Self::String => formatter.write_str("string"),
-            Self::Path => formatter.write_str("filesystem path"),
+            Self::Array => formatter.write_str("array"),
+            Self::Object => formatter.write_str("object"),
         }
-    }
-}
-
-impl PrimitiveType {
-    pub const fn as_type(self) -> SchemaType {
-        SchemaType::Primitive(self)
     }
 }
 
 /// Human-readable kind for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[non_exhaustive]
-pub enum SchemaType {
-    Primitive(PrimitiveType),
-    Array,
-    Object,
+pub struct SchemaType {
+    pub(crate) base: Option<BasicType>,
+}
+
+impl SchemaType {
+    pub const ANY: Self = Self { base: None };
+
+    pub const fn new(base: BasicType) -> Self {
+        Self { base: Some(base) }
+    }
 }
 
 impl fmt::Display for SchemaType {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Primitive(ty) => fmt::Display::fmt(ty, formatter),
-            Self::Array => formatter.write_str("array"),
-            Self::Object => formatter.write_str("object"),
+        if let Some(base) = &self.base {
+            fmt::Display::fmt(base, formatter)
+        } else {
+            formatter.write_str("any")
         }
     }
 }
