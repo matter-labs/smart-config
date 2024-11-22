@@ -4,7 +4,10 @@ use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
 
-use crate::{metadata::PrimitiveType, DescribeConfig, DeserializeConfig};
+use crate::{
+    metadata::PrimitiveType, value::WithOrigin, DescribeConfig, DeserializeConfig,
+    DeserializeContext, ParseErrors,
+};
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -83,6 +86,15 @@ pub(crate) enum DefaultingEnumConfig {
         #[config(default_t = 123)]
         int: u32,
     },
+}
+
+pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result<C, ParseErrors> {
+    let mut errors = ParseErrors::default();
+    let ctx = DeserializeContext::new(val, "".into(), C::describe_config(), &mut errors).unwrap();
+    match C::deserialize_config(ctx) {
+        Some(config) => Ok(config),
+        None => Err(errors),
+    }
 }
 
 #[cfg(test)]

@@ -25,14 +25,6 @@ impl DefaultValue {
             }
         }
     }
-
-    fn instance(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
-        match self {
-            Self::DefaultTrait => quote_spanned!(span=> ::core::default::Default::default()),
-            Self::Path(path) => quote_spanned!(span=> #path()),
-            Self::Expr(expr) => quote_spanned!(span=> #expr),
-        }
-    }
 }
 
 impl ConfigField {

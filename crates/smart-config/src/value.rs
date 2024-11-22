@@ -75,6 +75,12 @@ impl PartialEq for WithOrigin {
     }
 }
 
+impl<T> WithOrigin<T> {
+    pub(crate) fn new(inner: T, origin: Arc<ValueOrigin>) -> Self {
+        Self { inner, origin }
+    }
+}
+
 impl WithOrigin {
     pub(crate) fn get(&self, pointer: Pointer) -> Option<&Self> {
         pointer

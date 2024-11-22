@@ -6,7 +6,7 @@ use serde::de;
 
 use crate::{
     metadata::{ConfigMetadata, NestedConfigMetadata, ParamMetadata},
-    value::ValueOrigin,
+    value::{ValueOrigin, WithOrigin},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -15,9 +15,33 @@ pub(crate) enum LocationInConfig {
     Nested(usize),
 }
 
+pub(crate) type ErrorWithOrigin = WithOrigin<serde_json::Error>;
+
+impl de::Error for ErrorWithOrigin {
+    fn custom<T: fmt::Display>(msg: T) -> Self {
+        Self {
+            inner: de::Error::custom(msg),
+            origin: Arc::default(),
+        }
+    }
+}
+
+impl fmt::Display for ErrorWithOrigin {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "[{}]: {}", self.origin, self.inner)
+    }
+}
+
+impl std::error::Error for ErrorWithOrigin {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.inner)
+    }
+}
+
 /// Config deserialization errors.
 pub struct ParseError {
     inner: serde_json::Error,
+    // FIXME: make mandatory
     path: Option<String>,
     origin: Option<Arc<ValueOrigin>>,
     config: Option<&'static ConfigMetadata>,
@@ -75,12 +99,6 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.inner)
-    }
-}
-
-impl de::Error for ParseError {
-    fn custom<T: fmt::Display>(msg: T) -> Self {
-        serde_json::Error::custom(msg).into()
     }
 }
 
@@ -184,6 +202,7 @@ impl ParseErrors {
         self.errors.iter()
     }
 
+    #[allow(clippy::len_without_is_empty)] // is_empty should always return false
     pub fn len(&self) -> usize {
         self.errors.len()
     }

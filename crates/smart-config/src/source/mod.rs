@@ -11,7 +11,7 @@ use crate::{
     metadata::{ConfigMetadata, PrimitiveType, SchemaType},
     schema::{Alias, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
-    DeserializeConfig, ValueDeserializer,
+    DeserializeConfig, DeserializeContext, ParseErrors,
 };
 
 #[macro_use]
@@ -135,12 +135,12 @@ impl<'a> ConfigRepository<'a> {
         let metadata = C::describe_config();
         let config_ref = self.schema.single(metadata)?;
         let prefix = config_ref.prefix();
-        let deserializer = match self.merged.get(Pointer(prefix)) {
-            Some(config_value) => ValueDeserializer::new(config_value, prefix.to_owned()),
-            None => ValueDeserializer::missing(prefix.to_owned()),
-        };
+        let mut errors = ParseErrors::default();
+        let context =
+            DeserializeContext::new(&self.merged, prefix.to_owned(), metadata, &mut errors);
+        let context = context.unwrap(); // FIXME: allow deserializing w/ no context
 
-        C::deserialize_config(deserializer)
+        C::deserialize_config(context)
             .with_context(|| {
                 let summary = if let Some(header) = metadata.help_header() {
                     format!(" ({})", header.trim().to_lowercase())

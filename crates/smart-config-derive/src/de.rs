@@ -5,74 +5,42 @@ use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, LitStr};
 
-use crate::utils::{
-    ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField, DefaultValue,
-};
-
-impl DefaultValue {
-    fn fallback_fn(
-        this: Option<&Self>,
-        span: proc_macro2::Span,
-        is_option: bool,
-    ) -> proc_macro2::TokenStream {
-        match this {
-            None if !is_option => {
-                quote_spanned!(span=> ::core::option::Option::None)
-            }
-            Some(Self::DefaultTrait) | None => {
-                quote_spanned!(span=> ::core::option::Option::Some(::core::default::Default::default))
-            }
-            Some(Self::Path(def_fn)) => {
-                quote_spanned!(span=> ::core::option::Option::Some(#def_fn))
-            }
-            Some(Self::Expr(expr)) => quote_spanned!(span=> ::core::option::Option::Some(|| #expr)),
-        }
-    }
-}
+use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField};
 
 impl ConfigField {
     /// Returns `Option<_>`.
     fn deserialize_param(
         &self,
-        cr: &proc_macro2::TokenStream,
+        _cr: &proc_macro2::TokenStream, // will be required for `with = ..`
         index: usize,
     ) -> proc_macro2::TokenStream {
         let name_span = self.name.span();
-        let param_name = self.param_name();
-        let is_option = Self::is_option(&self.ty);
-        let default_fallback =
-            DefaultValue::fallback_fn(self.attrs.default.as_ref(), name_span, is_option);
+        let default_instance = if let Some(default) = &self.attrs.default {
+            Some(default.instance(name_span))
+        } else if Self::is_option(&self.ty) {
+            Some(quote_spanned!(name_span=> ::core::option::Option::None))
+        } else {
+            None
+        };
+        let err_if_missing = default_instance.is_none();
 
         if !self.attrs.nest {
-            quote_spanned! {name_span=>
-                match deserializer.deserialize_param(
-                    #index,
-                    #param_name,
-                    #default_fallback,
-                ) {
-                    ::core::result::Result::Ok(value) => ::core::option::Option::Some(value),
-                    ::core::result::Result::Err(err) => {
-                        errors.push(err);
-                        ::core::option::Option::None
-                    }
-                }
+            let mut param_expr = quote_spanned! {name_span=>
+                ctx.deserialize_param(#index, #err_if_missing, &())
+            };
+            if let Some(default) = default_instance {
+                param_expr = quote!(#param_expr.or_else(|| ::core::option::Option::Some(#default)));
             }
-        } else if self.attrs.flatten {
-            quote_spanned! {name_span=>
-                #cr::DeserializeConfig::deserialize_config_full(
-                    deserializer.for_flattened_config(),
-                    errors,
-                )
-            }
+            param_expr
         } else {
-            quote_spanned! {name_span=>
-                deserializer.deserialize_nested_config(
-                    errors,
-                    #index,
-                    #param_name,
-                    #default_fallback,
-                )
+            let mut config_expr = quote_spanned! {name_span=>
+                ctx.deserialize_nested_config(#index, #err_if_missing)
+            };
+            if let Some(default) = default_instance {
+                config_expr =
+                    quote!(#config_expr.or_else(|| ::core::option::Option::Some(#default)));
             }
+            config_expr
         }
     }
 }
@@ -136,7 +104,7 @@ impl ConfigContainer {
                     Self { #(#fields,)* }
                 })
             }
-            ConfigContainerFields::Enum { tag, variants } => {
+            ConfigContainerFields::Enum { variants, .. } => {
                 let match_hands = variants.iter().map(|variant| {
                     let name = &variant.name;
                     let matches = variant.matches();
@@ -153,34 +121,25 @@ impl ConfigContainer {
                 });
                 let match_hands: Vec<_> = match_hands.collect();
 
-                let tag_name = tag.value();
                 let expected_variants = variants
                     .iter()
                     .flat_map(ConfigEnumVariant::expected_variants);
                 let default = variants
                     .iter()
                     .find_map(|variant| variant.attrs.default.then(|| variant.name()));
-                let default = if let Some(val) = default {
-                    quote!(::core::option::Option::Some(#val))
-                } else {
-                    quote!(::core::option::Option::None)
+                let err_if_missing_tag = default.is_none();
+                let mut tag_expr = quote! {
+                    ctx.deserialize_tag(#param_index, EXPECTED_VARIANTS, #err_if_missing_tag)
                 };
+                if let Some(default) = default {
+                    tag_expr = quote! {
+                        #tag_expr.or_else(|| ::core::option::Option::Some(#default))
+                    };
+                }
 
                 quote! {{
                     const EXPECTED_VARIANTS: &[&str] = &[#(#expected_variants,)*];
-                    let __tag = match deserializer.deserialize_tag(
-                        #param_index,
-                        #tag_name,
-                        EXPECTED_VARIANTS,
-                        #default,
-                    ) {
-                        ::core::result::Result::Ok(tag) => tag,
-                        ::core::result::Result::Err(err) => {
-                            errors.push(err);
-                            return ::core::option::Option::None;
-                        }
-                    };
-                    match __tag {
+                    match #tag_expr? {
                         #(#match_hands)*
                         _ => ::core::unreachable!(),
                     }
@@ -190,11 +149,10 @@ impl ConfigContainer {
 
         quote! {
             impl #cr::DeserializeConfig for #name {
-                fn deserialize_config_full(
-                    deserializer: #cr::ValueDeserializer<'_>,
-                    errors: &mut #cr::ParseErrors,
+                #[allow(unused_mut)]
+                fn deserialize_config(
+                    mut ctx: #cr::DeserializeContext<'_>,
                 ) -> ::core::option::Option<Self> {
-                    let deserializer = deserializer.for_config::<Self>();
                     ::core::option::Option::Some(#instance)
                 }
             }
