@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use assert_matches::assert_matches;
 use serde::Deserialize;
 
-use super::serde::ValueDeserializer;
+use super::deserializer::ValueDeserializer;
 use crate::{
     config,
     testonly::{
