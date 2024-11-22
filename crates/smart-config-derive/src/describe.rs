@@ -68,7 +68,7 @@ impl ConfigField {
                 aliases: &[#(#aliases,)*],
                 help: #help,
                 ty: #meta_mod::RustType::of::<#ty>(#ty_in_code),
-                deserializer: const { &#deserializer },
+                deserializer: const { &#cr::de::DeserializerWrapper::<#ty, _>::new(#deserializer) },
                 default_value: #default_value,
             }
         }})

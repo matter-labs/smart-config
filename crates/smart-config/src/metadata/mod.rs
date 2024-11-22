@@ -2,15 +2,12 @@
 
 use std::{any, fmt};
 
+use crate::de::ObjectSafeDeserializer;
+
 #[cfg(test)]
 mod tests;
 #[doc(hidden)] // used in the derive macro
 pub mod validation;
-
-/// Object-safe part of parameter deserializer.
-pub trait DeserializerBase: 'static + fmt::Debug + Send + Sync {
-    fn expecting(&self) -> SchemaType;
-}
 
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]
@@ -40,7 +37,7 @@ pub struct ParamMetadata {
     pub help: &'static str,
     /// Type with a potential `Option<_>` wrapper stripped.
     pub ty: RustType,
-    pub deserializer: &'static dyn DeserializerBase,
+    pub deserializer: &'static dyn ObjectSafeDeserializer,
     #[doc(hidden)] // set by derive macro
     pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
 }

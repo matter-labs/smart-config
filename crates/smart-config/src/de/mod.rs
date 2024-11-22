@@ -8,7 +8,7 @@ use ::serde::{
 use self::serde::ValueDeserializer;
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
-    metadata::{BasicType, ConfigMetadata, DeserializerBase, ParamMetadata, SchemaType},
+    metadata::{BasicType, ConfigMetadata, ParamMetadata, SchemaType},
     value::{Pointer, ValueOrigin, WithOrigin},
     DescribeConfig, ParseError, ParseErrors,
 };
@@ -163,7 +163,9 @@ pub trait DeserializeConfig: DescribeConfig + Sized {
     fn deserialize_config(ctx: DeserializeContext<'_>) -> Option<Self>;
 }
 
-pub trait DeserializeParam<T>: DeserializerBase {
+pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
+    fn expecting(&self) -> SchemaType;
+
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -174,13 +176,11 @@ pub trait DeserializeParam<T>: DeserializerBase {
 #[derive(Debug)]
 pub struct Serde(pub BasicType);
 
-impl DeserializerBase for Serde {
+impl<T: DeserializeOwned> DeserializeParam<T> for Serde {
     fn expecting(&self) -> SchemaType {
         SchemaType::new(self.0)
     }
-}
 
-impl<T: DeserializeOwned> DeserializeParam<T> for Serde {
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -208,13 +208,11 @@ impl<T: 'static> fmt::Debug for WellKnown<T> {
     }
 }
 
-impl<T: 'static + DeserializeOwned> DeserializerBase for WellKnown<T> {
+impl<T: 'static + DeserializeOwned> DeserializeParam<T> for WellKnown<T> {
     fn expecting(&self) -> SchemaType {
         SchemaType::ANY // FIXME
     }
-}
 
-impl<T: 'static + DeserializeOwned> DeserializeParam<T> for WellKnown<T> {
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -245,13 +243,11 @@ impl<T: 'static, D: DeserializeParam<T>> WithDefault<T, D> {
     }
 }
 
-impl<T: 'static, D: DeserializeParam<T>> DeserializerBase for WithDefault<T, D> {
+impl<T: 'static, D: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, D> {
     fn expecting(&self) -> SchemaType {
         self.inner.expecting()
     }
-}
 
-impl<T: 'static, D: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, D> {
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -265,19 +261,30 @@ impl<T: 'static, D: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, 
     }
 }
 
+#[doc(hidden)] // Implementation detail
 #[derive(Debug)]
-struct TagDeserializer {
+pub struct TagDeserializer {
     expected: &'static [&'static str],
     default_value: Option<&'static str>,
 }
 
-impl DeserializerBase for TagDeserializer {
-    fn expecting(&self) -> SchemaType {
-        SchemaType::new(BasicType::String)
+impl TagDeserializer {
+    pub const fn new(
+        expected: &'static [&'static str],
+        default_value: Option<&'static str>,
+    ) -> Self {
+        Self {
+            expected,
+            default_value,
+        }
     }
 }
 
 impl DeserializeParam<&'static str> for TagDeserializer {
+    fn expecting(&self) -> SchemaType {
+        SchemaType::new(BasicType::String)
+    }
+
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -303,5 +310,56 @@ impl DeserializeParam<&'static str> for TagDeserializer {
                     .unwrap_or_default();
                 ErrorWithOrigin::new(err, origin)
             })
+    }
+}
+
+/// Object-safe part of parameter deserializer. Stored in param metadata.
+pub trait ObjectSafeDeserializer: 'static + fmt::Debug + Send + Sync {
+    fn expecting(&self) -> SchemaType;
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Box<dyn any::Any>, ErrorWithOrigin>;
+}
+
+#[doc(hidden)]
+pub struct DeserializerWrapper<T, D> {
+    inner: D,
+    _ty: PhantomData<fn(T)>,
+}
+
+impl<T, D: fmt::Debug> fmt::Debug for DeserializerWrapper<T, D> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_tuple("DeserializerWrapper")
+            .field(&self.inner)
+            .finish()
+    }
+}
+
+impl<T: 'static, D: DeserializeParam<T>> DeserializerWrapper<T, D> {
+    pub const fn new(inner: D) -> Self {
+        Self {
+            inner,
+            _ty: PhantomData,
+        }
+    }
+}
+
+impl<T: 'static, D: DeserializeParam<T>> ObjectSafeDeserializer for DeserializerWrapper<T, D> {
+    fn expecting(&self) -> SchemaType {
+        self.inner.expecting()
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Box<dyn any::Any>, ErrorWithOrigin> {
+        self.inner
+            .deserialize_param(ctx, param)
+            .map(|val| Box::new(val) as _)
     }
 }
