@@ -1,4 +1,15 @@
-use std::{any, fmt, marker::PhantomData};
+use std::{
+    any,
+    collections::{HashMap, HashSet},
+    fmt,
+    hash::Hash,
+    marker::PhantomData,
+    num::{
+        NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
+        NonZeroU64, NonZeroU8, NonZeroUsize,
+    },
+    path::PathBuf,
+};
 
 use ::serde::{
     de::{DeserializeOwned, Error as DeError},
@@ -148,6 +159,10 @@ pub trait DeserializeConfig: DescribeConfig + Sized {
     fn deserialize_config(ctx: DeserializeContext<'_>) -> Option<Self>;
 }
 
+#[diagnostic::on_unimplemented(
+    message = "`{T}` param cannot be deserialized",
+    note = "Add #[config(with = Serde(_)] attribute to deserialize any param implementing `serde::Deserialize`"
+)]
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     fn expecting(&self) -> SchemaType;
 
@@ -193,17 +208,122 @@ impl<T: 'static> fmt::Debug for WellKnown<T> {
     }
 }
 
-impl<T: 'static + DeserializeOwned> DeserializeParam<T> for WellKnown<T> {
+macro_rules! impl_well_known_deserialize {
+    ($ty:ty, $expecting:expr) => {
+        impl DeserializeParam<$ty> for WellKnown<$ty> {
+            fn expecting(&self) -> SchemaType {
+                $expecting
+            }
+
+            fn deserialize_param(
+                &self,
+                ctx: DeserializeContext<'_>,
+                param: &'static ParamMetadata,
+            ) -> Result<$ty, ErrorWithOrigin> {
+                <$ty as Deserialize>::deserialize(ctx.current_value_deserializer(param.name)?)
+            }
+        }
+    };
+}
+
+impl_well_known_deserialize!(bool, SchemaType::new(BasicType::Bool));
+
+impl_well_known_deserialize!(u8, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(i8, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(u16, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(i16, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(u32, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(i32, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(u64, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(i64, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(u128, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(i128, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(usize, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(isize, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroU8, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroI8, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroU16, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroI16, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroU32, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroI32, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroU64, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroI64, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroUsize, SchemaType::new(BasicType::Integer));
+impl_well_known_deserialize!(NonZeroIsize, SchemaType::new(BasicType::Integer));
+
+impl_well_known_deserialize!(f32, SchemaType::new(BasicType::Float));
+impl_well_known_deserialize!(f64, SchemaType::new(BasicType::Float));
+
+impl_well_known_deserialize!(String, SchemaType::new(BasicType::String));
+impl_well_known_deserialize!(PathBuf, SchemaType::new(BasicType::String));
+
+impl<T> DeserializeParam<Option<T>> for WellKnown<Option<T>>
+where
+    T: 'static + DeserializeOwned,
+    WellKnown<T>: DeserializeParam<T>,
+{
     fn expecting(&self) -> SchemaType {
-        SchemaType::ANY // FIXME
+        WellKnown::<T>::new().expecting()
     }
 
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
-    ) -> Result<T, ErrorWithOrigin> {
-        T::deserialize(ctx.current_value_deserializer(param.name)?)
+    ) -> Result<Option<T>, ErrorWithOrigin> {
+        let Ok(deserializer) = ctx.current_value_deserializer(param.name) else {
+            return Ok(None);
+        };
+        <Option<T>>::deserialize(deserializer)
+    }
+}
+
+impl<T: 'static + DeserializeOwned> DeserializeParam<Vec<T>> for WellKnown<Vec<T>> {
+    fn expecting(&self) -> SchemaType {
+        SchemaType::new(BasicType::Array)
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Vec<T>, ErrorWithOrigin> {
+        <Vec<T>>::deserialize(ctx.current_value_deserializer(param.name)?)
+    }
+}
+
+impl<T> DeserializeParam<HashSet<T>> for WellKnown<HashSet<T>>
+where
+    T: 'static + Eq + Hash + DeserializeOwned,
+{
+    fn expecting(&self) -> SchemaType {
+        SchemaType::new(BasicType::Array)
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<HashSet<T>, ErrorWithOrigin> {
+        <HashSet<T>>::deserialize(ctx.current_value_deserializer(param.name)?)
+    }
+}
+
+impl<K, V> DeserializeParam<HashMap<K, V>> for WellKnown<HashMap<K, V>>
+where
+    K: 'static + Eq + Hash + DeserializeOwned,
+    V: 'static + DeserializeOwned,
+{
+    fn expecting(&self) -> SchemaType {
+        SchemaType::new(BasicType::Object)
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<HashMap<K, V>, ErrorWithOrigin> {
+        <HashMap<K, V>>::deserialize(ctx.current_value_deserializer(param.name)?)
     }
 }
 
