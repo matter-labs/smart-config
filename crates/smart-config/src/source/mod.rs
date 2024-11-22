@@ -220,7 +220,7 @@ impl WithOrigin {
         if matching_entries.is_empty() {
             return;
         }
-        self.ensure_object(at, |_| Arc::new(ValueOrigin::Unknown))
+        self.ensure_object(at, |_| Arc::default())
             .extend(matching_entries);
     }
 

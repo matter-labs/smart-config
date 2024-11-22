@@ -2,6 +2,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    num::NonZeroUsize,
     sync::Arc,
 };
 
@@ -25,8 +26,6 @@ pub(crate) enum SimpleEnum {
 impl de::WellKnown for SimpleEnum {
     const TYPE: SchemaType = SchemaType::new(BasicType::String);
 }
-
-// FIXME: test `Assume`; test `f32` / `f64`
 
 // FIXME: test embedding into config
 #[derive(Debug, Deserialize)]
@@ -118,6 +117,16 @@ pub(crate) enum DefaultingEnumConfig {
         #[config(default_t = 123)]
         int: u32,
     },
+}
+
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ConfigWithComplexTypes {
+    #[config(default_t = 4.2)]
+    pub float: f32,
+    pub array: [NonZeroUsize; 2],
+    #[config(with = de::Assume(BasicType::Float))]
+    pub assumed: Option<serde_json::Value>,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {

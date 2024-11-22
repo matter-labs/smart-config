@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroUsize,
+};
 
 use assert_matches::assert_matches;
 use serde::Deserialize;
@@ -8,8 +11,8 @@ use crate::{
     config,
     testonly::{
         test_deserialize, test_deserialize_missing, wrap_into_value, CompoundConfig,
-        ConfigWithNesting, DefaultingConfig, DefaultingEnumConfig, EnumConfig, NestedConfig,
-        SimpleEnum, TestParam,
+        ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, DefaultingEnumConfig,
+        EnumConfig, NestedConfig, SimpleEnum, TestParam,
     },
     value::{Pointer, Value, ValueOrigin},
     DescribeConfig, Environment,
@@ -318,4 +321,78 @@ fn missing_nested_config_parsing_error() {
     assert_eq!(err.path(), "nested.renamed");
     assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
     assert_eq!(err.param().unwrap().name, "renamed");
+}
+
+#[test]
+fn parsing_complex_types() {
+    let json = config!("array": [4, 5]);
+    let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
+    assert_eq!(
+        config,
+        ConfigWithComplexTypes {
+            float: 4.2,
+            array: [NonZeroUsize::new(4).unwrap(), NonZeroUsize::new(5).unwrap()],
+            assumed: None,
+        }
+    );
+
+    let json = config!("array": [4, 5], "assumed": 24);
+    let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
+    assert_eq!(
+        config,
+        ConfigWithComplexTypes {
+            float: 4.2,
+            array: [NonZeroUsize::new(4).unwrap(), NonZeroUsize::new(5).unwrap()],
+            assumed: Some(serde_json::json!(24)),
+        }
+    );
+
+    let json = config!("array": [5, 6], "float": -3, "assumed": ());
+    let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
+    assert_eq!(
+        config,
+        ConfigWithComplexTypes {
+            float: -3.0,
+            array: [NonZeroUsize::new(5).unwrap(), NonZeroUsize::new(6).unwrap()],
+            assumed: None,
+        }
+    );
+}
+
+#[test]
+fn parsing_complex_types_errors() {
+    let json = config!("array": [1]);
+    let errors = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    let err = errors.first();
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid length"), "{inner}");
+    assert_eq!(err.path(), "array");
+    assert_matches!(err.origin(), ValueOrigin::Json { path, ..} if path == "array");
+
+    let json = config!("array": [0, 1]);
+    let errors = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    let err = errors.first();
+    let inner = err.inner().to_string();
+    assert!(inner.contains("nonzero"), "{inner}");
+    assert_eq!(err.path(), "array");
+    assert_matches!(err.origin(), ValueOrigin::Json { path, ..} if path == "array.0");
+
+    let json = config!("array": [2, 3], "float": "what");
+    let errors = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    let err = errors.first();
+    let inner = err.inner().to_string();
+    assert!(inner.contains("what"), "{inner}");
+    assert_eq!(err.path(), "float");
+    assert_matches!(err.origin(), ValueOrigin::Json { path, ..} if path == "float");
+
+    let json = config!("array": [2, 3], "assumed": true);
+    let errors = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    let err = errors.first();
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("invalid type") && inner.contains("expected float"),
+        "{inner}"
+    );
+    assert_eq!(err.path(), "assumed");
+    assert_matches!(err.origin(), ValueOrigin::Json { path, ..} if path == "assumed");
 }

@@ -93,6 +93,13 @@ impl<T> WithOrigin<T> {
     pub(crate) fn new(inner: T, origin: Arc<ValueOrigin>) -> Self {
         Self { inner, origin }
     }
+
+    pub(crate) fn set_origin_if_unset(mut self, origin: &Arc<ValueOrigin>) -> Self {
+        if matches!(self.origin.as_ref(), ValueOrigin::Unknown) {
+            self.origin = origin.clone();
+        }
+        self
+    }
 }
 
 impl WithOrigin {

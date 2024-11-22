@@ -123,6 +123,16 @@ impl<T: WellKnown> WellKnown for Vec<T> {
     const TYPE: SchemaType = SchemaType::new(BasicType::Array);
 }
 
+impl<T: WellKnown, const N: usize> WellKnown for [T; N]
+where
+    [T; N]: DeserializeOwned, // `serde` implements `Deserialize` for separate lengths rather for generics
+{
+    const TYPE: SchemaType = SchemaType::new(BasicType::Array);
+}
+
+// Heterogeneous tuples don't look like a good idea to mark as well-known because they wouldn't look well-structured
+// (it'd be better to define either multiple params or a struct param).
+
 impl<T: WellKnown + Eq + Hash> WellKnown for HashSet<T> {
     const TYPE: SchemaType = SchemaType::new(BasicType::Array);
 }
