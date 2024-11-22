@@ -128,34 +128,19 @@ impl DeserializeContext<'_> {
         T::deserialize_config(child_ctx)
     }
 
-    pub fn deserialize_param<T, D: DeserializeParam<T>>(
-        &mut self,
-        index: usize,
-        with: &D,
-    ) -> Option<T> {
+    pub fn deserialize_param<T: 'static>(&mut self, index: usize) -> Option<T> {
         let (child_ctx, param) = self.for_param(index);
-        match with.deserialize_param(child_ctx, param) {
-            Ok(param) => Some(param),
+        match param.deserializer.deserialize_param(child_ctx, param) {
+            Ok(param) => Some(
+                *param
+                    .downcast()
+                    .expect("Internal error: deserializer output has wrong type"),
+            ),
             Err(err) => {
                 self.push_error(err, Some(LocationInConfig::Param(index)));
                 None
             }
         }
-    }
-
-    pub fn deserialize_tag(
-        &mut self,
-        index: usize,
-        expected: &'static [&'static str], // TODO: record in meta?
-        default_value: Option<&'static str>,
-    ) -> Option<&'static str> {
-        self.deserialize_param(
-            index,
-            &TagDeserializer {
-                expected,
-                default_value,
-            },
-        )
     }
 }
 

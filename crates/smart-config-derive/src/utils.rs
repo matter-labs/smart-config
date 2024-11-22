@@ -1,6 +1,6 @@
 //! Miscellaneous utils.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, iter};
 
 use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
@@ -99,6 +99,16 @@ impl DefaultValue {
             Self::DefaultTrait => quote_spanned!(span=> ::core::default::Default::default()),
             Self::Path(path) => quote_spanned!(span=> #path()),
             Self::Expr(expr) => quote_spanned!(span=> #expr),
+        }
+    }
+
+    fn fallback_fn(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
+        match self {
+            Self::DefaultTrait => {
+                quote_spanned!(span=> ::core::default::Default::default)
+            }
+            Self::Path(def_fn) => quote!(#def_fn),
+            Self::Expr(expr) => quote_spanned!(span=> || #expr),
         }
     }
 }
@@ -224,17 +234,29 @@ impl ConfigField {
         })
     }
 
-    pub fn from_tag(tag: &LitStr, default: Option<&str>) -> Self {
+    pub fn from_tag(
+        cr: &proc_macro2::TokenStream,
+        tag: &LitStr,
+        variants: impl Iterator<Item = String>,
+        default: Option<&str>,
+    ) -> Self {
+        // FIXME: use `WithDefault` here?
+        let default_opt = wrap_in_option(default.map(|val| quote!(#val)));
+        let with = syn::parse_quote! {
+            #cr::de::TagDeserializer::new(&[#(#variants,)*], #default_opt)
+        };
+
         Self {
             attrs: ConfigFieldAttrs {
                 default: default.map(|s| {
                     DefaultValue::Expr(syn::parse_quote_spanned!(tag.span() => #s.into()))
                 }),
+                with: Some(with),
                 ..ConfigFieldAttrs::default()
             },
             docs: "Tag for the enum config".to_owned(),
             name: Ident::new(&tag.value(), tag.span()).into(),
-            ty: syn::parse_quote_spanned!(tag.span()=> ::std::string::String),
+            ty: syn::parse_quote_spanned!(tag.span()=> &'static str),
         }
     }
 
@@ -265,12 +287,14 @@ impl ConfigField {
             })
     }
 
-    pub fn deserializer(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-        if let Some(with) = &self.attrs.with {
-            quote!(#with)
+    pub fn default_fn(&self) -> Option<proc_macro2::TokenStream> {
+        let name_span = self.name.span();
+        if let Some(default) = &self.attrs.default {
+            Some(default.fallback_fn(name_span))
+        } else if Self::is_option(&self.ty) {
+            Some(quote_spanned!(name_span=> || ::core::option::Option::None))
         } else {
-            let ty = &self.ty;
-            quote_spanned!(ty.span()=> #cr::de::WellKnown::<#ty>::new())
+            None
         }
     }
 }
@@ -351,6 +375,10 @@ impl ConfigEnumVariant {
             .as_ref()
             .map(LitStr::value)
             .unwrap_or_else(|| self.name.to_string())
+    }
+
+    pub fn expected_variants(&self) -> impl Iterator<Item = String> + '_ {
+        iter::once(self.name()).chain(self.attrs.aliases.iter().map(LitStr::value))
     }
 }
 

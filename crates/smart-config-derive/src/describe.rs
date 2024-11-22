@@ -4,7 +4,9 @@ use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, Type};
 
-use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigField, DefaultValue};
+use crate::utils::{
+    ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField, DefaultValue,
+};
 
 impl DefaultValue {
     fn boxed(
@@ -28,6 +30,21 @@ impl DefaultValue {
 }
 
 impl ConfigField {
+    fn deserializer(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let mut deserializer = if let Some(with) = &self.attrs.with {
+            quote!(#with)
+        } else {
+            let ty = &self.ty;
+            quote_spanned!(ty.span()=> #cr::de::WellKnown::<#ty>::new())
+        };
+        let default_fn = self.default_fn();
+
+        if let Some(default_fn) = &default_fn {
+            deserializer = quote!(#cr::de::WithDefault::new(#deserializer, #default_fn));
+        }
+        deserializer
+    }
+
     fn describe_param(
         &self,
         cr: &proc_macro2::TokenStream,
@@ -113,7 +130,10 @@ impl ConfigContainer {
             let default = variants
                 .iter()
                 .find_map(|variant| variant.attrs.default.then(|| variant.name()));
-            let tag = ConfigField::from_tag(tag, default.as_deref());
+            let expected_variants = variants
+                .iter()
+                .flat_map(ConfigEnumVariant::expected_variants);
+            let tag = ConfigField::from_tag(&cr, tag, expected_variants, default.as_deref());
             params.push(tag.describe_param(&cr, &meta_mod)?);
         }
 

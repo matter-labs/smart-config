@@ -1,53 +1,22 @@
-use std::iter;
-
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
-use syn::{spanned::Spanned, DeriveInput, LitStr};
+use syn::{spanned::Spanned, DeriveInput};
 
 use crate::utils::{
     wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
-    DefaultValue,
 };
-
-impl DefaultValue {
-    fn fallback_fn(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
-        match self {
-            Self::DefaultTrait => {
-                quote_spanned!(span=> ::core::default::Default::default)
-            }
-            Self::Path(def_fn) => quote!(#def_fn),
-            Self::Expr(expr) => quote_spanned!(span=> || #expr),
-        }
-    }
-}
 
 impl ConfigField {
     /// Returns `Option<_>`.
-    fn deserialize_param(
-        &self,
-        cr: &proc_macro2::TokenStream,
-        index: usize,
-    ) -> proc_macro2::TokenStream {
+    fn deserialize_param(&self, index: usize) -> proc_macro2::TokenStream {
         let name_span = self.name.span();
-        let default_fn = if let Some(default) = &self.attrs.default {
-            Some(default.fallback_fn(name_span))
-        } else if Self::is_option(&self.ty) {
-            Some(quote_spanned!(name_span=> || ::core::option::Option::None))
-        } else {
-            None
-        };
-
         if !self.attrs.nest {
-            let mut deserializer = self.deserializer(cr);
-            if let Some(default_fn) = default_fn {
-                deserializer = quote!(#cr::de::WithDefault::new(#deserializer, #default_fn));
-            }
             quote_spanned! {name_span=>
-                ctx.deserialize_param(#index, &#deserializer)
+                ctx.deserialize_param(#index)
             }
         } else {
-            let default_fn = wrap_in_option(default_fn);
+            let default_fn = wrap_in_option(self.default_fn());
             quote_spanned! {name_span=>
                 ctx.deserialize_nested_config(#index, #default_fn)
             }
@@ -63,16 +32,11 @@ impl ConfigEnumVariant {
         let name_span = self.name.span();
         quote_spanned!(name_span=> #name #(| #all_names)*)
     }
-
-    fn expected_variants(&self) -> impl Iterator<Item = String> + '_ {
-        iter::once(self.name()).chain(self.attrs.aliases.iter().map(LitStr::value))
-    }
 }
 
 impl ConfigContainer {
     fn process_fields<'a>(
         fields: &'a [ConfigField],
-        cr: &'a proc_macro2::TokenStream,
         param_index: &'a mut usize,
         nested_index: &'a mut usize,
     ) -> (proc_macro2::TokenStream, Vec<proc_macro2::TokenStream>) {
@@ -88,7 +52,7 @@ impl ConfigContainer {
             };
 
             let name = &field.name;
-            let value = field.deserialize_param(cr, index);
+            let value = field.deserialize_param(index);
             let local_var = Ident::new(&format!("__{i}"), name.span());
             init.extend(quote_spanned! {name.span()=>
                 let #local_var = #value;
@@ -108,7 +72,7 @@ impl ConfigContainer {
         let instance = match &self.fields {
             ConfigContainerFields::Struct(fields) => {
                 let (init, fields) =
-                    Self::process_fields(fields, &cr, &mut param_index, &mut nested_index);
+                    Self::process_fields(fields, &mut param_index, &mut nested_index);
                 quote!({
                     #init
                     Self { #(#fields,)* }
@@ -118,36 +82,19 @@ impl ConfigContainer {
                 let match_hands = variants.iter().map(|variant| {
                     let name = &variant.name;
                     let matches = variant.matches();
-                    let (init, variant_fields) = Self::process_fields(
-                        &variant.fields,
-                        &cr,
-                        &mut param_index,
-                        &mut nested_index,
-                    );
+                    let (init, variant_fields) =
+                        Self::process_fields(&variant.fields, &mut param_index, &mut nested_index);
                     quote!(#matches => {
                         #init
                         Self::#name { #(#variant_fields,)* }
                     })
                 });
                 let match_hands: Vec<_> = match_hands.collect();
-
-                let expected_variants = variants
-                    .iter()
-                    .flat_map(ConfigEnumVariant::expected_variants);
-                let default = variants
-                    .iter()
-                    .find_map(|variant| variant.attrs.default.then(|| variant.name()));
-                let default = if let Some(default) = default {
-                    quote!(::core::option::Option::Some(#default))
-                } else {
-                    quote!(::core::option::Option::None)
-                };
                 let tag_expr = quote! {
-                    ctx.deserialize_tag(#param_index, EXPECTED_VARIANTS, #default)
+                    ctx.deserialize_param::<&'static str>(#param_index)
                 };
 
                 quote! {{
-                    const EXPECTED_VARIANTS: &[&str] = &[#(#expected_variants,)*];
                     match #tag_expr? {
                         #(#match_hands)*
                         _ => ::core::unreachable!(),
