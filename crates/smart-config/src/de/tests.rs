@@ -66,16 +66,12 @@ fn parsing_enum_config() {
         })
     );
 
-    let env = Environment::from_iter(
-        "",
-        [
-            ("type", "Nested"),
-            ("renamed", "first"),
-            ("other_int", "123"),
-        ],
+    let json = config!(
+        "type": "Nested",
+        "renamed": "first",
+        "other_int": 123
     );
-    let env = wrap_into_value(env);
-    let config: EnumConfig = test_deserialize(&env).unwrap();
+    let config: EnumConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config,
         EnumConfig::Nested(NestedConfig {
@@ -97,18 +93,14 @@ fn parsing_enum_config() {
         }
     );
 
-    let env = Environment::from_iter(
-        "",
-        [
-            ("type", "WithFields"),
-            ("renamed", "second"),
-            ("string", "???"),
-            ("flag", "false"),
-            ("set", "12"),
-        ],
+    let json = config!(
+        "type": "WithFields",
+        "renamed": "second",
+        "string": "???",
+        "flag": false,
+        "set": [12]
     );
-    let env = wrap_into_value(env);
-    let config: EnumConfig = test_deserialize(&env).unwrap();
+    let config: EnumConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config,
         EnumConfig::WithFields {
@@ -175,7 +167,7 @@ fn parsing_compound_config() {
 
     let json = config!(
         "nested.renamed": "first",
-        "nested.other_int": "321",
+        "nested.other_int": 321,
         "default.renamed": "second",
         "default.map": HashMap::from([("foo", 3)]),
         "renamed": "second",
@@ -287,10 +279,7 @@ fn type_mismatch_parsing_error() {
     let errors = test_deserialize::<NestedConfig>(&env).unwrap_err();
     let err = errors.first();
 
-    assert!(
-        err.inner().to_string().contains("u32 value 'what'"),
-        "{err}"
-    );
+    assert!(err.inner().to_string().contains("invalid type"), "{err}");
     assert_matches!(
         err.origin(),
         ValueOrigin::EnvVar(name) if name == "other_int"
@@ -334,15 +323,17 @@ fn parsing_complex_types() {
         ConfigWithComplexTypes {
             float: 4.2,
             array: [NonZeroUsize::new(4).unwrap(), NonZeroUsize::new(5).unwrap()],
+            choices: None,
             assumed: None,
             short_dur: Duration::from_millis(100),
             path: "./test".into(),
-            memory_size_mb: ByteSize::new(128, SizeUnit::MiB),
+            memory_size_mb: Some(ByteSize::new(128, SizeUnit::MiB)),
         }
     );
 
     let json = config!(
         "array": [4, 5],
+        "choices": ["first", "second"],
         "assumed": 24,
         "short_dur": 200,
         "path": "/mnt",
@@ -354,24 +345,33 @@ fn parsing_complex_types() {
         ConfigWithComplexTypes {
             float: 4.2,
             array: [NonZeroUsize::new(4).unwrap(), NonZeroUsize::new(5).unwrap()],
+            choices: Some(vec![SimpleEnum::First, SimpleEnum::Second]),
             assumed: Some(serde_json::json!(24)),
             short_dur: Duration::from_millis(200),
             path: "/mnt".into(),
-            memory_size_mb: ByteSize::new(64, SizeUnit::MiB),
+            memory_size_mb: Some(ByteSize::new(64, SizeUnit::MiB)),
         }
     );
 
-    let json = config!("array": [5, 6], "float": -3, "assumed": (), "short_dur": 1000);
+    let json = config!(
+        "array": [5, 6],
+        "float": -3,
+        "choices": (),
+        "assumed": (),
+        "short_dur": 1000,
+        "memory_size_mb": (),
+    );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config,
         ConfigWithComplexTypes {
             float: -3.0,
             array: [NonZeroUsize::new(5).unwrap(), NonZeroUsize::new(6).unwrap()],
+            choices: None,
             assumed: None,
             short_dur: Duration::from_secs(1),
             path: "./test".into(),
-            memory_size_mb: ByteSize::new(128, SizeUnit::MiB),
+            memory_size_mb: None,
         }
     );
 }

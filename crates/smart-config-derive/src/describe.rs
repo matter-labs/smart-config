@@ -35,7 +35,7 @@ impl ConfigField {
             quote!(#with)
         } else {
             let ty = &self.ty;
-            quote_spanned!(ty.span()=> #cr::de::DefaultDeserializer::<#ty>::new())
+            quote_spanned!(ty.span()=> <#ty as #cr::de::WellKnown>::DE)
         };
         let default_fn = self.default_fn();
 

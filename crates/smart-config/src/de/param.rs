@@ -24,13 +24,10 @@ use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
     metadata::{BasicType, ParamMetadata, SchemaType, SizeUnit, TimeUnit},
+    value::Value,
     ByteSize,
 };
 
-#[diagnostic::on_unimplemented(
-    message = "`{T}` param cannot be deserialized",
-    note = "Add #[config(with = Serde(_)] attribute to deserialize any param implementing `serde::Deserialize`"
-)]
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     fn expecting(&self) -> SchemaType;
 
@@ -41,14 +38,34 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     ) -> Result<T, ErrorWithOrigin>;
 }
 
-/// Generic [`DeserializeParam`] implementation for any type implementing [`serde::Deserialize`].
-/// Usually makes sense if the param type is not [`WellKnown`], and it cannot be marked as such.
-#[derive(Debug)]
-pub struct Assume(pub BasicType);
-
-impl<T: DeserializeOwned> DeserializeParam<T> for Assume {
+impl<T, De> DeserializeParam<T> for &'static De
+where
+    De: DeserializeParam<T> + ?Sized,
+{
     fn expecting(&self) -> SchemaType {
-        SchemaType::new(self.0)
+        (*self).expecting()
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        (*self).deserialize_param(ctx, param)
+    }
+}
+
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` param cannot be deserialized",
+    note = "Add #[config(with = _)] attribute to specify deserializer to use"
+)]
+pub trait WellKnown: 'static {
+    const DE: &'static dyn DeserializeParam<Self>;
+}
+
+impl<T: DeserializeOwned> DeserializeParam<T> for SchemaType {
+    fn expecting(&self) -> SchemaType {
+        *self
     }
 
     fn deserialize_param(
@@ -58,46 +75,60 @@ impl<T: DeserializeOwned> DeserializeParam<T> for Assume {
     ) -> Result<T, ErrorWithOrigin> {
         let deserializer = ctx.current_value_deserializer(param.name)?;
         // Permissively assume that optional values are allowed.
-        if let Some(actual_type) = deserializer.value().basic_type() {
-            let types_match = actual_type == self.0
-                || (self.0 == BasicType::Float && actual_type == BasicType::Integer);
+        if let (Some(actual_type), Some(expected_type)) =
+            (deserializer.value().basic_type(), self.base)
+        {
+            let types_match = actual_type == expected_type
+                || (expected_type == BasicType::Float && actual_type == BasicType::Integer);
             if !types_match {
-                return Err(deserializer.invalid_type(self.0.as_str()));
+                return Err(deserializer.invalid_type(expected_type.as_str()));
             }
         }
         T::deserialize(deserializer)
     }
 }
 
-pub trait WellKnown: 'static + DeserializeOwned {
-    const TYPE: SchemaType;
+/// Proxies to the corresponding [`SchemaType`].
+impl<T: DeserializeOwned> DeserializeParam<T> for BasicType {
+    fn expecting(&self) -> SchemaType {
+        SchemaType::new(*self)
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        SchemaType::new(*self).deserialize_param(ctx, param)
+    }
 }
 
 impl WellKnown for bool {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Bool);
+    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Bool);
 }
 
 impl WellKnown for String {
-    const TYPE: SchemaType = SchemaType::new(BasicType::String);
+    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::String);
 }
 
 impl WellKnown for PathBuf {
-    const TYPE: SchemaType = SchemaType::new(BasicType::String).with_qualifier("filesystem path");
+    const DE: &'static dyn DeserializeParam<Self> =
+        &SchemaType::new(BasicType::String).with_qualifier("filesystem path");
 }
 
 impl WellKnown for f32 {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Float);
+    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Float);
 }
 
 impl WellKnown for f64 {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Float);
+    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Float);
 }
 
 macro_rules! impl_well_known_int {
     ($($int:ty),+) => {
         $(
         impl WellKnown for $int {
-            const TYPE: SchemaType = SchemaType::new(BasicType::Integer);
+            const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Integer);
         }
         )+
     };
@@ -118,29 +149,37 @@ impl_well_known_int!(
 );
 
 impl<T: WellKnown> WellKnown for Option<T> {
-    const TYPE: SchemaType = T::TYPE;
+    const DE: &'static dyn DeserializeParam<Self> = &Optional(T::DE);
 }
 
-impl<T: WellKnown> WellKnown for Vec<T> {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Array);
+impl<T: WellKnown + DeserializeOwned> WellKnown for Vec<T> {
+    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Array);
 }
 
 impl<T: WellKnown, const N: usize> WellKnown for [T; N]
 where
     [T; N]: DeserializeOwned, // `serde` implements `Deserialize` for separate lengths rather for generics
 {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Array);
+    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Array);
 }
 
 // Heterogeneous tuples don't look like a good idea to mark as well-known because they wouldn't look well-structured
 // (it'd be better to define either multiple params or a struct param).
 
-impl<T: WellKnown + Eq + Hash> WellKnown for HashSet<T> {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Array).with_qualifier("set");
+impl<T> WellKnown for HashSet<T>
+where
+    T: WellKnown + Eq + Hash + DeserializeOwned,
+{
+    const DE: &'static dyn DeserializeParam<Self> =
+        &SchemaType::new(BasicType::Array).with_qualifier("set");
 }
 
-impl<T: WellKnown + Eq + Ord> WellKnown for BTreeSet<T> {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Array).with_qualifier("set");
+impl<T> WellKnown for BTreeSet<T>
+where
+    T: WellKnown + Eq + Ord + DeserializeOwned,
+{
+    const DE: &'static dyn DeserializeParam<Self> =
+        &SchemaType::new(BasicType::Array).with_qualifier("set");
 }
 
 /// Keys are intentionally restricted by [`FromStr`] in order to prevent runtime errors when dealing with keys
@@ -148,51 +187,19 @@ impl<T: WellKnown + Eq + Ord> WellKnown for BTreeSet<T> {
 impl<K, V> WellKnown for HashMap<K, V>
 where
     K: 'static + DeserializeOwned + Eq + Hash + FromStr,
-    V: WellKnown,
+    V: WellKnown + DeserializeOwned,
 {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Object).with_qualifier("map");
+    const DE: &'static dyn DeserializeParam<Self> =
+        &SchemaType::new(BasicType::Object).with_qualifier("map");
 }
 
 impl<K, V> WellKnown for BTreeMap<K, V>
 where
     K: 'static + DeserializeOwned + Eq + Ord + FromStr,
-    V: WellKnown,
+    V: WellKnown + DeserializeOwned,
 {
-    const TYPE: SchemaType = SchemaType::new(BasicType::Object).with_qualifier("map");
-}
-
-/// Default [`DeserializeParam`] implementation used unless it is explicitly overwritten via `#[config(with = _)]`
-/// attribute.
-pub struct DefaultDeserializer<T>(PhantomData<fn(T)>);
-
-#[allow(clippy::new_without_default)] // won't make much sense, since it cannot be used in const contexts
-impl<T: 'static> DefaultDeserializer<T> {
-    pub const fn new() -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<T: 'static> fmt::Debug for DefaultDeserializer<T> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("DefaultDeserializer")
-            .field("type", &any::type_name::<T>())
-            .finish()
-    }
-}
-
-impl<T: WellKnown> DeserializeParam<T> for DefaultDeserializer<T> {
-    fn expecting(&self) -> SchemaType {
-        T::TYPE
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<T, ErrorWithOrigin> {
-        T::deserialize(ctx.current_value_deserializer(param.name)?)
-    }
+    const DE: &'static dyn DeserializeParam<Self> =
+        &SchemaType::new(BasicType::Object).with_qualifier("map");
 }
 
 pub struct WithDefault<T, D> {
@@ -231,6 +238,27 @@ impl<T: 'static, D: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, 
         } else {
             Ok((self.default)())
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct Optional<De>(pub De);
+
+impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
+    fn expecting(&self) -> SchemaType {
+        self.0.expecting()
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Option<T>, ErrorWithOrigin> {
+        let current_value = ctx.current_value().map(|val| &val.inner);
+        if matches!(current_value, None | Some(Value::Null)) {
+            return Ok(None);
+        }
+        self.0.deserialize_param(ctx, param).map(Some)
     }
 }
 

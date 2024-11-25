@@ -11,7 +11,7 @@ use std::{
 use serde::Deserialize;
 
 use crate::{
-    de::{self, DeserializeContext},
+    de::{self, DeserializeContext, DeserializeParam},
     metadata::{BasicType, SchemaType, SizeUnit, TimeUnit},
     source::ConfigContents,
     value::{Value, WithOrigin},
@@ -26,7 +26,7 @@ pub(crate) enum SimpleEnum {
 }
 
 impl de::WellKnown for SimpleEnum {
-    const TYPE: SchemaType = SchemaType::new(BasicType::String);
+    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::String);
 }
 
 // FIXME: test embedding into config
@@ -127,15 +127,16 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(default_t = 4.2)]
     pub float: f32,
     pub array: [NonZeroUsize; 2],
-    #[config(with = de::Assume(BasicType::Float))]
+    pub choices: Option<Vec<SimpleEnum>>,
+    #[config(with = de::Optional(BasicType::Float))]
     pub assumed: Option<serde_json::Value>,
     #[config(default_t = Duration::from_millis(100), with = TimeUnit::Millis)]
     pub short_dur: Duration,
     #[config(default_t = "./test".into())]
     pub path: PathBuf,
-    #[config(with = SizeUnit::MiB, default_t = ByteSize::new(128, SizeUnit::MiB))]
-    pub memory_size_mb: ByteSize,
-    // FIXME: Option<_> doesn't work with `with = _`
+    #[config(with = de::Optional(SizeUnit::MiB))]
+    #[config(default_t = Some(ByteSize::new(128, SizeUnit::MiB)))]
+    pub memory_size_mb: Option<ByteSize>,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {

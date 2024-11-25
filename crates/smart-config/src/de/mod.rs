@@ -2,8 +2,8 @@ use serde::de::Error as DeError;
 
 use self::deserializer::ValueDeserializer;
 pub use self::param::{
-    Assume, DefaultDeserializer, DeserializeParam, DeserializerWrapper, ObjectSafeDeserializer,
-    TagDeserializer, WellKnown, WithDefault,
+    DeserializeParam, DeserializerWrapper, ObjectSafeDeserializer, Optional, TagDeserializer,
+    WellKnown, WithDefault,
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},

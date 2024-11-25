@@ -1,7 +1,5 @@
 use std::{collections::BTreeSet, mem, sync::Arc};
 
-use anyhow::Context as _;
-
 pub use self::{
     env::{Environment, KeyValueMap},
     json::Json,
@@ -141,17 +139,17 @@ impl<'a> ConfigRepository<'a> {
             DeserializeContext::new(&self.merged, prefix.to_owned(), metadata, &mut errors);
 
         C::deserialize_config(context)
-            .with_context(|| {
+            .ok_or_else(|| {
                 let summary = if let Some(header) = metadata.help_header() {
                     format!(" ({})", header.trim().to_lowercase())
                 } else {
                     String::new()
                 };
-                format!(
+                anyhow::Error::new(errors).context(format!(
                     "error parsing configuration `{name}`{summary} at `{prefix}` (aliases: {aliases:?})",
                     name = metadata.ty.name_in_code(),
                     aliases = config_ref.data.aliases
-                )
+                ))
             })
     }
 }

@@ -289,13 +289,10 @@ impl ConfigField {
 
     pub fn default_fn(&self) -> Option<proc_macro2::TokenStream> {
         let name_span = self.name.span();
-        if let Some(default) = &self.attrs.default {
-            Some(default.fallback_fn(name_span))
-        } else if Self::is_option(&self.ty) {
-            Some(quote_spanned!(name_span=> || ::core::option::Option::None))
-        } else {
-            None
-        }
+        self.attrs
+            .default
+            .as_ref()
+            .map(|default| default.fallback_fn(name_span))
     }
 }
 
