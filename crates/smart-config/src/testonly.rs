@@ -107,6 +107,7 @@ pub(crate) struct CompoundConfig {
 pub(crate) struct DefaultingConfig {
     #[config(default_t = 12)]
     pub int: u32,
+    pub float: Option<f64>,
     #[config(default_t = Some("https://example.com/".into()))]
     pub url: Option<String>,
     #[config(default)]

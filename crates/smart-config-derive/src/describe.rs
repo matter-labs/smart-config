@@ -147,7 +147,7 @@ impl ConfigContainer {
         Ok(quote! {
             impl #cr::DescribeConfig for #name {
                 fn describe_config() -> &'static #meta_mod::ConfigMetadata {
-                    static METADATA_CELL: #cr::Lazy<#meta_mod::ConfigMetadata> = #cr::Lazy::new(|| #cr::ConfigMetadata {
+                    static METADATA_CELL: #cr::Lazy<#meta_mod::ConfigMetadata> = #cr::Lazy::new(|| #meta_mod::ConfigMetadata {
                         ty: #meta_mod::RustType::of::<#name>(#name_str),
                         help: #help,
                         params: ::std::boxed::Box::new([#(#params,)*]),
@@ -163,11 +163,17 @@ impl ConfigContainer {
         let fields = fields.iter().map(|field| {
             let name = &field.name;
             let name_span = field.name.span();
-            let default = field.attrs.default.as_ref().ok_or_else(|| {
+            let field_instance = if let Some(default) = &field.attrs.default {
+                default.instance(name_span)
+            } else if ConfigField::is_option(&field.ty) {
+                quote_spanned!(field.ty.span()=> ::core::option::Option::None)
+            } else if field.attrs.nest {
+                // Attempt to use `Default` impl
+                quote_spanned!(field.ty.span()=> ::core::default::Default::default())
+            } else {
                 let msg = "Cannot derive(Default): field does not have a default value";
-                syn::Error::new(name_span, msg)
-            })?;
-            let field_instance = default.instance(name_span);
+                return Err(syn::Error::new(name_span, msg));
+            };
             Ok(quote_spanned!(name_span=> #name: #field_instance))
         });
         fields.collect()

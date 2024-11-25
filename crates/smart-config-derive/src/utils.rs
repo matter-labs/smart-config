@@ -1,6 +1,9 @@
 //! Miscellaneous utils.
 
-use std::{collections::HashSet, iter};
+use std::{
+    collections::{HashMap, HashSet},
+    iter,
+};
 
 use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
@@ -50,6 +53,7 @@ fn parse_docs(attrs: &[Attribute]) -> String {
     docs
 }
 
+#[derive(Debug)]
 pub(crate) struct ConfigVariantAttrs {
     pub rename: Option<LitStr>,
     pub aliases: Vec<LitStr>,
@@ -87,6 +91,7 @@ impl ConfigVariantAttrs {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum DefaultValue {
     DefaultTrait,
     Path(Path),
@@ -113,7 +118,7 @@ impl DefaultValue {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(crate) struct ConfigFieldAttrs {
     pub rename: Option<String>,
     pub aliases: Vec<String>,
@@ -191,6 +196,7 @@ impl ConfigFieldAttrs {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct ConfigField {
     pub attrs: ConfigFieldAttrs,
     pub docs: String,
@@ -296,6 +302,7 @@ impl ConfigField {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct ConfigContainerAttrs {
     pub cr: Option<Path>,
     pub rename_all: Option<LitStr>,
@@ -359,6 +366,7 @@ impl ConfigContainerAttrs {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct ConfigEnumVariant {
     pub attrs: ConfigVariantAttrs,
     pub name: Ident,
@@ -379,6 +387,7 @@ impl ConfigEnumVariant {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum ConfigContainerFields {
     Struct(Vec<ConfigField>),
     Enum {
@@ -399,6 +408,7 @@ impl ConfigContainerFields {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct ConfigContainer {
     pub attrs: ConfigContainerAttrs,
     pub name: Ident,
@@ -448,7 +458,7 @@ impl ConfigContainer {
         container_attrs: &ConfigContainerAttrs,
     ) -> syn::Result<ConfigContainerFields> {
         let mut variants = vec![];
-        let mut merged_fields_by_name = HashSet::new();
+        let mut merged_fields_by_name = HashMap::new();
         let mut variants_with_aliases = HashSet::new();
         let mut has_default_variant = false;
 
@@ -479,10 +489,14 @@ impl ConfigContainer {
                 Fields::Named(fields) => {
                     for field in &fields.named {
                         let new_field = ConfigField::new(field)?;
-                        if !merged_fields_by_name.insert(new_field.param_name()) {
-                            let msg = "Parameter with this name is already defined in another enum variant; \
-                                this may lead to unexpected config merge results and thus not supported";
-                            return Err(syn::Error::new_spanned(field, msg));
+                        if let Some(prev_ty) =
+                            merged_fields_by_name.insert(new_field.param_name(), &field.ty)
+                        {
+                            if *prev_ty != new_field.ty {
+                                let msg = "Parameter with this name and another type is already defined in another enum variant; \
+                                    this may lead to unexpected config merge results and thus not supported";
+                                return Err(syn::Error::new_spanned(field, msg));
+                            }
                         }
                         variant_fields.push(new_field);
                     }
@@ -514,7 +528,7 @@ impl ConfigContainer {
             let msg = "Only tagged enums are supported as configs. Please add #[config(tag = ..)] to the enum";
             syn::Error::new_spanned(&data.variants, msg)
         })?;
-        if merged_fields_by_name.contains(&tag.value()) {
+        if merged_fields_by_name.contains_key(&tag.value()) {
             let msg = "Tag name coincides with an existing param name";
             return Err(syn::Error::new(tag.span(), msg));
         }
