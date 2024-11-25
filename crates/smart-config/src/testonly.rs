@@ -11,7 +11,7 @@ use std::{
 use serde::Deserialize;
 
 use crate::{
-    de::{self, DeserializeContext, DeserializeParam},
+    de::{self, DeserializeContext, DeserializeParam, DeserializerOptions},
     metadata::{BasicType, SchemaType, SizeUnit, TimeUnit},
     source::ConfigContents,
     value::{Value, WithOrigin},
@@ -33,10 +33,13 @@ impl de::WellKnown for SimpleEnum {
 #[derive(Debug, Deserialize)]
 pub(crate) struct TestParam {
     pub int: u64,
+    #[serde(default)]
     pub bool: bool,
     pub string: String,
     pub optional: Option<i64>,
+    #[serde(default)]
     pub array: Vec<u32>,
+    #[serde(default)]
     pub repeated: HashSet<SimpleEnum>,
 }
 
@@ -161,7 +164,14 @@ pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
 
 pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result<C, ParseErrors> {
     let mut errors = ParseErrors::default();
-    let ctx = DeserializeContext::new(val, "".into(), C::describe_config(), &mut errors);
+    let de_options = DeserializerOptions::default();
+    let ctx = DeserializeContext::new(
+        &de_options,
+        val,
+        "".into(),
+        C::describe_config(),
+        &mut errors,
+    );
     match C::deserialize_config(ctx) {
         Some(config) => Ok(config),
         None => Err(errors),
@@ -170,8 +180,15 @@ pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result
 
 pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, ParseErrors> {
     let mut errors = ParseErrors::default();
+    let de_options = DeserializerOptions::default();
     let val = WithOrigin::new(Value::Null, Arc::default());
-    let ctx = DeserializeContext::new(&val, "test".into(), C::describe_config(), &mut errors);
+    let ctx = DeserializeContext::new(
+        &de_options,
+        &val,
+        "test".into(),
+        C::describe_config(),
+        &mut errors,
+    );
     match C::deserialize_config(ctx) {
         Some(config) => Ok(config),
         None => Err(errors),

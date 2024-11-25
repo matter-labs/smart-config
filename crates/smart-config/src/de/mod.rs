@@ -1,9 +1,12 @@
 use serde::de::Error as DeError;
 
 use self::deserializer::ValueDeserializer;
-pub use self::param::{
-    DeserializeParam, DeserializerWrapper, ObjectSafeDeserializer, Optional, TagDeserializer,
-    WellKnown, WithDefault,
+pub use self::{
+    deserializer::DeserializerOptions,
+    param::{
+        DeserializeParam, DeserializerWrapper, ObjectSafeDeserializer, Optional, TagDeserializer,
+        WellKnown, WithDefault,
+    },
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
@@ -20,6 +23,7 @@ mod tests;
 /// Context for deserializing a configuration.
 #[derive(Debug)]
 pub struct DeserializeContext<'a> {
+    de_options: &'a DeserializerOptions,
     root_value: &'a WithOrigin,
     path: String,
     current_config: &'static ConfigMetadata,
@@ -28,12 +32,14 @@ pub struct DeserializeContext<'a> {
 
 impl<'a> DeserializeContext<'a> {
     pub(crate) fn new(
+        de_options: &'a DeserializerOptions,
         root_value: &'a WithOrigin,
         path: String,
         current_config: &'static ConfigMetadata,
         errors: &'a mut ParseErrors,
     ) -> Self {
         Self {
+            de_options,
             root_value,
             path,
             current_config,
@@ -43,6 +49,7 @@ impl<'a> DeserializeContext<'a> {
 
     fn child(&mut self, path: &str) -> DeserializeContext<'_> {
         DeserializeContext {
+            de_options: self.de_options,
             root_value: self.root_value,
             path: Pointer(&self.path).join(path),
             current_config: self.current_config,
@@ -59,7 +66,7 @@ impl<'a> DeserializeContext<'a> {
         name: &'static str,
     ) -> Result<ValueDeserializer<'a>, ErrorWithOrigin> {
         if let Some(value) = self.current_value() {
-            Ok(ValueDeserializer::new(value))
+            Ok(ValueDeserializer::new(value, self.de_options))
         } else {
             Err(DeError::missing_field(name))
         }

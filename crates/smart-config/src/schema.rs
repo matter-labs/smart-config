@@ -456,7 +456,7 @@ optional
             Value::Number(123_u64.into())
         );
 
-        let config: TestConfig = parser.parse().unwrap();
+        let config: TestConfig = parser.single().unwrap().parse().unwrap();
         assert_eq!(config.str, "test");
         assert_eq!(config.optional_int, Some(123));
     }
@@ -491,7 +491,12 @@ optional
                 ("APP_DEPRECATED_OPTIONAL", "321"),
             ],
         );
-        let config: TestConfig = ConfigRepository::new(&schema).with(env).parse().unwrap();
+        let config: TestConfig = ConfigRepository::new(&schema)
+            .with(env)
+            .single()
+            .unwrap()
+            .parse()
+            .unwrap();
         assert_eq!(config.str, "?");
         assert_eq!(config.optional_int, Some(321));
     }
@@ -543,7 +548,7 @@ optional
             Value::Number("777".parse().unwrap())
         );
 
-        let config: NestingConfig = repo.parse().unwrap();
+        let config: NestingConfig = repo.single().unwrap().parse().unwrap();
         assert!(config.bool_value);
         assert_eq!(config.hierarchical.str, "???");
         assert_eq!(config.hierarchical.optional_int, None);

@@ -22,13 +22,37 @@ fn parsing_enum_config_with_schema() {
         "map.second": 2,
     );
     let repo = ConfigRepository::new(&schema).with(json);
-    let config: EnumConfig = repo.parse().unwrap();
+    let config: EnumConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(
         config,
         EnumConfig::Nested(NestedConfig {
             simple_enum: SimpleEnum::Second,
             other_int: 42,
             map: HashMap::from([("first".to_owned(), 1), ("second".to_owned(), 2)]),
+        })
+    );
+
+    // Test coercing config variants for an enum used directly as a param
+    let json = config!(
+        "type": "Nested",
+        "renamed": "FIRST",
+        "map.first": 1,
+    );
+    let mut repo = ConfigRepository::new(&schema).with(json);
+    let errors = repo.single::<EnumConfig>().unwrap().parse().unwrap_err();
+    let err = errors.first();
+    let inner = err.inner().to_string();
+    assert!(inner.contains("unknown variant"), "{inner}");
+    assert_eq!(err.path(), "renamed");
+
+    repo.deserializer_options().coerce_shouting_variant_names = true;
+    let config: EnumConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(
+        config,
+        EnumConfig::Nested(NestedConfig {
+            simple_enum: SimpleEnum::First,
+            other_int: 42,
+            map: HashMap::from([("first".to_owned(), 1)]),
         })
     );
 
@@ -39,7 +63,7 @@ fn parsing_enum_config_with_schema() {
         "set": [42],
     );
     let repo = ConfigRepository::new(&schema).with(json);
-    let config: EnumConfig = repo.parse().unwrap();
+    let config: EnumConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(
         config,
         EnumConfig::WithFields {
@@ -64,7 +88,7 @@ fn parsing_enum_config_with_schema() {
         Value::Bool(false)
     );
 
-    let config: EnumConfig = repo.parse().unwrap();
+    let config: EnumConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(
         config,
         EnumConfig::WithFields {
@@ -80,7 +104,7 @@ fn parsing_defaulting_config_from_missing_value_with_schema() {
     let schema = ConfigSchema::default().insert::<DefaultingConfig>("test");
     let json = config!("unrelated": 123);
     let repo = ConfigRepository::new(&schema).with(json);
-    let config: DefaultingConfig = repo.parse().unwrap();
+    let config: DefaultingConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(config, DefaultingConfig::default());
 }
 
@@ -94,7 +118,7 @@ fn parsing_compound_config_with_schema() {
 
     let schema = ConfigSchema::default().insert::<CompoundConfig>("");
     let repo = ConfigRepository::new(&schema).with(json);
-    let config: CompoundConfig = repo.parse().unwrap();
+    let config: CompoundConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(
         config.nested,
         NestedConfig {
@@ -161,7 +185,8 @@ fn merging_config_parts() {
         .unwrap()
         .push_alias(Alias::prefix("deprecated"));
 
-    let config: ConfigWithNesting = ConfigRepository::new(&schema).with(json).parse().unwrap();
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 4);
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 42);
@@ -174,7 +199,8 @@ fn merging_config_parts() {
         "deprecated.not_merged": "!",
     );
 
-    let config: ConfigWithNesting = ConfigRepository::new(&schema).with(json).parse().unwrap();
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 123);
     assert_eq!(config.not_merged, "");
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
@@ -192,7 +218,8 @@ fn merging_config_parts_with_env() {
         .unwrap()
         .push_alias(Alias::prefix("deprecated"));
 
-    let config: ConfigWithNesting = ConfigRepository::new(&schema).with(env).parse().unwrap();
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 4);
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 42);
@@ -208,7 +235,8 @@ fn merging_config_parts_with_env() {
         ],
     );
 
-    let config: ConfigWithNesting = ConfigRepository::new(&schema).with(env).parse().unwrap();
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 123);
     assert_eq!(config.not_merged, "");
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
@@ -302,7 +330,7 @@ fn using_aliases_with_object_config() {
     );
     let repo = ConfigRepository::new(&schema).with(json);
 
-    let config: ConfigWithNesting = repo.parse().unwrap();
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 321);
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 42);
@@ -320,7 +348,7 @@ fn using_env_config_overrides() {
     );
     let mut repo = ConfigRepository::new(&schema).with(base);
 
-    let config: ConfigWithNesting = repo.parse().unwrap();
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 321);
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 42);
@@ -338,7 +366,7 @@ fn using_env_config_overrides() {
     assert_eq!(enum_value.inner, Value::String("second".into()));
     assert_matches!(enum_value.origin.as_ref(), ValueOrigin::EnvVar(_));
 
-    let config: ConfigWithNesting = repo.parse().unwrap();
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 321);
     assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
 
@@ -348,7 +376,7 @@ fn using_env_config_overrides() {
     let int_value = repo.merged().get(Pointer("test.value")).unwrap();
     assert_eq!(int_value.inner, Value::Number(555_u64.into()));
 
-    let config: ConfigWithNesting = repo.parse().unwrap();
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 555);
     assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
 }

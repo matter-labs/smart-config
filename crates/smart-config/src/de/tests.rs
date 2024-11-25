@@ -10,6 +10,7 @@ use serde::Deserialize;
 use super::deserializer::ValueDeserializer;
 use crate::{
     config,
+    de::DeserializerOptions,
     metadata::SizeUnit,
     testonly::{
         test_deserialize, test_deserialize_missing, wrap_into_value, CompoundConfig,
@@ -21,7 +22,7 @@ use crate::{
 };
 
 #[test]
-fn parsing() {
+fn parsing_param() {
     let env = Environment::from_iter(
         "",
         [
@@ -29,18 +30,45 @@ fn parsing() {
             ("bool", "true"),
             ("string", "??"),
             ("array", "1,2,3"),
-            ("renamed", "first"),
             ("repeated", "second,first"),
         ],
     );
     let env = wrap_into_value(env);
 
-    let config = TestParam::deserialize(ValueDeserializer::new(&env)).unwrap();
+    let mut options = DeserializerOptions::default();
+    let config = TestParam::deserialize(ValueDeserializer::new(&env, &options)).unwrap();
     assert_eq!(config.int, 1);
     assert_eq!(config.optional, None);
     assert!(config.bool);
     assert_eq!(config.string, "??");
     assert_eq!(config.array, [1, 2, 3]);
+    assert_eq!(
+        config.repeated,
+        HashSet::from([SimpleEnum::First, SimpleEnum::Second])
+    );
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("int", "42"),
+            ("string", "!!"),
+            ("repeated", "FIRST,SECOND"),
+        ],
+    );
+    let env = wrap_into_value(env);
+
+    let err = TestParam::deserialize(ValueDeserializer::new(&env, &options)).unwrap_err();
+    let inner = err.inner.to_string();
+    assert!(inner.contains("unknown variant"), "{inner}");
+    assert_matches!(err.origin.as_ref(), ValueOrigin::EnvVar(name) if name == "repeated");
+
+    options.coerce_shouting_variant_names = true;
+    let config = TestParam::deserialize(ValueDeserializer::new(&env, &options)).unwrap();
+    assert_eq!(config.int, 42);
+    assert_eq!(config.optional, None);
+    assert!(!config.bool);
+    assert_eq!(config.string, "!!");
+    assert_eq!(config.array, [] as [u32; 0]);
     assert_eq!(
         config.repeated,
         HashSet::from([SimpleEnum::First, SimpleEnum::Second])

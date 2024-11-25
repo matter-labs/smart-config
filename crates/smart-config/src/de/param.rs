@@ -63,6 +63,7 @@ pub trait WellKnown: 'static {
     const DE: &'static dyn DeserializeParam<Self>;
 }
 
+/// This deserializer assumes that the value is required. Hence, optional params should be wrapped in [`Optional`] to work correctly.
 impl<T: DeserializeOwned> DeserializeParam<T> for SchemaType {
     fn expecting(&self) -> SchemaType {
         *self
@@ -292,7 +293,7 @@ impl DeserializeParam<&'static str> for TagDeserializer {
         param: &'static ParamMetadata,
     ) -> Result<&'static str, ErrorWithOrigin> {
         let s = if let Some(current_value) = ctx.current_value() {
-            String::deserialize(ValueDeserializer::new(current_value))?
+            String::deserialize(ValueDeserializer::new(current_value, ctx.de_options))?
         } else if let Some(default) = self.default_value {
             return Ok(default);
         } else {

@@ -23,6 +23,7 @@ pub struct ConfigMetadata {
 }
 
 impl ConfigMetadata {
+    #[allow(dead_code)] // FIXME: ???
     pub(crate) fn help_header(&self) -> Option<&'static str> {
         let first_line = self.help.lines().next()?;
         first_line.strip_prefix("# ")

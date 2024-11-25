@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, mem, sync::Arc};
+use std::{collections::BTreeSet, marker::PhantomData, mem, sync::Arc};
 
 pub use self::{
     env::{Environment, KeyValueMap},
@@ -6,9 +6,9 @@ pub use self::{
     yaml::Yaml,
 };
 use crate::{
-    de::DeserializeContext,
+    de::{DeserializeContext, DeserializerOptions},
     metadata::{BasicType, ConfigMetadata},
-    schema::{Alias, ConfigSchema},
+    schema::{Alias, ConfigRef, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseErrors,
 };
@@ -41,6 +41,7 @@ pub trait ConfigSource {
 #[derive(Debug, Clone)]
 pub struct ConfigRepository<'a> {
     schema: &'a ConfigSchema,
+    de_options: DeserializerOptions,
     all_prefixes_with_aliases: BTreeSet<Pointer<'a>>,
     merged: WithOrigin,
 }
@@ -54,12 +55,18 @@ impl<'a> ConfigRepository<'a> {
             .collect();
         Self {
             schema,
+            de_options: DeserializerOptions::default(),
             all_prefixes_with_aliases,
             merged: WithOrigin {
                 inner: Value::Object(Map::default()),
                 origin: Arc::default(),
             },
         }
+    }
+
+    /// Accesses options used during `serde`-powered deserialization.
+    pub fn deserializer_options(&mut self) -> &mut DeserializerOptions {
+        &mut self.de_options
     }
 
     /// Extends this environment with a new configuration source.
@@ -126,31 +133,47 @@ impl<'a> ConfigRepository<'a> {
         &self.merged
     }
 
-    /// Parses a configuration.
-    pub fn parse<C>(&self) -> anyhow::Result<C>
-    where
-        C: DeserializeConfig,
-    {
-        let metadata = C::describe_config();
-        let config_ref = self.schema.single(metadata)?;
-        let prefix = config_ref.prefix();
-        let mut errors = ParseErrors::default();
-        let context =
-            DeserializeContext::new(&self.merged, prefix.to_owned(), metadata, &mut errors);
+    /// Returns a parser for the single configuration of the specified type.
+    ///
+    /// # Errors
+    ///
+    /// Errors if the config is not a part of the schema or is mounted to multiple locations.
+    pub fn single<C: DeserializeConfig>(&self) -> anyhow::Result<ConfigParser<'_, C>> {
+        let config_ref = self.schema.single(C::describe_config())?;
+        Ok(ConfigParser {
+            repo: self,
+            config_ref,
+            _config: PhantomData,
+        })
+    }
+}
 
-        C::deserialize_config(context)
-            .ok_or_else(|| {
-                let summary = if let Some(header) = metadata.help_header() {
-                    format!(" ({})", header.trim().to_lowercase())
-                } else {
-                    String::new()
-                };
-                anyhow::Error::new(errors).context(format!(
-                    "error parsing configuration `{name}`{summary} at `{prefix}` (aliases: {aliases:?})",
-                    name = metadata.ty.name_in_code(),
-                    aliases = config_ref.data.aliases
-                ))
-            })
+#[derive(Debug)]
+pub struct ConfigParser<'a, C> {
+    repo: &'a ConfigRepository<'a>,
+    config_ref: ConfigRef<'a>,
+    _config: PhantomData<C>,
+}
+
+impl<C: DeserializeConfig> ConfigParser<'_, C> {
+    pub fn parse(self) -> Result<C, ParseErrors> {
+        let prefix = self.config_ref.prefix();
+        let mut errors = ParseErrors::default();
+        let context = DeserializeContext::new(
+            &self.repo.de_options,
+            &self.repo.merged,
+            prefix.to_owned(),
+            self.config_ref.data.metadata,
+            &mut errors,
+        );
+
+        C::deserialize_config(context).ok_or_else(|| {
+            assert!(
+                errors.len() > 0,
+                "Internal error: deserialization failed, but no errors were provided"
+            );
+            errors
+        })
     }
 }
 
