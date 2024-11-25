@@ -1,5 +1,7 @@
 use std::{env, sync::Arc};
 
+use anyhow::Context as _;
+
 use super::{ConfigContents, ConfigSource};
 use crate::value::{Map, ValueOrigin, WithOrigin};
 
@@ -51,6 +53,28 @@ impl Environment {
         self.map.extend(defined_vars);
         self
     }
+
+    // FIXME: functionally incomplete ('' strings, interpolation, comments after vars)
+    pub fn from_dotenv(contents: &str) -> anyhow::Result<Self> {
+        let mut map = Map::default();
+        for line in contents.lines().map(str::trim) {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let (name, variable_value) = line.split_once('=').with_context(|| {
+                format!("Incorrect line for setting environment variable: {line}")
+            })?;
+            let variable_value = variable_value.trim_matches('"');
+            map.insert(
+                name.to_owned(),
+                WithOrigin {
+                    inner: variable_value.to_owned(),
+                    origin: Arc::new(ValueOrigin::EnvVar(name.into())),
+                },
+            );
+        }
+        Ok(Self { map })
+    }
 }
 
 impl ConfigSource for Environment {
@@ -94,5 +118,31 @@ impl KeyValueMap {
 impl ConfigSource for KeyValueMap {
     fn into_contents(self) -> ConfigContents {
         ConfigContents::KeyValue(self.map)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_matches::assert_matches;
+
+    use super::*;
+
+    #[test]
+    fn parsing_dotenv_contents() {
+        let env = Environment::from_dotenv(
+            r#"
+            TEST=what
+            OTHER="test string"
+
+            # Overwriting vars should be supported
+            TEST=42
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(env.map.len(), 2, "{:?}", env.map);
+        assert_eq!(env.map["TEST"].inner, "42");
+        assert_matches!(env.map["TEST"].origin.as_ref(), ValueOrigin::EnvVar(name) if name == "TEST");
+        assert_eq!(env.map["OTHER"].inner, "test string");
     }
 }
