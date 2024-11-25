@@ -10,13 +10,14 @@ use serde::Deserialize;
 use super::deserializer::ValueDeserializer;
 use crate::{
     config,
+    metadata::SizeUnit,
     testonly::{
         test_deserialize, test_deserialize_missing, wrap_into_value, CompoundConfig,
         ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, DefaultingEnumConfig,
         EnumConfig, NestedConfig, SimpleEnum, TestParam,
     },
     value::{Pointer, Value, ValueOrigin},
-    DescribeConfig, Environment,
+    ByteSize, DescribeConfig, Environment,
 };
 
 #[test]
@@ -336,10 +337,17 @@ fn parsing_complex_types() {
             assumed: None,
             short_dur: Duration::from_millis(100),
             path: "./test".into(),
+            memory_size_mb: ByteSize::new(128, SizeUnit::MiB),
         }
     );
 
-    let json = config!("array": [4, 5], "assumed": 24, "short_dur": 200, "path": "/mnt");
+    let json = config!(
+        "array": [4, 5],
+        "assumed": 24,
+        "short_dur": 200,
+        "path": "/mnt",
+        "memory_size_mb": 64,
+    );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config,
@@ -349,6 +357,7 @@ fn parsing_complex_types() {
             assumed: Some(serde_json::json!(24)),
             short_dur: Duration::from_millis(200),
             path: "/mnt".into(),
+            memory_size_mb: ByteSize::new(64, SizeUnit::MiB),
         }
     );
 
@@ -362,6 +371,7 @@ fn parsing_complex_types() {
             assumed: None,
             short_dur: Duration::from_secs(1),
             path: "./test".into(),
+            memory_size_mb: ByteSize::new(128, SizeUnit::MiB),
         }
     );
 }

@@ -23,7 +23,8 @@ use serde::{
 use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
-    metadata::{BasicType, ParamMetadata, SchemaType, TimeUnit},
+    metadata::{BasicType, ParamMetadata, SchemaType, SizeUnit, TimeUnit},
+    ByteSize,
 };
 
 #[diagnostic::on_unimplemented(
@@ -333,6 +334,30 @@ impl DeserializeParam<Duration> for TimeUnit {
                     .ok_or_else(|| deserializer.enrich_err(self.overflow_err(raw_value)))?;
                 Duration::from_secs(val)
             }
+        })
+    }
+}
+
+impl DeserializeParam<ByteSize> for SizeUnit {
+    fn expecting(&self) -> SchemaType {
+        SchemaType::new(BasicType::Integer)
+            .with_qualifier("byte size")
+            .with_unit((*self).into())
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<ByteSize, ErrorWithOrigin> {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let raw_value = u64::deserialize(deserializer)?;
+        ByteSize::checked(raw_value, *self).ok_or_else(|| {
+            let err = DeError::custom(format!(
+                "{raw_value} {unit} does not fit into `u64`",
+                unit = self.plural()
+            ));
+            deserializer.enrich_err(err)
         })
     }
 }

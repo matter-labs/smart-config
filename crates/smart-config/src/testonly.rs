@@ -12,10 +12,10 @@ use serde::Deserialize;
 
 use crate::{
     de::{self, DeserializeContext},
-    metadata::{BasicType, SchemaType, TimeUnit},
+    metadata::{BasicType, SchemaType, SizeUnit, TimeUnit},
     source::ConfigContents,
     value::{Value, WithOrigin},
-    ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
+    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
@@ -133,6 +133,9 @@ pub(crate) struct ConfigWithComplexTypes {
     pub short_dur: Duration,
     #[config(default_t = "./test".into())]
     pub path: PathBuf,
+    #[config(with = SizeUnit::MiB, default_t = ByteSize::new(128, SizeUnit::MiB))]
+    pub memory_size_mb: ByteSize,
+    // FIXME: Option<_> doesn't work with `with = _`
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {

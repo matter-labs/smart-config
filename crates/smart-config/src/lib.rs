@@ -7,6 +7,7 @@ pub use self::{
     de::DeserializeConfig,
     error::{ParseError, ParseErrors},
     source::{ConfigRepository, ConfigSource, Environment, Json, KeyValueMap, Yaml},
+    types::ByteSize,
 };
 
 pub mod de;
@@ -16,6 +17,7 @@ mod schema;
 mod source;
 #[cfg(test)]
 mod testonly;
+mod types;
 pub mod value;
 
 /// Describes a configuration (i.e., a group of related parameters).

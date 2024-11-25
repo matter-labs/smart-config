@@ -207,14 +207,51 @@ impl fmt::Display for TimeUnit {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
+pub enum SizeUnit {
+    Bytes,
+    KiB,
+    MiB,
+    GiB,
+}
+
+impl SizeUnit {
+    pub(crate) const fn plural(self) -> &'static str {
+        match self {
+            Self::Bytes => "bytes",
+            Self::KiB => "kilobytes",
+            Self::MiB => "megabytes",
+            Self::GiB => "gigabytes",
+        }
+    }
+
+    pub(crate) const fn bytes_in_unit(self) -> u64 {
+        match self {
+            Self::Bytes => 1,
+            Self::KiB => 1_024,
+            Self::MiB => 1_024 * 1_024,
+            Self::GiB => 1_024 * 1_024 * 1_024,
+        }
+    }
+}
+
+impl fmt::Display for SizeUnit {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.plural())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum UnitOfMeasurement {
     Time(TimeUnit),
+    ByteSize(SizeUnit),
 }
 
 impl fmt::Display for UnitOfMeasurement {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Time(unit) => fmt::Display::fmt(unit, formatter),
+            Self::ByteSize(unit) => fmt::Display::fmt(unit, formatter),
         }
     }
 }
@@ -222,5 +259,11 @@ impl fmt::Display for UnitOfMeasurement {
 impl From<TimeUnit> for UnitOfMeasurement {
     fn from(unit: TimeUnit) -> Self {
         Self::Time(unit)
+    }
+}
+
+impl From<SizeUnit> for UnitOfMeasurement {
+    fn from(unit: SizeUnit) -> Self {
+        Self::ByteSize(unit)
     }
 }
