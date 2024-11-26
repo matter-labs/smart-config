@@ -56,9 +56,9 @@ fn parse_docs(attrs: &[Attribute]) -> String {
 
 #[derive(Debug)]
 pub(crate) struct ConfigVariantAttrs {
-    pub rename: Option<LitStr>,
-    pub aliases: Vec<LitStr>,
-    pub default: bool,
+    pub(crate) rename: Option<LitStr>,
+    pub(crate) aliases: Vec<LitStr>,
+    pub(crate) default: bool,
 }
 
 impl ConfigVariantAttrs {
@@ -121,12 +121,12 @@ impl DefaultValue {
 
 #[derive(Debug, Default)]
 pub(crate) struct ConfigFieldAttrs {
-    pub rename: Option<String>,
-    pub aliases: Vec<String>,
-    pub default: Option<DefaultValue>,
-    pub flatten: bool,
-    pub nest: bool,
-    pub with: Option<Expr>,
+    pub(crate) rename: Option<String>,
+    pub(crate) aliases: Vec<String>,
+    pub(crate) default: Option<DefaultValue>,
+    pub(crate) flatten: bool,
+    pub(crate) nest: bool,
+    pub(crate) with: Option<Expr>,
 }
 
 impl ConfigFieldAttrs {
@@ -199,10 +199,10 @@ impl ConfigFieldAttrs {
 
 #[derive(Debug)]
 pub(crate) struct ConfigField {
-    pub attrs: ConfigFieldAttrs,
-    pub docs: String,
-    pub name: Member,
-    pub ty: Type,
+    pub(crate) attrs: ConfigFieldAttrs,
+    pub(crate) docs: String,
+    pub(crate) name: Member,
+    pub(crate) ty: Type,
 }
 
 impl ConfigField {
@@ -305,10 +305,10 @@ impl ConfigField {
 
 #[derive(Debug)]
 pub(crate) struct ConfigContainerAttrs {
-    pub cr: Option<Path>,
-    pub rename_all: Option<LitStr>,
-    pub tag: Option<LitStr>,
-    pub derive_default: bool,
+    pub(crate) cr: Option<Path>,
+    pub(crate) rename_all: Option<LitStr>,
+    pub(crate) tag: Option<LitStr>,
+    pub(crate) derive_default: bool,
 }
 
 impl ConfigContainerAttrs {
@@ -410,10 +410,10 @@ impl ConfigContainerFields {
 
 #[derive(Debug)]
 pub(crate) struct ConfigContainer {
-    pub attrs: ConfigContainerAttrs,
-    pub name: Ident,
-    pub help: String,
-    pub fields: ConfigContainerFields,
+    pub(crate) attrs: ConfigContainerAttrs,
+    pub(crate) name: Ident,
+    pub(crate) help: String,
+    pub(crate) fields: ConfigContainerFields,
 }
 
 impl ConfigContainer {

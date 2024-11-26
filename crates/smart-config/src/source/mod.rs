@@ -100,7 +100,7 @@ impl<'a> ConfigRepository<'a> {
                 unreachable!();
             };
 
-            for param in &config_data.metadata.params {
+            for param in &*config_data.metadata.params {
                 if config_object.contains_key(param.name) {
                     continue;
                 }
@@ -304,7 +304,7 @@ impl WithOrigin {
             unreachable!("expected an object due to previous preprocessing steps");
         };
 
-        for param in &metadata.params {
+        for param in &*metadata.params {
             if let Some(value) = map.get_mut(param.name) {
                 let Value::String(str) = &value.inner else {
                     continue;
