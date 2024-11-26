@@ -345,6 +345,26 @@ impl TimeUnit {
     }
 }
 
+/// Supports deserializing a [`Duration`] from a number, with `self` being the unit of measurement.
+///
+/// # Examples
+///
+/// ```
+/// # use std::time::Duration;
+/// # use smart_config::{metadata::TimeUnit, DescribeConfig, DeserializeConfig};
+/// use smart_config::testing;
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(with = TimeUnit::Millis)]
+///     time_ms: Duration,
+/// }
+///
+/// let source = smart_config::config!("time_ms": 100);
+/// let config = testing::test::<TestConfig>(source)?;
+/// assert_eq!(config.time_ms, Duration::from_millis(100));
+/// # anyhow::Ok(())
+/// ```
 impl DeserializeParam<Duration> for TimeUnit {
     fn expecting(&self) -> SchemaType {
         SchemaType::new(BasicType::Integer)
@@ -388,6 +408,26 @@ impl DeserializeParam<Duration> for TimeUnit {
     }
 }
 
+/// Supports deserializing a [`ByteSize`] from a number, with `self` being the unit of measurement.
+///
+/// # Examples
+///
+/// ```
+/// # use std::time::Duration;
+/// # use smart_config::{metadata::SizeUnit, DescribeConfig, DeserializeConfig, ByteSize};
+/// use smart_config::testing;
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(with = SizeUnit::MiB)]
+///     size_mb: ByteSize,
+/// }
+///
+/// let source = smart_config::config!("size_mb": 4);
+/// let config = testing::test::<TestConfig>(source)?;
+/// assert_eq!(config.size_mb, ByteSize(4 << 20));
+/// # anyhow::Ok(())
+/// ```
 impl DeserializeParam<ByteSize> for SizeUnit {
     fn expecting(&self) -> SchemaType {
         SchemaType::new(BasicType::Integer)

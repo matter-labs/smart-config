@@ -29,6 +29,87 @@
 //! - Transform value types from strings to expected types.
 //!
 //! Preprocessing and merging config sources is encapsulated in [`ConfigRepository`].
+//!
+//! # Features
+//!
+//! - Rich, self-documenting configuration schema.
+//! - Utilizes the schema to enrich configuration sources and intelligently merge them.
+//! - Doesn't require a god object uniting all configs in the app; they may be dynamically collected and deserialized
+//!   inside relevant components.
+//! - Supports lazy parsing for complex / multi-component apps (only the used configs are parsed; other configs are not required).
+//! - Supports multiple configuration formats and programmable source priorities (e.g., `base.yml` + overrides from the
+//!   `overrides/` dir in the alphabetic order + env vars).
+//! - Rich and complete deserialization errors including locations and value origins.
+//!
+//! # Examples
+//!
+//! ## Basic workflow
+//!
+//! ```
+//! use smart_config::{
+//!     config, ConfigSchema, ConfigRepository, DescribeConfig, DeserializeConfig, Yaml, Environment,
+//! };
+//!
+//! #[derive(Debug, DescribeConfig, DeserializeConfig)]
+//! pub struct TestConfig {
+//!     pub port: u16,
+//!     #[config(default_t = "test".into())]
+//!     pub name: String,
+//!     #[config(default_t = true)]
+//!     pub tracing: bool,
+//! }
+//!
+//! let schema = ConfigSchema::default().insert::<TestConfig>("test");
+//! // Assume we use two config sources: a YAML file and env vars,
+//! // the latter having higher priority.
+//! let yaml = r"
+//! test:
+//!   port: 4000
+//!   name: app
+//! ";
+//! let yaml = Yaml::new("test.yml", serde_yaml::from_str(yaml)?)?;
+//! let env = Environment::from_iter("APP_", [("APP_TEST_PORT", "8000")]);
+//! // Add both sources to a repo.
+//! let repo = ConfigRepository::new(&schema).with(yaml).with(env);
+//! // Get the parser for the config.
+//! let parser = repo.single::<TestConfig>()?;
+//! let config = parser.parse()?;
+//! assert_eq!(config.port, 8_000); // from the env var
+//! assert_eq!(config.name, "app"); // from YAML
+//! assert!(config.tracing); // from the default value
+//! # anyhow::Ok(())
+//! ```
+//!
+//! ## Declaring type as well-known
+//!
+//! ```
+//! use std::collections::HashMap;
+//! use smart_config::{
+//!     de::{DeserializeParam, WellKnown},
+//!     metadata::BasicType, DescribeConfig, DeserializeConfig,
+//! };
+//!
+//! #[derive(Debug, serde::Deserialize)]
+//! enum CustomEnum {
+//!     First,
+//!     Second,
+//! }
+//!
+//! impl WellKnown for CustomEnum {
+//!     // signals that the type should be deserialized via `serde`
+//!     // and the expected input is a string
+//!     const DE: &'static dyn DeserializeParam<Self> = &BasicType::String;
+//! }
+//!
+//! // Then, the type can be used in configs basically everywhere:
+//! #[derive(Debug, DescribeConfig, DeserializeConfig)]
+//! struct TestConfig {
+//!     value: CustomEnum,
+//!     optional: Option<CustomEnum>,
+//!     repeated: Vec<CustomEnum>,
+//!     map: HashMap<String, CustomEnum>,
+//! }
+//! ```
 
 // Documentation settings
 #![doc(html_root_url = "https://docs.rs/smart-config/0.1.0")]

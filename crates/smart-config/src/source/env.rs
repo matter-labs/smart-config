@@ -6,8 +6,6 @@ use super::{ConfigContents, ConfigSource};
 use crate::value::{Map, ValueOrigin, WithOrigin};
 
 /// Configuration sourced from environment variables.
-///
-/// Use [`KeyValueMap`] for string key–value entries that are not env variables (e.g., command-line args).
 #[derive(Debug, Clone, Default)]
 pub struct Environment {
     map: Map<String>,

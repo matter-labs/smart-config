@@ -19,14 +19,23 @@ Metadata includes a variety of info extracted from the config type:
 Multiple configurations are collected into a global schema. Each configuration is *mounted* at a specific path.
 E.g., if a large app has an HTTP server component, it may be mounted at `api.http`. Multiple config types may be mounted
 at the same path (e.g., flattened configs); conversely, a single config type may be mounted at multiple places.
-As a result, there doesn't need to be a god object uniting all configs in the app; they may be dynamically collected and deserialized
-inside relevant components.
 
 This information provides rich human-readable info about configs. It also assists when preprocessing and merging config inputs.
 For example, env vars are a flat string -> string map; with the help of a schema, it's possible to:
 
 - Correctly nest vars (e.g., transform the `API_HTTP_PORT` var into a `port` var inside `http` object inside `api` object)
 - Transform value types from strings to expected types.
+
+## Features
+
+- Rich, self-documenting configuration schema.
+- Utilizes the schema to enrich configuration sources and intelligently merge them.
+- Doesn't require a god object uniting all configs in the app; they may be dynamically collected and deserialized
+  inside relevant components.
+- Supports lazy parsing for complex / multi-component apps (only the used configs are parsed; other configs are not required).
+- Supports multiple configuration formats and programmable source priorities (e.g., `base.yml` + overrides from the
+  `overrides/` dir in the alphabetic order + env vars).
+- Rich and complete deserialization errors including locations and value origins.
 
 ## Usage
 
