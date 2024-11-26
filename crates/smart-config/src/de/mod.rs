@@ -40,8 +40,8 @@ use self::deserializer::ValueDeserializer;
 pub use self::{
     deserializer::DeserializerOptions,
     param::{
-        DeserializeParam, DeserializerWrapper, ObjectSafeDeserializer, Optional, TagDeserializer,
-        WellKnown, WithDefault,
+        Csv, DeserializeParam, DeserializerWrapper, ObjectSafeDeserializer, Optional,
+        TagDeserializer, WellKnown, WithDefault,
     },
 };
 use crate::{

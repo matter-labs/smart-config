@@ -110,7 +110,7 @@ pub(crate) struct DefaultingConfig {
     pub float: Option<f64>,
     #[config(default_t = Some("https://example.com/".into()))]
     pub url: Option<String>,
-    #[config(default)]
+    #[config(default, with = de::Csv(","))]
     pub set: HashSet<SimpleEnum>,
 }
 
@@ -141,6 +141,8 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(with = de::Optional(SizeUnit::MiB))]
     #[config(default_t = Some(ByteSize::new(128, SizeUnit::MiB)))]
     pub memory_size_mb: Option<ByteSize>,
+    #[config(default, with = de::Csv(":"))]
+    pub paths: Vec<PathBuf>,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {

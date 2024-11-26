@@ -21,10 +21,13 @@ use serde::{
 };
 
 use crate::{
-    de::{deserializer::ValueDeserializer, DeserializeContext},
+    de::{
+        deserializer::{deserialize_string_as_array, ValueDeserializer},
+        DeserializeContext,
+    },
     error::ErrorWithOrigin,
     metadata::{BasicType, ParamMetadata, SchemaType, SizeUnit, TimeUnit},
-    value::Value,
+    value::{Value, WithOrigin},
     ByteSize,
 };
 
@@ -449,6 +452,33 @@ impl DeserializeParam<ByteSize> for SizeUnit {
             ));
             deserializer.enrich_err(err)
         })
+    }
+}
+
+/// FIXME
+#[derive(Debug, Clone, Copy)]
+pub struct Csv(pub &'static str);
+
+// FIXME: narrow impl to arrays etc.
+impl<T: WellKnown + DeserializeOwned> DeserializeParam<T> for Csv {
+    fn expecting(&self) -> SchemaType {
+        SchemaType::ANY.with_qualifier("array or comma-separated string")
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        let Some(WithOrigin {
+            inner: Value::String(s),
+            origin,
+        }) = ctx.current_value()
+        else {
+            return T::DE.deserialize_param(ctx, param);
+        };
+
+        deserialize_string_as_array(ctx.de_options, s, self.0, origin)
     }
 }
 

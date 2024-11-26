@@ -356,6 +356,7 @@ fn parsing_complex_types() {
             short_dur: Duration::from_millis(100),
             path: "./test".into(),
             memory_size_mb: Some(ByteSize::new(128, SizeUnit::MiB)),
+            paths: vec![],
         }
     );
 
@@ -365,6 +366,7 @@ fn parsing_complex_types() {
         "assumed": 24,
         "short_dur": 200,
         "path": "/mnt",
+        "paths": "/usr/bin:/usr/local/bin",
         "memory_size_mb": 64,
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
@@ -378,6 +380,7 @@ fn parsing_complex_types() {
             short_dur: Duration::from_millis(200),
             path: "/mnt".into(),
             memory_size_mb: Some(ByteSize::new(64, SizeUnit::MiB)),
+            paths: vec!["/usr/bin".into(), "/usr/local/bin".into()],
         }
     );
 
@@ -388,6 +391,7 @@ fn parsing_complex_types() {
         "assumed": (),
         "short_dur": 1000,
         "memory_size_mb": (),
+        "paths": ["/usr/bin", "/mnt"],
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -400,6 +404,7 @@ fn parsing_complex_types() {
             short_dur: Duration::from_secs(1),
             path: "./test".into(),
             memory_size_mb: None,
+            paths: vec!["/usr/bin".into(), "/mnt".into()],
         }
     );
 }
