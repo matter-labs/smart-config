@@ -1,12 +1,12 @@
 //! `serde`-compatible deserializer based on a value with origin.
 
-use std::{iter::empty, sync::Arc};
+use std::sync::Arc;
 
 use serde::{
     de::{
         self,
         value::{MapDeserializer, SeqDeserializer},
-        DeserializeOwned, DeserializeSeed, Error as DeError, IntoDeserializer,
+        DeserializeSeed, Error as DeError, IntoDeserializer,
     },
     Deserialize, Deserializer,
 };
@@ -43,25 +43,6 @@ macro_rules! parse_int_value {
             result.map_err(|err| err.set_origin_if_unset(&self.value.origin))
         }
         )*
-    }
-}
-
-pub(super) fn deserialize_string_as_array<T: DeserializeOwned>(
-    options: &DeserializerOptions,
-    s: &str,
-    pat: &str,
-    origin: &Arc<ValueOrigin>,
-) -> Result<T, ErrorWithOrigin> {
-    if s.is_empty() {
-        T::deserialize(SeqDeserializer::new(empty::<ValueDeserializer>()))
-    } else {
-        let items = s.split(pat).map(|item| WithOrigin {
-            inner: Value::String(item.to_owned()),
-            origin: origin.clone(), // TODO: better origin
-        });
-        let items: Vec<_> = items.collect();
-        let items = items.iter().map(|val| ValueDeserializer::new(val, options));
-        T::deserialize(SeqDeserializer::new(items))
     }
 }
 

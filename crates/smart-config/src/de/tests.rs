@@ -361,7 +361,7 @@ fn parsing_complex_types() {
     );
 
     let json = config!(
-        "array": [4, 5],
+        "array": "5,4",
         "choices": ["first", "second"],
         "assumed": 24,
         "short_dur": 200,
@@ -374,7 +374,7 @@ fn parsing_complex_types() {
         config,
         ConfigWithComplexTypes {
             float: 4.2,
-            array: [NonZeroUsize::new(4).unwrap(), NonZeroUsize::new(5).unwrap()],
+            array: [NonZeroUsize::new(5).unwrap(), NonZeroUsize::new(4).unwrap()],
             choices: Some(vec![SimpleEnum::First, SimpleEnum::Second]),
             assumed: Some(serde_json::json!(24)),
             short_dur: Duration::from_millis(200),

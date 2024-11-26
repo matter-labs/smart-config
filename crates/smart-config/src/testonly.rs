@@ -110,7 +110,7 @@ pub(crate) struct DefaultingConfig {
     pub float: Option<f64>,
     #[config(default_t = Some("https://example.com/".into()))]
     pub url: Option<String>,
-    #[config(default, with = de::Csv(","))]
+    #[config(default, with = de::Delimited(","))]
     pub set: HashSet<SimpleEnum>,
 }
 
@@ -130,6 +130,7 @@ pub(crate) enum DefaultingEnumConfig {
 pub(crate) struct ConfigWithComplexTypes {
     #[config(default_t = 4.2)]
     pub float: f32,
+    #[config(with = de::Delimited(","))]
     pub array: [NonZeroUsize; 2],
     pub choices: Option<Vec<SimpleEnum>>,
     #[config(with = de::Optional(BasicType::Float))]
@@ -141,7 +142,7 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(with = de::Optional(SizeUnit::MiB))]
     #[config(default_t = Some(ByteSize::new(128, SizeUnit::MiB)))]
     pub memory_size_mb: Option<ByteSize>,
-    #[config(default, with = de::Csv(":"))]
+    #[config(default, with = de::Delimited(":"))]
     pub paths: Vec<PathBuf>,
 }
 

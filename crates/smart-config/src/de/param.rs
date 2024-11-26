@@ -21,10 +21,7 @@ use serde::{
 };
 
 use crate::{
-    de::{
-        deserializer::{deserialize_string_as_array, ValueDeserializer},
-        DeserializeContext,
-    },
+    de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
     metadata::{BasicType, ParamMetadata, SchemaType, SizeUnit, TimeUnit},
     value::{Value, WithOrigin},
@@ -78,6 +75,13 @@ pub trait WellKnown: 'static {
     const DE: &'static dyn DeserializeParam<Self>;
 }
 
+/// Marker for types that are known to be represented by arrays.
+///
+/// # Implementations
+///
+/// Among other types, this trait is implemented for [`Vec`], [`HashSet`] and [`BTreeSet`].
+pub trait WellKnownArray: WellKnown {}
+
 /// This deserializer assumes that the value is required. Hence, optional params should be wrapped in [`Optional`] to work correctly.
 impl<T: DeserializeOwned> DeserializeParam<T> for SchemaType {
     fn expecting(&self) -> SchemaType {
@@ -95,9 +99,7 @@ impl<T: DeserializeOwned> DeserializeParam<T> for SchemaType {
             (deserializer.value().basic_type(), self.base)
         {
             let types_match = actual_type == expected_type
-                || (expected_type == BasicType::Float && actual_type == BasicType::Integer)
-                // FIXME: probably worth to get rid of
-                || (expected_type == BasicType::Array && actual_type == BasicType::String);
+                || (expected_type == BasicType::Float && actual_type == BasicType::Integer);
             if !types_match {
                 return Err(deserializer.invalid_type(expected_type.as_str()));
             }
@@ -174,12 +176,16 @@ impl<T: WellKnown + DeserializeOwned> WellKnown for Vec<T> {
     const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Array);
 }
 
+impl<T: WellKnown + DeserializeOwned> WellKnownArray for Vec<T> {}
+
 impl<T: WellKnown, const N: usize> WellKnown for [T; N]
 where
     [T; N]: DeserializeOwned, // `serde` implements `Deserialize` for separate lengths rather for generics
 {
     const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Array);
 }
+
+impl<T: WellKnown, const N: usize> WellKnownArray for [T; N] where [T; N]: DeserializeOwned {}
 
 // Heterogeneous tuples don't look like a good idea to mark as well-known because they wouldn't look well-structured
 // (it'd be better to define either multiple params or a struct param).
@@ -193,6 +199,13 @@ where
         &SchemaType::new(BasicType::Array).with_qualifier("set");
 }
 
+impl<T, S> WellKnownArray for HashSet<T, S>
+where
+    T: WellKnown + Eq + Hash + DeserializeOwned,
+    S: 'static + Default + BuildHasher,
+{
+}
+
 impl<T> WellKnown for BTreeSet<T>
 where
     T: WellKnown + Eq + Ord + DeserializeOwned,
@@ -200,6 +213,8 @@ where
     const DE: &'static dyn DeserializeParam<Self> =
         &SchemaType::new(BasicType::Array).with_qualifier("set");
 }
+
+impl<T> WellKnownArray for BTreeSet<T> where T: WellKnown + Eq + Ord + DeserializeOwned {}
 
 /// Keys are intentionally restricted by [`FromStr`] in order to prevent runtime errors when dealing with keys
 /// that do not serialize to strings.
@@ -455,19 +470,51 @@ impl DeserializeParam<ByteSize> for SizeUnit {
     }
 }
 
-/// FIXME
-#[derive(Debug, Clone, Copy)]
-pub struct Csv(pub &'static str);
+/// Deserializer that supports either an array of values, or a string in which values are delimited
+/// by the specified separator.
+///
+/// # Examples
+///
+/// ```
+/// use std::{collections::HashSet, path::PathBuf};
+/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default, with = de::Delimited(","))]
+///     strings: Vec<String>,
+///     // More complex types are supported as well
+///     #[config(with = de::Delimited(":"))]
+///     paths: Vec<PathBuf>,
+///     // ...and more complex collections (here together with string -> number coercion)
+///     #[config(with = de::Delimited(";"))]
+///     ints: HashSet<u64>,
+/// }
+///
+/// let sample = smart_config::config!(
+///     "strings": ["test", "string"], // standard array value is still supported
+///     "paths": "/usr/bin:/usr/local/bin",
+///     "ints": "12;34;12",
+/// );
+/// let config: TestConfig = testing::test(sample)?;
+/// assert_eq!(config.strings.len(), 2);
+/// assert_eq!(config.strings[0], "test");
+/// assert_eq!(config.paths.len(), 2);
+/// assert_eq!(config.paths[1].as_os_str(), "/usr/local/bin");
+/// assert_eq!(config.ints, HashSet::from([12, 34]));
+/// # anyhow::Ok(())
+/// ```
+#[derive(Debug)]
+pub struct Delimited(pub &'static str);
 
-// FIXME: narrow impl to arrays etc.
-impl<T: WellKnown + DeserializeOwned> DeserializeParam<T> for Csv {
+impl<T: WellKnownArray> DeserializeParam<T> for Delimited {
     fn expecting(&self) -> SchemaType {
-        SchemaType::ANY.with_qualifier("array or comma-separated string")
+        SchemaType::ANY.with_qualifier("array or delimited string")
     }
 
     fn deserialize_param(
         &self,
-        ctx: DeserializeContext<'_>,
+        mut ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
         let Some(WithOrigin {
@@ -478,7 +525,11 @@ impl<T: WellKnown + DeserializeOwned> DeserializeParam<T> for Csv {
             return T::DE.deserialize_param(ctx, param);
         };
 
-        deserialize_string_as_array(ctx.de_options, s, self.0, origin)
+        let array_items = s
+            .split(self.0)
+            .map(|part| WithOrigin::new(Value::String(part.to_owned()), origin.clone()));
+        let array = WithOrigin::new(Value::Array(array_items.collect()), origin.clone());
+        T::DE.deserialize_param(ctx.patched(&array), param)
     }
 }
 
