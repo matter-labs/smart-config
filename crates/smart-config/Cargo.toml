@@ -26,5 +26,8 @@ assert_matches.workspace = true
 doc-comment.workspace = true
 version-sync.workspace = true
 
+[features]
+default = []
+
 [lints]
 workspace = true

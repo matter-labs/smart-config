@@ -30,7 +30,7 @@
 //!
 //! Preprocessing and merging config sources is encapsulated in [`ConfigRepository`].
 //!
-//! # Features
+//! # TL;DR
 //!
 //! - Rich, self-documenting configuration schema.
 //! - Utilizes the schema to enrich configuration sources and intelligently merge them.
@@ -40,6 +40,15 @@
 //! - Supports multiple configuration formats and programmable source priorities (e.g., `base.yml` + overrides from the
 //!   `overrides/` dir in the alphabetic order + env vars).
 //! - Rich and complete deserialization errors including locations and value origins.
+//!
+//! # Crate features
+//!
+//! ## `primitive-types`
+//!
+//! *(Off by default)*
+//!
+//! Implements deserialization for basic Ethereum types like [`H256`](primitive_types::H256) (32-byte hash)
+//! and [`U256`](primitive_types::U256) (256-bit unsigned integer).
 //!
 //! # Examples
 //!
