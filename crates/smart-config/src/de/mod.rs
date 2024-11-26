@@ -1,3 +1,39 @@
+//! Configuration deserialization logic.
+//!
+//! # How it works
+//!
+//! [`DeserializeConfig`] derive macro visits all config parameters invoking associated [`DeserializeParam`]
+//! implementations. Unlike `serde` deserialization, deserialization does not stop early on error (we want to get
+//! errors for all params). Nested / flattened configs do not use `serde` either for a couple of reasons:
+//!
+//! - To reach all params regardless of encountered errors as mentioned above
+//! - `serde` sometimes collects params in intermediate containers (e.g., in structs with `#[serde(flatten)]`
+//!   or in tagged enums), which leads to param deserialization potentially getting broken in unpredictable ways.
+//!
+//! So, each config param is deserialized in isolation from an optional [`Value`](crate::value::Value) [`WithOrigin`]
+//! encapsulated in [`DeserializeContext`].
+//!
+//! # Deserializers
+//!
+//! The default deserializer is extracted from the param type with the help of [`WellKnown`] trait.
+//! If you have a custom type defined locally which you want to use in configs, the easiest solution
+//! would be to implement `WellKnown` for it.
+//! Alternatively, it's possible to specify a custom deserializer using `#[config(with = _)]` attribute.
+//!
+//! ## Universal deserializers
+//!
+//! [`BasicType`](crate::metadata::BasicType) and [`SchemaType`](crate::metadata::SchemaType) can deserialize
+//! any param implementing [`serde::Deserialize`]. An important caveat is that these deserializers require
+//! the input `Value` to be present; otherwise, they'll fail with a "missing value" error. As such,
+//! for [`Option`]al types, it's necessary to wrap a deserializer in the [`Optional`] decorator.
+//!
+//! ## Durations and byte sizes
+//!
+//! [`TimeUnit`](crate::metadata::TimeUnit) and [`SizeUnit`](crate::metadata::SizeUnit) can deserialize [`Duration`]s
+//! and [`ByteSize`](crate::ByteSize)s, respectively. See their docs for more details.
+//!
+//! [`Duration`]: std::time::Duration
+
 use serde::de::Error as DeError;
 
 use self::deserializer::ValueDeserializer;
@@ -151,6 +187,9 @@ impl DeserializeContext<'_> {
     }
 }
 
+/// Deserializes this configuration from the provided context.
 pub trait DeserializeConfig: DescribeConfig + Sized {
+    /// Performs deserialization. If it fails, the method should return `None` and maybe add
+    /// errors to the context.
     fn deserialize_config(ctx: DeserializeContext<'_>) -> Option<Self>;
 }

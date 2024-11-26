@@ -8,6 +8,7 @@ use crate::metadata::SizeUnit;
 pub struct ByteSize(pub u64);
 
 impl ByteSize {
+    /// Creates a value with the specified unit of measurement checking for overflow.
     pub const fn checked(val: u64, unit: SizeUnit) -> Option<Self> {
         match val.checked_mul(unit.bytes_in_unit()) {
             Some(val) => Some(Self(val)),
@@ -15,6 +16,11 @@ impl ByteSize {
         }
     }
 
+    /// Creates a value with the specified unit of measurement.
+    ///
+    /// # Panics
+    ///
+    /// Panics on overflow.
     pub const fn new(val: u64, unit: SizeUnit) -> Self {
         match Self::checked(val, unit) {
             Some(size) => size,

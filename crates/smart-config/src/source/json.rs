@@ -11,10 +11,12 @@ pub struct Json {
 }
 
 impl Json {
+    /// Creates an empty JSON source with the specified name.
     pub fn empty(filename: &str) -> Self {
         Self::new(filename, serde_json::Map::default())
     }
 
+    /// Creates a source with the specified name and contents.
     pub fn new(filename: &str, object: serde_json::Map<String, serde_json::Value>) -> Self {
         let filename: Arc<str> = filename.into();
         let inner = Self::map_value(serde_json::Value::Object(object), &filename, String::new());

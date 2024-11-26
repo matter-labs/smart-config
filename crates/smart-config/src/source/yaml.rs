@@ -12,6 +12,7 @@ pub struct Yaml {
 }
 
 impl Yaml {
+    /// Creates a source with the specified name and contents.
     pub fn new(filename: &str, object: serde_yaml::Mapping) -> anyhow::Result<Self> {
         let filename: Arc<str> = filename.into();
         let inner =

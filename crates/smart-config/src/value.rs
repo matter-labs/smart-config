@@ -4,22 +4,28 @@ use std::{collections::HashMap, fmt, iter, sync::Arc};
 
 use crate::metadata::BasicType;
 
+/// Origin of a [`Value`] in configuration input.
+// TODO: brush up?
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub enum ValueOrigin {
+    /// Unknown / default origin.
     #[default]
     Unknown,
+    /// Env variable with the enclosed name.
     EnvVar(String),
-    Map {
-        map_name: Arc<str>,
-        key: String,
-    },
+    /// JSON file.
     Json {
+        /// Name of the file.
         filename: Arc<str>,
+        /// Dot-separated path in the file, like `api.http.port`.
         path: String,
     },
+    /// YAML file.
     Yaml {
+        /// Name of the file.
         filename: Arc<str>,
+        /// Dot-separated path in the file, like `api.http.port`.
         path: String,
     },
 }
@@ -29,7 +35,6 @@ impl fmt::Display for ValueOrigin {
         match self {
             Self::Unknown => formatter.write_str("unknown"),
             Self::EnvVar(name) => write!(formatter, "env variable '{name}'"),
-            Self::Map { map_name, key } => write!(formatter, "value '{key}' from {map_name}"),
             Self::Json { filename, path } => {
                 write!(formatter, "variable at '{path}' in JSON file '{filename}'")
             }
@@ -43,12 +48,18 @@ impl fmt::Display for ValueOrigin {
 /// JSON value with additional origin information.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum Value {
+    /// `null`.
     #[default]
     Null,
+    /// Boolean value.
     Bool(bool),
+    /// Numeric value.
     Number(serde_json::Number),
+    /// String value.
     String(String),
+    /// Array of values.
     Array(Vec<WithOrigin>),
+    /// Object / map of values.
     Object(Map),
 }
 
@@ -65,6 +76,7 @@ impl Value {
         })
     }
 
+    /// Attempts to convert this value to an object.
     pub fn as_object(&self) -> Option<&Map> {
         match self {
             Self::Object(map) => Some(map),
@@ -79,7 +91,9 @@ pub type Map<V = Value> = HashMap<String, WithOrigin<V>>;
 /// JSON value together with its origin.
 #[derive(Debug, Clone, Default)]
 pub struct WithOrigin<T = Value> {
+    /// Inner value.
     pub inner: T,
+    /// Origin of the value.
     pub origin: Arc<ValueOrigin>,
 }
 

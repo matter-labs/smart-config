@@ -98,7 +98,7 @@ pub struct ConfigMut<'a, C> {
 }
 
 impl<'a, C: DescribeConfig> ConfigMut<'a, C> {
-    // Gets the config prefix.
+    /// Gets the config prefix.
     pub fn prefix(&self) -> &str {
         &self.prefix
     }
@@ -114,7 +114,7 @@ impl<'a, C: DescribeConfig> ConfigMut<'a, C> {
     }
 }
 
-/// Schema for configuration. Can contain multiple configs bound to different "locations".
+/// Schema for configuration. Can contain multiple configs bound to different paths.
 #[derive(Default, Debug)]
 pub struct ConfigSchema {
     configs: HashMap<(any::TypeId, Cow<'static, str>), ConfigData>,

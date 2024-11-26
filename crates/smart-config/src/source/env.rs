@@ -54,7 +54,7 @@ impl Environment {
         self
     }
 
-    // FIXME: functionally incomplete ('' strings, interpolation, comments after vars)
+    #[doc(hidden)] // FIXME: functionally incomplete ('' strings, interpolation, comments after vars)
     pub fn from_dotenv(contents: &str) -> anyhow::Result<Self> {
         let mut map = Map::default();
         for line in contents.lines().map(str::trim) {
@@ -76,6 +76,7 @@ impl Environment {
         Ok(Self { map })
     }
 
+    /// Strips a prefix from all contained vars and returns the filtered vars.
     pub fn strip_prefix(self, prefix: &str) -> Self {
         let prefix = prefix.to_lowercase();
         let filtered = self

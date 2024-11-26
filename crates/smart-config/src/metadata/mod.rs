@@ -33,17 +33,22 @@ impl ConfigMetadata {
 /// Metadata for a specific configuration parameter.
 #[derive(Debug, Clone, Copy)]
 pub struct ParamMetadata {
+    /// Canonical param name in the config sources. Not necessarily the Rust field name!
     pub name: &'static str,
+    /// Param aliases.
     pub aliases: &'static [&'static str],
+    /// Human-readable param help parsed from the doc comment.
     pub help: &'static str,
-    /// Type with a potential `Option<_>` wrapper stripped.
+    /// Rust type of the parameter.
     pub ty: RustType,
+    #[doc(hidden)] // implementation detail
     pub deserializer: &'static dyn ObjectSafeDeserializer,
-    #[doc(hidden)] // set by derive macro
+    #[doc(hidden)] // implementation detail
     pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
 }
 
 impl ParamMetadata {
+    /// Returns the default value for the param.
     pub fn default_value(&self) -> Option<impl fmt::Debug + '_> {
         self.default_value.map(|value_fn| value_fn())
     }
@@ -69,6 +74,7 @@ impl PartialEq for RustType {
 }
 
 impl RustType {
+    /// Creates a new type.
     pub fn of<T: 'static>(name_in_code: &'static str) -> Self {
         Self {
             id: any::TypeId::of::<T>(),
@@ -80,19 +86,27 @@ impl RustType {
         self.id
     }
 
+    /// Returns the name of this type as specified in code.
     pub fn name_in_code(&self) -> &'static str {
         self.name_in_code
     }
 }
 
+/// Basic value type in the JSON object model.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub enum BasicType {
+    /// Boolean value.
     Bool,
+    /// Integer value.
     Integer,
+    /// Floating-point value.
     Float,
+    /// String.
     String,
+    /// Array of values.
     Array,
+    /// Object / map of values.
     Object,
 }
 
@@ -115,7 +129,7 @@ impl fmt::Display for BasicType {
     }
 }
 
-/// Human-readable kind for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
+/// Human-readable description for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SchemaType {
     /// `None` means that arbitrary values are accepted.
@@ -125,12 +139,14 @@ pub struct SchemaType {
 }
 
 impl SchemaType {
+    /// "Any" type.
     pub const ANY: Self = Self {
         base: None,
         qualifier: None,
         unit: None,
     };
 
+    /// Creates a new type description with the specified `base` type.
     pub const fn new(base: BasicType) -> Self {
         Self {
             base: Some(base),
@@ -138,6 +154,7 @@ impl SchemaType {
         }
     }
 
+    /// Adds a qualifier.
     pub const fn with_qualifier(self, qualifier: &'static str) -> Self {
         Self {
             qualifier: Some(qualifier),
@@ -145,6 +162,7 @@ impl SchemaType {
         }
     }
 
+    /// Adds a unit of measurement.
     pub const fn with_unit(self, unit: UnitOfMeasurement) -> Self {
         Self {
             unit: Some(unit),
@@ -173,17 +191,25 @@ impl fmt::Display for SchemaType {
 /// Mention of a nested configuration within a configuration.
 #[derive(Debug, Clone, Copy)]
 pub struct NestedConfigMetadata {
+    /// Name of the config in config sources. Empty for flattened configs. Not necessarily the Rust field name!
     pub name: &'static str,
+    /// Config metadata.
     pub meta: &'static ConfigMetadata,
 }
 
+/// Unit of time measurement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum TimeUnit {
+    /// Millisecond (0.001 seconds).
     Millis,
+    /// Base unit – second.
     Seconds,
+    /// Minute (60 seconds).
     Minutes,
+    /// Hour (3,600 seconds).
     Hours,
+    /// Day (86,400 seconds).
     Days,
     // No larger units since they are less useful and may be ambiguous (e.g., is a month 30 days? is a year 365 days or 365.25...)
 }
@@ -206,12 +232,17 @@ impl fmt::Display for TimeUnit {
     }
 }
 
+/// Unit of byte size measurement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SizeUnit {
+    /// Base unit – bytes.
     Bytes,
+    /// Binary kilobyte (aka kibibyte) = 1,024 bytes.
     KiB,
+    /// Binary megabyte (aka mibibyte) = 1,048,576 bytes.
     MiB,
+    /// Binary gigabyte (aka gibibyte) = 1,073,741,824 bytes.
     GiB,
 }
 
@@ -241,10 +272,13 @@ impl fmt::Display for SizeUnit {
     }
 }
 
+/// General unit of measurement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum UnitOfMeasurement {
+    /// Time UoM.
     Time(TimeUnit),
+    /// Byte size UoM.
     ByteSize(SizeUnit),
 }
 

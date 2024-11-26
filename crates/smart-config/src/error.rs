@@ -122,26 +122,29 @@ impl ParseError {
     }
 }
 
+/// Collection of [`ParseError`]s returned from [`ConfigParser::parse()`](crate::ConfigParser::parse()).
 #[derive(Debug, Default)]
 pub struct ParseErrors {
     errors: Vec<ParseError>,
 }
 
 impl ParseErrors {
-    #[doc(hidden)]
-    pub fn push(&mut self, err: ParseError) {
+    pub(crate) fn push(&mut self, err: ParseError) {
         self.errors.push(err);
     }
 
+    /// Iterates over the contained errors.
     pub fn iter(&self) -> impl Iterator<Item = &ParseError> + '_ {
         self.errors.iter()
     }
 
+    /// Returns the number of contained errors.
     #[allow(clippy::len_without_is_empty)] // is_empty should always return false
     pub fn len(&self) -> usize {
         self.errors.len()
     }
 
+    /// Returns a reference to the first error.
     pub fn first(&self) -> &ParseError {
         self.errors.first().expect("no errors")
     }

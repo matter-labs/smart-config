@@ -43,6 +43,7 @@ pub struct ConfigRepository<'a> {
 }
 
 impl<'a> ConfigRepository<'a> {
+    /// Creates an empty config repo based on the provided schema.
     pub fn new(schema: &'a ConfigSchema) -> Self {
         let all_prefixes_with_aliases: BTreeSet<_> = schema
             .prefixes_with_aliases()
@@ -143,6 +144,7 @@ impl<'a> ConfigRepository<'a> {
     }
 }
 
+/// Parser of configuration input in a [`ConfigRepository`].
 #[derive(Debug)]
 pub struct ConfigParser<'a, C> {
     repo: &'a ConfigRepository<'a>,
@@ -151,6 +153,7 @@ pub struct ConfigParser<'a, C> {
 }
 
 impl<C: DeserializeConfig> ConfigParser<'_, C> {
+    /// Performs parsing.
     pub fn parse(self) -> Result<C, ParseErrors> {
         let prefix = self.config_ref.prefix();
         let mut errors = ParseErrors::default();

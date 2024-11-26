@@ -28,9 +28,12 @@ use crate::{
     ByteSize,
 };
 
+/// Deserializes a parameter of the specified type.
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
+    /// Describes which parameter this deserializer is expecting.
     fn expecting(&self) -> SchemaType;
 
+    /// Performs deserialization given the context and param metadata.
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -55,11 +58,16 @@ where
     }
 }
 
+/// Parameter type with well-known [deserializer](DeserializeParam).
+///
+/// Conceptually, this means that the type is known to behave well when deserializing data from a [`Value`]
+/// (ordinarily, using [`serde::Deserialize`]).
 #[diagnostic::on_unimplemented(
     message = "`{Self}` param cannot be deserialized",
     note = "Add #[config(with = _)] attribute to specify deserializer to use"
 )]
 pub trait WellKnown: 'static {
+    /// Standard deserializer for the param.
     const DE: &'static dyn DeserializeParam<Self>;
 }
 
@@ -205,6 +213,7 @@ where
         &SchemaType::new(BasicType::Object).with_qualifier("map");
 }
 
+/// Deserializer decorator that defaults to the provided value if the input for the param is missing.
 pub struct WithDefault<T, D> {
     inner: D,
     default: fn() -> T,
@@ -220,13 +229,14 @@ impl<T: 'static, D: fmt::Debug> fmt::Debug for WithDefault<T, D> {
     }
 }
 
-impl<T: 'static, D: DeserializeParam<T>> WithDefault<T, D> {
-    pub const fn new(inner: D, default: fn() -> T) -> Self {
+impl<T: 'static, De: DeserializeParam<T>> WithDefault<T, De> {
+    /// Creates a new instance.
+    pub const fn new(inner: De, default: fn() -> T) -> Self {
         Self { inner, default }
     }
 }
 
-impl<T: 'static, D: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, D> {
+impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, De> {
     fn expecting(&self) -> SchemaType {
         self.inner.expecting()
     }
@@ -244,6 +254,8 @@ impl<T: 'static, D: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, 
     }
 }
 
+/// Deserializer decorator that wraps the output of the underlying decorator in `Some` and returns `None`
+/// if the input for the param is missing.
 #[derive(Debug)]
 pub struct Optional<De>(pub De);
 
@@ -265,6 +277,7 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
     }
 }
 
+/// Deserializer for enum tags.
 #[doc(hidden)] // Implementation detail
 #[derive(Debug)]
 pub struct TagDeserializer {
@@ -394,9 +407,12 @@ impl DeserializeParam<ByteSize> for SizeUnit {
 }
 
 /// Object-safe part of parameter deserializer. Stored in param metadata.
+#[doc(hidden)]
 pub trait ObjectSafeDeserializer: 'static + fmt::Debug + Send + Sync {
+    /// Describes which parameter this deserializer is expecting.
     fn expecting(&self) -> SchemaType;
 
+    /// Performs deserialization given the context and param metadata and wraps the output in a type-erased `Box`.
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -404,9 +420,10 @@ pub trait ObjectSafeDeserializer: 'static + fmt::Debug + Send + Sync {
     ) -> Result<Box<dyn any::Any>, ErrorWithOrigin>;
 }
 
+/// Wrapper transforming [`DeserializeParam`] to [`ObjectSafeDeserializer`].
 #[doc(hidden)]
-pub struct DeserializerWrapper<T, D> {
-    inner: D,
+pub struct DeserializerWrapper<T, De> {
+    inner: De,
     _ty: PhantomData<fn(T)>,
 }
 
@@ -419,8 +436,8 @@ impl<T, D: fmt::Debug> fmt::Debug for DeserializerWrapper<T, D> {
     }
 }
 
-impl<T: 'static, D: DeserializeParam<T>> DeserializerWrapper<T, D> {
-    pub const fn new(inner: D) -> Self {
+impl<T: 'static, De: DeserializeParam<T>> DeserializerWrapper<T, De> {
+    pub const fn new(inner: De) -> Self {
         Self {
             inner,
             _ty: PhantomData,
@@ -428,7 +445,7 @@ impl<T: 'static, D: DeserializeParam<T>> DeserializerWrapper<T, D> {
     }
 }
 
-impl<T: 'static, D: DeserializeParam<T>> ObjectSafeDeserializer for DeserializerWrapper<T, D> {
+impl<T: 'static, De: DeserializeParam<T>> ObjectSafeDeserializer for DeserializerWrapper<T, De> {
     fn expecting(&self) -> SchemaType {
         self.inner.expecting()
     }
