@@ -66,7 +66,7 @@ impl Environment {
             })?;
             let variable_value = variable_value.trim_matches('"');
             map.insert(
-                name.to_owned(),
+                name.to_lowercase(),
                 WithOrigin {
                     inner: variable_value.to_owned(),
                     origin: Arc::new(ValueOrigin::EnvVar(name.into())),
@@ -75,47 +75,20 @@ impl Environment {
         }
         Ok(Self { map })
     }
+
+    pub fn strip_prefix(self, prefix: &str) -> Self {
+        let prefix = prefix.to_lowercase();
+        let filtered = self
+            .map
+            .into_iter()
+            .filter_map(|(name, value)| Some((name.strip_prefix(&prefix)?.to_owned(), value)));
+        Self {
+            map: filtered.collect(),
+        }
+    }
 }
 
 impl ConfigSource for Environment {
-    fn into_contents(self) -> ConfigContents {
-        ConfigContents::KeyValue(self.map)
-    }
-}
-
-/// Generic key–value configuration source.
-#[derive(Debug)]
-pub struct KeyValueMap {
-    map: Map<String>,
-}
-
-impl KeyValueMap {
-    /// Creates a new key–value map with the specified name and contents.
-    pub fn new<K, V>(name: &str, entries: impl IntoIterator<Item = (K, V)>) -> Self
-    where
-        K: Into<String>,
-        V: Into<String>,
-    {
-        let map_name: Arc<str> = name.into();
-        let map = entries
-            .into_iter()
-            .map(|(key, value)| {
-                let key = key.into();
-                let value = WithOrigin {
-                    inner: value.into(),
-                    origin: Arc::new(ValueOrigin::Map {
-                        map_name: map_name.clone(),
-                        key: key.clone(),
-                    }),
-                };
-                (key, value)
-            })
-            .collect();
-        Self { map }
-    }
-}
-
-impl ConfigSource for KeyValueMap {
     fn into_contents(self) -> ConfigContents {
         ConfigContents::KeyValue(self.map)
     }
@@ -131,18 +104,24 @@ mod tests {
     fn parsing_dotenv_contents() {
         let env = Environment::from_dotenv(
             r#"
-            TEST=what
-            OTHER="test string"
+            APP_TEST=what
+            APP_OTHER="test string"
 
             # Overwriting vars should be supported
-            TEST=42
+            APP_TEST=42
             "#,
         )
         .unwrap();
 
         assert_eq!(env.map.len(), 2, "{:?}", env.map);
-        assert_eq!(env.map["TEST"].inner, "42");
-        assert_matches!(env.map["TEST"].origin.as_ref(), ValueOrigin::EnvVar(name) if name == "TEST");
-        assert_eq!(env.map["OTHER"].inner, "test string");
+        assert_eq!(env.map["app_test"].inner, "42");
+        assert_matches!(env.map["app_test"].origin.as_ref(), ValueOrigin::EnvVar(name) if name == "APP_TEST");
+        assert_eq!(env.map["app_other"].inner, "test string");
+
+        let env = env.strip_prefix("app_");
+        assert_eq!(env.map.len(), 2, "{:?}", env.map);
+        assert_eq!(env.map["test"].inner, "42");
+        assert_matches!(env.map["test"].origin.as_ref(), ValueOrigin::EnvVar(name) if name == "APP_TEST");
+        assert_eq!(env.map["other"].inner, "test string");
     }
 }

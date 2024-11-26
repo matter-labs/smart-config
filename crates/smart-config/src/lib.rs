@@ -6,7 +6,7 @@ use self::metadata::ConfigMetadata;
 pub use self::{
     de::DeserializeConfig,
     error::{ParseError, ParseErrors},
-    source::{ConfigRepository, ConfigSource, Environment, Json, KeyValueMap, Yaml},
+    source::{ConfigRepository, ConfigSource, Environment, Json, Yaml},
     types::ByteSize,
 };
 
@@ -15,6 +15,7 @@ mod error;
 pub mod metadata;
 mod schema;
 mod source;
+pub mod testing;
 #[cfg(test)]
 mod testonly;
 mod types;

@@ -80,7 +80,9 @@ impl<T: DeserializeOwned> DeserializeParam<T> for SchemaType {
             (deserializer.value().basic_type(), self.base)
         {
             let types_match = actual_type == expected_type
-                || (expected_type == BasicType::Float && actual_type == BasicType::Integer);
+                || (expected_type == BasicType::Float && actual_type == BasicType::Integer)
+                // FIXME: probably worth to get rid of
+                || (expected_type == BasicType::Array && actual_type == BasicType::String);
             if !types_match {
                 return Err(deserializer.invalid_type(expected_type.as_str()));
             }

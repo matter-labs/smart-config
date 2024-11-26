@@ -1,10 +1,6 @@
 use std::{collections::BTreeSet, marker::PhantomData, mem, sync::Arc};
 
-pub use self::{
-    env::{Environment, KeyValueMap},
-    json::Json,
-    yaml::Yaml,
-};
+pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
     metadata::{BasicType, ConfigMetadata},
@@ -128,7 +124,6 @@ impl<'a> ConfigRepository<'a> {
     }
 
     // TODO: probably makes sense to make public
-    #[cfg(test)]
     pub(crate) fn merged(&self) -> &WithOrigin {
         &self.merged
     }
