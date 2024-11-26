@@ -11,6 +11,7 @@ macro_rules! impl_well_known_hash {
     ($($ty:ident),+) => {
         $(
         /// Accepts a hex string with an optional `0x` prefix.
+        #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
         impl WellKnown for primitive_types::$ty {
             const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::String)
             .with_qualifier("hex string with optional 0x prefix");
@@ -52,6 +53,7 @@ macro_rules! impl_well_known_uint {
         $(
         /// Accepts a hex string with an **mandatory** `0x` prefix. This prefix is required to clearly signal hex encoding
         /// so that `"34"` doesn't get mistaken for decimal 34.
+        #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
         impl WellKnown for primitive_types::$ty {
             const DE: &'static dyn DeserializeParam<Self> = &HexUintDeserializer;
         }

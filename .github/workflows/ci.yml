@@ -77,7 +77,7 @@ jobs:
         run: |
           cargo clean --doc && \
           cargo rustdoc -p smart-config-derive --all-features && \
-          cargo rustdoc -p smart-config --all-features
+          cargo rustdoc -p smart-config --all-features -- --cfg docsrs
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4

@@ -113,6 +113,7 @@
 
 // Documentation settings
 #![doc(html_root_url = "https://docs.rs/smart-config/0.1.0")]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[doc(hidden)] // used in the derive macro
 pub use once_cell::sync::Lazy;
