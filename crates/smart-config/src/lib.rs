@@ -2,7 +2,7 @@
 //!
 //! # Overview
 //!
-//! The task being solved by the library is merging configuration input from a variety of prioritized [sources](ConfigSource)
+//! The task solved by the library is merging configuration input from a variety of prioritized [sources](ConfigSource)
 //! (JSON and YAML files, env variables, command-line args etc.) and converting this input to strongly typed
 //! representation (i.e., config structs or enums). As with other config systems, config input follows the JSON object model
 //! (see [`Value`](value::Value)), with each value enriched with its [origin](value::ValueOrigin) (e.g., a path in a specific JSON file,
@@ -19,6 +19,8 @@
 //! Multiple configurations are collected into a global [`ConfigSchema`]. Each configuration is *mounted* at a specific path.
 //! E.g., if a large app has an HTTP server component, it may be mounted at `api.http`. Multiple config types may be mounted
 //! at the same path (e.g., flattened configs); conversely, a single config type may be mounted at multiple places.
+//! As a result, there doesn't need to be a god object uniting all configs in the app; they may be dynamically collected and deserialized
+//! inside relevant components.
 //!
 //! This information provides rich human-readable info about configs. It also assists when preprocessing and merging config inputs.
 //! For example, env vars are a flat string -> string map; with the help of a schema, it's possible to:
