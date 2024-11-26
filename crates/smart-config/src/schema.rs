@@ -91,6 +91,7 @@ impl<'a> ConfigRef<'a> {
 }
 
 /// Mutable reference to a specific configuration inside [`ConfigSchema`].
+#[derive(Debug)]
 pub struct ConfigMut<'a, C> {
     prefix: String,
     pub(crate) data: &'a mut ConfigData,
@@ -148,6 +149,7 @@ impl ConfigSchema {
     /// # Errors
     ///
     /// Returns an error if the configuration is not registered or has more than one mount point.
+    #[allow(clippy::missing_panics_doc)] // false positive
     pub fn single(&self, metadata: &'static ConfigMetadata) -> anyhow::Result<ConfigRef<'_>> {
         let prefixes: Vec<_> = self.locate(metadata).take(2).collect();
         match prefixes.as_slice() {
@@ -175,6 +177,7 @@ impl ConfigSchema {
     /// # Errors
     ///
     /// Returns an error if the configuration is not registered or has more than one mount point.
+    #[allow(clippy::missing_panics_doc)] // false positive
     pub fn single_mut<C: DescribeConfig>(&mut self) -> anyhow::Result<ConfigMut<'_, C>> {
         let metadata = C::describe_config();
         let mut it = self.locate(metadata);
@@ -189,18 +192,18 @@ impl ConfigSchema {
                 "configuration `{}` is registered in at least 2 locations: {first_prefix:?}, {second_prefix:?}",
                 metadata.ty.name_in_code()
             );
-        } else {
-            drop(it);
-            let prefix = first_prefix.to_owned();
-            Ok(ConfigMut {
-                data: self
-                    .configs
-                    .get_mut(&(metadata.ty.id(), prefix.clone().into()))
-                    .unwrap(),
-                prefix,
-                _config: PhantomData,
-            })
         }
+
+        drop(it);
+        let prefix = first_prefix.to_owned();
+        Ok(ConfigMut {
+            data: self
+                .configs
+                .get_mut(&(metadata.ty.id(), prefix.clone().into()))
+                .unwrap(),
+            prefix,
+            _config: PhantomData,
+        })
     }
 
     /// Inserts a new configuration type at the specified place.
@@ -257,9 +260,11 @@ impl ConfigSchema {
         self.configs.insert((type_id, prefix), data);
     }
 
-    /// Writes help about this schema to the provided writer.
+    /// Writes help about this schema to the provided writer. `param_filter` can be used to filter displayed parameters.
     ///
-    /// `param_filter` can be used to filter displayed parameters.
+    /// # Errors
+    ///
+    /// Propagates I/O errors should they occur when writing to the writer.
     pub fn write_help(
         &self,
         writer: &mut impl io::Write,

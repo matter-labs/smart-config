@@ -13,9 +13,10 @@ use syn::{
 };
 
 pub(crate) fn wrap_in_option(val: Option<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
-    match val {
-        Some(val) => quote!(::core::option::Option::Some(#val)),
-        None => quote!(::core::option::Option::None),
+    if let Some(val) = val {
+        quote!(::core::option::Option::Some(#val))
+    } else {
+        quote!(::core::option::Option::None)
     }
 }
 
@@ -99,7 +100,7 @@ pub(crate) enum DefaultValue {
 }
 
 impl DefaultValue {
-    pub fn instance(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
+    pub(crate) fn instance(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
         match self {
             Self::DefaultTrait => quote_spanned!(span=> ::core::default::Default::default()),
             Self::Path(path) => quote_spanned!(span=> #path()),
@@ -186,12 +187,12 @@ impl ConfigFieldAttrs {
         }
 
         Ok(Self {
-            nest,
-            with,
             rename,
             aliases,
             default,
             flatten,
+            nest,
+            with,
         })
     }
 }
@@ -240,7 +241,7 @@ impl ConfigField {
         })
     }
 
-    pub fn from_tag(
+    pub(crate) fn from_tag(
         cr: &proc_macro2::TokenStream,
         tag: &LitStr,
         variants: impl Iterator<Item = String>,
@@ -266,7 +267,7 @@ impl ConfigField {
         }
     }
 
-    pub fn is_option(ty: &Type) -> bool {
+    pub(crate) fn is_option(ty: &Type) -> bool {
         let Type::Path(TypePath { path, .. }) = ty else {
             return false;
         };
@@ -283,7 +284,7 @@ impl ConfigField {
         angle_bracketed.args.len() == 1
     }
 
-    pub fn param_name(&self) -> String {
+    pub(crate) fn param_name(&self) -> String {
         self.attrs
             .rename
             .clone()
@@ -293,7 +294,7 @@ impl ConfigField {
             })
     }
 
-    pub fn default_fn(&self) -> Option<proc_macro2::TokenStream> {
+    pub(crate) fn default_fn(&self) -> Option<proc_macro2::TokenStream> {
         let name_span = self.name.span();
         self.attrs
             .default
@@ -368,21 +369,20 @@ impl ConfigContainerAttrs {
 
 #[derive(Debug)]
 pub(crate) struct ConfigEnumVariant {
-    pub attrs: ConfigVariantAttrs,
-    pub name: Ident,
-    pub fields: Vec<ConfigField>,
+    pub(crate) attrs: ConfigVariantAttrs,
+    pub(crate) name: Ident,
+    pub(crate) fields: Vec<ConfigField>,
 }
 
 impl ConfigEnumVariant {
-    pub fn name(&self) -> String {
+    pub(crate) fn name(&self) -> String {
         self.attrs
             .rename
             .as_ref()
-            .map(LitStr::value)
-            .unwrap_or_else(|| self.name.to_string())
+            .map_or_else(|| self.name.to_string(), LitStr::value)
     }
 
-    pub fn expected_variants(&self) -> impl Iterator<Item = String> + '_ {
+    pub(crate) fn expected_variants(&self) -> impl Iterator<Item = String> + '_ {
         iter::once(self.name()).chain(self.attrs.aliases.iter().map(LitStr::value))
     }
 }
@@ -397,7 +397,7 @@ pub(crate) enum ConfigContainerFields {
 }
 
 impl ConfigContainerFields {
-    pub fn all_fields(&self) -> Vec<&ConfigField> {
+    pub(crate) fn all_fields(&self) -> Vec<&ConfigField> {
         match self {
             Self::Struct(fields) => fields.iter().collect(),
             Self::Enum { variants, .. } => variants
@@ -417,7 +417,7 @@ pub(crate) struct ConfigContainer {
 }
 
 impl ConfigContainer {
-    pub fn new(raw: &DeriveInput) -> syn::Result<Self> {
+    pub(crate) fn new(raw: &DeriveInput) -> syn::Result<Self> {
         if raw.generics.type_params().count() != 0
             || raw.generics.const_params().count() != 0
             || raw.generics.lifetimes().count() != 0
@@ -433,7 +433,7 @@ impl ConfigContainer {
                 ConfigContainerFields::Struct(Self::extract_struct_fields(data)?)
             }
             Data::Enum(data) => Self::extract_enum_fields(data, &attrs)?,
-            _ => {
+            Data::Union(_) => {
                 let message = "#[derive(DescribeConfig)] can only be placed on structs or enums";
                 return Err(syn::Error::new_spanned(raw, message));
             }
@@ -536,7 +536,7 @@ impl ConfigContainer {
         Ok(ConfigContainerFields::Enum { tag, variants })
     }
 
-    pub fn cr(&self) -> proc_macro2::TokenStream {
+    pub(crate) fn cr(&self) -> proc_macro2::TokenStream {
         if let Some(cr) = &self.attrs.cr {
             quote!(#cr)
         } else {

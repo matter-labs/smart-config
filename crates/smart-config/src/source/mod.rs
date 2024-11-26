@@ -6,7 +6,7 @@ use crate::{
     metadata::{BasicType, ConfigMetadata},
     schema::{Alias, ConfigRef, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
-    DeserializeConfig, ParseErrors,
+    DeserializeConfig, ParseError, ParseErrors,
 };
 
 #[macro_use]
@@ -67,6 +67,7 @@ impl<'a> ConfigRepository<'a> {
     }
 
     /// Extends this environment with a new configuration source.
+    #[must_use]
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
         match source.into_contents() {
             ConfigContents::KeyValue(mut kv) => {
@@ -154,22 +155,27 @@ pub struct ConfigParser<'a, C> {
 
 impl<C: DeserializeConfig> ConfigParser<'_, C> {
     /// Performs parsing.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors encountered during parsing. This list of errors is as full as possible (i.e.,
+    /// there is no short-circuiting on encountering an error).
     pub fn parse(self) -> Result<C, ParseErrors> {
         let prefix = self.config_ref.prefix();
+        let metadata = self.config_ref.data.metadata;
         let mut errors = ParseErrors::default();
         let context = DeserializeContext::new(
             &self.repo.de_options,
             &self.repo.merged,
             prefix.to_owned(),
-            self.config_ref.data.metadata,
+            metadata,
             &mut errors,
         );
 
         C::deserialize_config(context).ok_or_else(|| {
-            assert!(
-                errors.len() > 0,
-                "Internal error: deserialization failed, but no errors were provided"
-            );
+            if errors.len() == 0 {
+                errors.push(ParseError::generic(prefix.to_owned(), metadata));
+            }
             errors
         })
     }

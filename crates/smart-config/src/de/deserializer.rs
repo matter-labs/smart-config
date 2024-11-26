@@ -53,20 +53,20 @@ pub(super) struct ValueDeserializer<'a> {
 }
 
 impl<'a> ValueDeserializer<'a> {
-    pub fn new(value: &'a WithOrigin, options: &'a DeserializerOptions) -> Self {
+    pub(super) fn new(value: &'a WithOrigin, options: &'a DeserializerOptions) -> Self {
         Self { value, options }
     }
 
-    pub fn value(&self) -> &'a Value {
+    pub(super) fn value(&self) -> &'a Value {
         &self.value.inner
     }
 
-    pub fn enrich_err(&self, err: serde_json::Error) -> ErrorWithOrigin {
+    pub(super) fn enrich_err(&self, err: serde_json::Error) -> ErrorWithOrigin {
         ErrorWithOrigin::new(err, self.value.origin.clone())
     }
 
     #[cold]
-    pub fn invalid_type(&self, expected: &str) -> ErrorWithOrigin {
+    pub(super) fn invalid_type(&self, expected: &str) -> ErrorWithOrigin {
         let actual = match self.value() {
             Value::Null => de::Unexpected::Unit,
             Value::Bool(value) => de::Unexpected::Bool(*value),
@@ -235,9 +235,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
             _ => return Err(self.invalid_type("string or object with single key")),
         };
 
-        if self.options.coerce_shouting_variant_names
-            && variant.chars().any(|char| char.is_uppercase())
-        {
+        if self.options.coerce_shouting_variant_names && variant.chars().any(char::is_uppercase) {
             let lc_variant = variant.to_lowercase();
             let expected_variant = variants
                 .iter()
@@ -398,9 +396,7 @@ struct VariantDeserializer<'a> {
 
 impl VariantDeserializer<'_> {
     fn origin(&self) -> &Arc<ValueOrigin> {
-        self.value
-            .map(|val| &val.origin)
-            .unwrap_or(&self.parent_origin)
+        self.value.map_or(&self.parent_origin, |val| &val.origin)
     }
 }
 

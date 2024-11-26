@@ -13,6 +13,11 @@ pub struct Yaml {
 
 impl Yaml {
     /// Creates a source with the specified name and contents.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input doesn't conform to the JSON object model; e.g., if it has objects / maps
+    /// with array or object keys.
     pub fn new(filename: &str, object: serde_yaml::Mapping) -> anyhow::Result<Self> {
         let filename: Arc<str> = filename.into();
         let inner =
@@ -33,7 +38,7 @@ impl Yaml {
         })
     }
 
-    fn map_number(number: serde_yaml::Number, path: &str) -> anyhow::Result<serde_json::Number> {
+    fn map_number(number: &serde_yaml::Number, path: &str) -> anyhow::Result<serde_json::Number> {
         Ok(if let Some(number) = number.as_u64() {
             number.into()
         } else if let Some(number) = number.as_i64() {
@@ -54,7 +59,7 @@ impl Yaml {
         let inner = match value {
             serde_yaml::Value::Null => Value::Null,
             serde_yaml::Value::Bool(value) => Value::Bool(value),
-            serde_yaml::Value::Number(value) => Value::Number(Self::map_number(value, &path)?),
+            serde_yaml::Value::Number(value) => Value::Number(Self::map_number(&value, &path)?),
             serde_yaml::Value::String(value) => Value::String(value),
             serde_yaml::Value::Sequence(items) => Value::Array(
                 items
@@ -139,10 +144,10 @@ array:
 
     #[test]
     fn unsupported_key() {
-        let yaml = r#"
+        let yaml = r"
 array:
     - [12, 34]: bogus
-        "#;
+        ";
         let yaml: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
         let serde_yaml::Value::Mapping(yaml) = yaml else {
             unreachable!();

@@ -55,7 +55,7 @@ pub(crate) struct NestedConfig {
 }
 
 impl NestedConfig {
-    pub fn default_nested() -> Self {
+    pub(crate) fn default_nested() -> Self {
         Self {
             simple_enum: SimpleEnum::First,
             other_int: 23,
@@ -169,7 +169,7 @@ pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result
     let ctx = DeserializeContext::new(
         &de_options,
         val,
-        "".into(),
+        String::new(),
         C::describe_config(),
         &mut errors,
     );

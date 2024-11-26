@@ -1,4 +1,10 @@
+//! Procedural macros for `smart-config`.
+//!
+//! All macros in this crate are re-exported from the `smart-config` crate. See its docs for more details
+//! and the examples of usage.
+
 #![recursion_limit = "128"]
+#![allow(missing_docs)] // Adding docs here would interfere with docs in the main crate
 
 extern crate proc_macro;
 

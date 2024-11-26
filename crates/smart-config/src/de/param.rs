@@ -4,7 +4,7 @@ use std::{
     any,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
-    hash::Hash,
+    hash::{BuildHasher, Hash},
     marker::PhantomData,
     num::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
@@ -34,6 +34,10 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     fn expecting(&self) -> SchemaType;
 
     /// Performs deserialization given the context and param metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a param cannot be deserialized, e.g. if it has an incorrect type.
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -177,9 +181,10 @@ where
 // Heterogeneous tuples don't look like a good idea to mark as well-known because they wouldn't look well-structured
 // (it'd be better to define either multiple params or a struct param).
 
-impl<T> WellKnown for HashSet<T>
+impl<T, S> WellKnown for HashSet<T, S>
 where
     T: WellKnown + Eq + Hash + DeserializeOwned,
+    S: 'static + Default + BuildHasher,
 {
     const DE: &'static dyn DeserializeParam<Self> =
         &SchemaType::new(BasicType::Array).with_qualifier("set");
@@ -195,10 +200,11 @@ where
 
 /// Keys are intentionally restricted by [`FromStr`] in order to prevent runtime errors when dealing with keys
 /// that do not serialize to strings.
-impl<K, V> WellKnown for HashMap<K, V>
+impl<K, V, S> WellKnown for HashMap<K, V, S>
 where
     K: 'static + DeserializeOwned + Eq + Hash + FromStr,
     V: WellKnown + DeserializeOwned,
+    S: 'static + Default + BuildHasher,
 {
     const DE: &'static dyn DeserializeParam<Self> =
         &SchemaType::new(BasicType::Object).with_qualifier("map");
@@ -225,7 +231,7 @@ impl<T: 'static, D: fmt::Debug> fmt::Debug for WithDefault<T, D> {
             .debug_struct("WithDefault")
             .field("inner", &self.inner)
             .field("type", &any::type_name::<T>())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

@@ -22,11 +22,12 @@ impl ByteSize {
     ///
     /// Panics on overflow.
     pub const fn new(val: u64, unit: SizeUnit) -> Self {
-        match Self::checked(val, unit) {
-            Some(size) => size,
-            None => compile_panic!(
+        if let Some(size) = Self::checked(val, unit) {
+            size
+        } else {
+            compile_panic!(
                 val => fmt::<u64>(), " ", unit.plural() => clip(16, ""), " does not fit into a `u64` value"
-            ),
+            );
         }
     }
 }

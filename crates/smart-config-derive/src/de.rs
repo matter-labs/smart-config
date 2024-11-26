@@ -11,14 +11,14 @@ impl ConfigField {
     /// Returns `Option<_>`.
     fn deserialize_param(&self, index: usize) -> proc_macro2::TokenStream {
         let name_span = self.name.span();
-        if !self.attrs.nest {
-            quote_spanned! {name_span=>
-                ctx.deserialize_param(#index)
-            }
-        } else {
+        if self.attrs.nest {
             let default_fn = wrap_in_option(self.default_fn());
             quote_spanned! {name_span=>
                 ctx.deserialize_nested_config(#index, #default_fn)
+            }
+        } else {
+            quote_spanned! {name_span=>
+                ctx.deserialize_param(#index)
             }
         }
     }

@@ -155,6 +155,7 @@ impl SchemaType {
     }
 
     /// Adds a qualifier.
+    #[must_use]
     pub const fn with_qualifier(self, qualifier: &'static str) -> Self {
         Self {
             qualifier: Some(qualifier),
@@ -163,6 +164,7 @@ impl SchemaType {
     }
 
     /// Adds a unit of measurement.
+    #[must_use]
     pub const fn with_unit(self, unit: UnitOfMeasurement) -> Self {
         Self {
             unit: Some(unit),
@@ -276,9 +278,9 @@ impl fmt::Display for SizeUnit {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum UnitOfMeasurement {
-    /// Time UoM.
+    /// Unit of time measurement.
     Time(TimeUnit),
-    /// Byte size UoM.
+    /// Unit of byte size measurement.
     ByteSize(SizeUnit),
 }
 

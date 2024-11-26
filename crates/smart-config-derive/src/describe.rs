@@ -49,7 +49,7 @@ impl ConfigField {
         &self,
         cr: &proc_macro2::TokenStream,
         meta_mod: &proc_macro2::TokenStream,
-    ) -> syn::Result<proc_macro2::TokenStream> {
+    ) -> proc_macro2::TokenStream {
         let name_span = self.name.span();
         let aliases = self.attrs.aliases.iter();
         let help = &self.docs;
@@ -74,7 +74,7 @@ impl ConfigField {
         );
         let deserializer = self.deserializer(cr);
 
-        Ok(quote_spanned! {name_span=> {
+        quote_spanned! {name_span=> {
             const _: () = {
                 #meta_mod::validation::assert_param_name(#param_name);
                 #(#aliases_validation)*
@@ -88,7 +88,7 @@ impl ConfigField {
                 deserializer: const { &#cr::de::DeserializerWrapper::<#ty, _>::new(#deserializer) },
                 default_value: #default_value,
             }
-        }})
+        }}
     }
 
     fn describe_nested_config(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
@@ -109,7 +109,7 @@ impl ConfigField {
 }
 
 impl ConfigContainer {
-    fn derive_describe_config(&self) -> syn::Result<proc_macro2::TokenStream> {
+    fn derive_describe_config(&self) -> proc_macro2::TokenStream {
         let cr = self.cr();
         let meta_mod = quote!(#cr::metadata);
         let name = &self.name;
@@ -123,7 +123,7 @@ impl ConfigContainer {
             }
             None
         });
-        let mut params = params.collect::<syn::Result<Vec<_>>>()?;
+        let mut params: Vec<_> = params.collect();
 
         if let ConfigContainerFields::Enum { tag, variants } = &self.fields {
             // Add the tag field description
@@ -134,7 +134,7 @@ impl ConfigContainer {
                 .iter()
                 .flat_map(ConfigEnumVariant::expected_variants);
             let tag = ConfigField::from_tag(&cr, tag, expected_variants, default.as_deref());
-            params.push(tag.describe_param(&cr, &meta_mod)?);
+            params.push(tag.describe_param(&cr, &meta_mod));
         }
 
         let nested_configs = all_fields.iter().filter_map(|field| {
@@ -144,7 +144,7 @@ impl ConfigContainer {
             None
         });
 
-        Ok(quote! {
+        quote! {
             impl #cr::DescribeConfig for #name {
                 fn describe_config() -> &'static #meta_mod::ConfigMetadata {
                     static METADATA_CELL: #cr::Lazy<#meta_mod::ConfigMetadata> = #cr::Lazy::new(|| #meta_mod::ConfigMetadata {
@@ -156,7 +156,7 @@ impl ConfigContainer {
                     &METADATA_CELL
                 }
             }
-        })
+        }
     }
 
     fn default_fields(fields: &[ConfigField]) -> syn::Result<Vec<proc_macro2::TokenStream>> {
@@ -210,7 +210,7 @@ impl ConfigContainer {
     }
 
     fn derive_all(&self) -> syn::Result<proc_macro2::TokenStream> {
-        let describe_impl = self.derive_describe_config()?;
+        let describe_impl = self.derive_describe_config();
         let default_impl = if self.attrs.derive_default {
             Some(self.derive_default()?)
         } else {

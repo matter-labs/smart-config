@@ -18,7 +18,7 @@ use crate::{
         EnumConfig, NestedConfig, SimpleEnum, TestParam,
     },
     value::{Pointer, Value, ValueOrigin},
-    ByteSize, DescribeConfig, Environment,
+    ByteSize, DescribeConfig, Environment, ParseError,
 };
 
 #[test]
@@ -243,7 +243,7 @@ fn parsing_compound_config_with_multiple_errors() {
     assert_eq!(
         errors
             .iter()
-            .filter_map(|err| err.param())
+            .filter_map(ParseError::param)
             .filter(|param| param.name == "renamed")
             .count(),
         2,

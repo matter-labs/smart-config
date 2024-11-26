@@ -2,7 +2,7 @@
 
 use std::{fmt, sync::Arc};
 
-use serde::de;
+use serde::{de, de::Error};
 
 use crate::{
     metadata::{ConfigMetadata, ParamMetadata},
@@ -94,6 +94,16 @@ impl std::error::Error for ParseError {
 }
 
 impl ParseError {
+    pub(crate) fn generic(path: String, config: &'static ConfigMetadata) -> Self {
+        Self {
+            inner: serde_json::Error::custom("unspecified error deserializing configuration"),
+            path,
+            origin: Arc::default(),
+            config,
+            location_in_config: None,
+        }
+    }
+
     /// Returns the wrapped error.
     pub fn inner(&self) -> &serde_json::Error {
         &self.inner
@@ -145,6 +155,7 @@ impl ParseErrors {
     }
 
     /// Returns a reference to the first error.
+    #[allow(clippy::missing_panics_doc)] // false positive
     pub fn first(&self) -> &ParseError {
         self.errors.first().expect("no errors")
     }

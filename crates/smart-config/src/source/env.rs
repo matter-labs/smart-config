@@ -39,6 +39,7 @@ impl Environment {
     }
 
     /// Adds additional variables to this environment. This is useful if the added vars don't have the necessary prefix.
+    #[must_use]
     pub fn with_vars(mut self, var_names: &[&str]) -> Self {
         let defined_vars = var_names.iter().filter_map(|&name| {
             let value = env::var_os(name)?.into_string().ok()?;
@@ -77,6 +78,7 @@ impl Environment {
     }
 
     /// Strips a prefix from all contained vars and returns the filtered vars.
+    #[must_use]
     pub fn strip_prefix(self, prefix: &str) -> Self {
         let prefix = prefix.to_lowercase();
         let filtered = self
