@@ -1,0 +1,87 @@
+name: Rust
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  merge_group:
+
+env:
+  CARGO_TERM_COLOR: "always"
+  CARGO_INCREMENTAL: "0"
+  RUSTC_WRAPPER: "sccache"
+  SCCACHE_GHA_ENABLED: "true"
+  # Minimum supported Rust version.
+  msrv: 1.70.0
+  # Nightly Rust necessary for building docs.
+  nightly: nightly-2024-08-01
+
+jobs:
+  build-msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.msrv }}
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Build libraries
+        run: cargo build --workspace --lib --all-features
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt, clippy, rust-src
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo test --workspace --all-features --all-targets
+      - name: Run doc tests
+        run: cargo test --workspace --all-features --doc
+
+  document:
+    needs:
+      - build
+      - build-msrv
+    if: github.event_name == 'push' && github.ref_type == 'branch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.nightly }}
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.4
+
+      - name: Build docs
+        run: |
+          cargo clean --doc && \
+          cargo rustdoc -p smart-config-derive --all-features && \
+          cargo rustdoc -p smart-config --all-features
+
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: target/doc
+          single-commit: true
