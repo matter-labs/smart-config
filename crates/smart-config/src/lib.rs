@@ -30,7 +30,8 @@
 //!
 //! Preprocessing and merging config sources is encapsulated in [`ConfigRepository`].
 
-#![warn(missing_docs)]
+// Documentation settings
+#![doc(html_root_url = "https://docs.rs/smart-config/0.1.0")]
 
 #[doc(hidden)] // used in the derive macro
 pub use once_cell::sync::Lazy;
@@ -61,3 +62,6 @@ pub trait DescribeConfig: 'static {
     /// Provides the config description.
     fn describe_config() -> &'static ConfigMetadata;
 }
+
+#[cfg(doctest)]
+doc_comment::doctest!("../README.md");

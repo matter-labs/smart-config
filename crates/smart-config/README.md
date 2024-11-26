@@ -28,6 +28,136 @@ For example, env vars are a flat string -> string map; with the help of a schema
 - Correctly nest vars (e.g., transform the `API_HTTP_PORT` var into a `port` var inside `http` object inside `api` object)
 - Transform value types from strings to expected types.
 
+## Usage
+
+Add this to your `Crate.toml`:
+
+```toml
+[dependencies]
+smart-config = "0.1.0"
+```
+
+### Declaring configurations
+
+```rust
+use std::{collections::{HashMap, HashSet}, path::PathBuf, time::Duration};
+use serde::Deserialize;
+use smart_config::{de::Optional, metadata::*, ByteSize, DescribeConfig, DeserializeConfig};
+
+#[derive(Debug, Deserialize)]
+enum CustomEnum {
+    First,
+    Second,
+}
+
+/// Configuration with type params of serveral types.
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(derive(Default))] // derive according to default values for params
+pub struct TestConfig {
+    /// Port to bind to.
+    #[config(default_t = 8080)]
+    pub port: u16,
+    #[config(default_t = "test".into())]
+    pub name: String,
+    #[config(default_t = "./test".into())]
+    pub path: PathBuf,
+    
+    // Basic collections are supported as well:
+    #[config(default)]
+    pub vec: Vec<u64>,
+    #[config(default)]
+    pub set: HashSet<String>,
+    #[config(default)]
+    pub map: HashMap<String, u64>,
+    
+    // For custom types, you can specify a custom deserializer. The deserializer below
+    // expects a string and works for all types implementing `serde::Deserialize`.
+    #[config(with = BasicType::String)]
+    #[config(default_t = CustomEnum::First)]
+    pub custom: CustomEnum,
+    
+    // There is dedicated support for durations and byte sizes.
+    #[config(default_t = Duration::from_millis(100), with = TimeUnit::Millis)]
+    pub short_dur: Duration,
+    #[config(with = Optional(SizeUnit::MiB))]
+    #[config(default_t = Some(ByteSize::new(128, SizeUnit::MiB)))]
+    pub memory_size_mb: Option<ByteSize>,
+  
+    // Configuration nesting and flattening are supported:
+    #[config(nest)]
+    pub nested: NestedConfig,
+    #[config(flatten)]
+    pub flattened: NestedConfig,
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(derive(Default))]
+pub struct NestedConfig {
+    #[config(default)]
+    pub other_int: u32,
+}
+```
+
+### Testing config deserialization
+
+```rust
+use smart_config::{config, testing, DescribeConfig, DeserializeConfig};
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+pub struct TestConfig {
+    #[config(default_t = 8080)]
+    pub port: u16,
+    #[config(default_t = "test".into())]
+    pub name: String,
+}
+
+let input = config!("port": 3000, "name": "app");
+// `test_complete` ensures that all params are mentioned in the input
+let config = testing::test_complete::<TestConfig>(input).unwrap();
+assert_eq!(config.port, 3000);
+assert_eq!(config.name, "app");
+```
+
+### Deserializing config
+
+```rust
+use smart_config::{
+    config, ConfigSchema, ConfigRepository, DescribeConfig, DeserializeConfig, Yaml, Environment,
+};
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+pub struct TestConfig {
+    pub port: u16,
+    #[config(default_t = "test".into())]
+    pub name: String,
+    #[config(default_t = true)]
+    pub tracing: bool,
+}
+
+let schema = ConfigSchema::default().insert::<TestConfig>("test");
+// Assume we use two config sources: a YAML file and env vars,
+// the latter having higher priority.
+let yaml = r"
+test:
+  port: 4000
+  name: app
+";
+let yaml = Yaml::new("test.yml", serde_yaml::from_str(yaml)?)?;
+let env = Environment::from_iter("APP_", [("APP_TEST_PORT", "8000")]);
+// Add both sources to a repo.
+let repo = ConfigRepository::new(&schema).with(yaml).with(env);
+// Get the parser for the config.
+let parser = repo.single::<TestConfig>()?;
+let config = parser.parse()?;
+assert_eq!(config.port, 8_000); // from the env var
+assert_eq!(config.name, "app"); // from YAML
+assert!(config.tracing); // from the default value
+
+anyhow::Ok(())
+```
+
+See crate docs for more examples.
+
 ## License
 
 Distributed under the terms of either
