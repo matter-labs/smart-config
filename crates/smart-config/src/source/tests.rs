@@ -6,8 +6,8 @@ use super::*;
 use crate::{
     schema::Alias,
     testonly::{
-        test_deserialize, CompoundConfig, ConfigWithNesting, DefaultingConfig, EnumConfig,
-        NestedConfig, SimpleEnum,
+        extract_env_var_name, extract_json_name, test_deserialize, CompoundConfig,
+        ConfigWithNesting, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum,
     },
 };
 
@@ -283,12 +283,12 @@ fn merging_configs() {
     assert_eq!(merged["int"].inner, Value::Number(123_u64.into()));
     assert_matches!(
         merged["int"].origin.as_ref(),
-        ValueOrigin::Json { filename, .. } if filename.as_ref() == "base.json"
+        ValueOrigin::Path { source, .. } if extract_json_name(source) == "base.json"
     );
     assert_eq!(merged["bool"].inner, Value::Bool(false));
     assert_matches!(
         merged["bool"].origin.as_ref(),
-        ValueOrigin::Json { filename, .. } if filename.as_ref() == "overrides.json"
+        ValueOrigin::Path { source, .. } if extract_json_name(source) == "overrides.json"
     );
     assert_matches!(
         &merged["array"].inner,
@@ -296,7 +296,7 @@ fn merging_configs() {
     );
     assert_matches!(
         merged["array"].origin.as_ref(),
-        ValueOrigin::Json { filename, .. } if filename.as_ref() == "overrides.json"
+        ValueOrigin::Path { source, .. } if extract_json_name(source) == "overrides.json"
     );
 
     assert_matches!(
@@ -307,14 +307,14 @@ fn merging_configs() {
     assert_eq!(nested_int.inner, Value::Number(123_u64.into()));
     assert_matches!(
         nested_int.origin.as_ref(),
-        ValueOrigin::Json { filename, .. } if filename.as_ref() == "overrides.json"
+        ValueOrigin::Path { source, .. } if extract_json_name(source) == "overrides.json"
     );
 
     let nested_str = merged["nested"].get(Pointer("string")).unwrap();
     assert_eq!(nested_str.inner, Value::String("???".into()));
     assert_matches!(
         nested_str.origin.as_ref(),
-        ValueOrigin::Json { filename, .. } if filename.as_ref() == "base.json"
+        ValueOrigin::Path { source, .. } if extract_json_name(source) == "base.json"
     );
 }
 
@@ -364,7 +364,7 @@ fn using_env_config_overrides() {
 
     let enum_value = repo.merged().get(Pointer("test.nested.renamed")).unwrap();
     assert_eq!(enum_value.inner, Value::String("second".into()));
-    assert_matches!(enum_value.origin.as_ref(), ValueOrigin::EnvVar(_));
+    extract_env_var_name(&enum_value.origin);
 
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 321);

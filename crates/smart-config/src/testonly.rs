@@ -8,13 +8,14 @@ use std::{
     time::Duration,
 };
 
+use assert_matches::assert_matches;
 use serde::Deserialize;
 
 use crate::{
     de::{self, DeserializeContext, DeserializeParam, DeserializerOptions},
     metadata::{BasicType, SchemaType, SizeUnit, TimeUnit},
     source::ConfigContents,
-    value::{Value, WithOrigin},
+    value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
 
@@ -197,6 +198,26 @@ pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, Pars
         Some(config) => Ok(config),
         None => Err(errors),
     }
+}
+
+pub(crate) fn extract_json_name(source: &ValueOrigin) -> &str {
+    if let ValueOrigin::File {
+        name,
+        format: FileFormat::Json,
+    } = source
+    {
+        name
+    } else {
+        panic!("unexpected source, expected JSON file: {source:?}");
+    }
+}
+
+pub(crate) fn extract_env_var_name(source: &ValueOrigin) -> &str {
+    let ValueOrigin::Path { path, source } = source else {
+        panic!("unexpected source: {source:?}");
+    };
+    assert_matches!(source.as_ref(), ValueOrigin::EnvVars);
+    path
 }
 
 #[cfg(test)]

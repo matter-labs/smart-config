@@ -137,6 +137,7 @@ mod tests {
     #[test]
     fn complete_testing_for_env_vars() {
         let env = Environment::from_dotenv(
+            "test.env",
             r#"
             APP_INT=123
             APP_FLOAT=8.4

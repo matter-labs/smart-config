@@ -134,7 +134,7 @@ impl fmt::Display for BasicType {
 pub struct SchemaType {
     /// `None` means that arbitrary values are accepted.
     pub(crate) base: Option<BasicType>,
-    pub(crate) qualifier: Option<&'static str>,
+    pub(crate) qualifier: Option<&'static str>, // FIXME: Cow
     pub(crate) unit: Option<UnitOfMeasurement>,
 }
 

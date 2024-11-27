@@ -65,10 +65,8 @@ fn describing_complex_types() {
         .iter()
         .find(|param| param.name == "array")
         .unwrap();
-    assert_eq!(
-        array_param.deserializer.expecting().base,
-        Some(BasicType::Array)
-    );
+    let expecting = array_param.deserializer.expecting();
+    assert_eq!(expecting.base, None);
 
     let assumed_param = metadata
         .params

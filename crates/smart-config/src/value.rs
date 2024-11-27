@@ -4,29 +4,57 @@ use std::{collections::HashMap, fmt, iter, sync::Arc};
 
 use crate::metadata::BasicType;
 
+/// Supported file formats.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum FileFormat {
+    /// JSON file.
+    Json,
+    /// YAML file.
+    Yaml,
+    /// `.env` file.
+    Dotenv,
+}
+
+impl fmt::Display for FileFormat {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Json => "JSON",
+            Self::Yaml => "YAML",
+            Self::Dotenv => ".env",
+        })
+    }
+}
+
 /// Origin of a [`Value`] in configuration input.
-// TODO: brush up?
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub enum ValueOrigin {
     /// Unknown / default origin.
     #[default]
-    Unknown,
-    /// Env variable with the enclosed name.
-    EnvVar(String),
-    /// JSON file.
-    Json {
-        /// Name of the file.
-        filename: Arc<str>,
-        /// Dot-separated path in the file, like `api.http.port`.
+    Unknown, // FIXME: remove?
+    /// Environment variables.
+    EnvVars,
+    /// File source.
+    File {
+        /// Filename; may not correspond to a real filesystem path.
+        name: String,
+        /// File format.
+        format: FileFormat,
+    },
+    /// Path from a structured source.
+    Path {
+        /// Source of structured data, e.g. a JSON file.
+        source: Arc<Self>,
+        /// Dot-separated path in the source, like `api.http.port`.
         path: String,
     },
-    /// YAML file.
-    Yaml {
-        /// Name of the file.
-        filename: Arc<str>,
-        /// Dot-separated path in the file, like `api.http.port`.
-        path: String,
+    /// Synthetic value.
+    Synthetic {
+        /// Original value source.
+        source: Arc<Self>,
+        /// Human-readable description of the transform.
+        transform: String,
     },
 }
 
@@ -34,12 +62,19 @@ impl fmt::Display for ValueOrigin {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unknown => formatter.write_str("unknown"),
-            Self::EnvVar(name) => write!(formatter, "env variable '{name}'"),
-            Self::Json { filename, path } => {
-                write!(formatter, "variable at '{path}' in JSON file '{filename}'")
+            Self::EnvVars => formatter.write_str("env variables"),
+            Self::File { name, format } => {
+                write!(formatter, "{format} file '{name}'")
             }
-            Self::Yaml { filename, path } => {
-                write!(formatter, "variable at '{path}' in YAML file '{filename}'")
+            Self::Path { source, path } => {
+                if matches!(source.as_ref(), ValueOrigin::EnvVars) {
+                    write!(formatter, "env variable '{path}'")
+                } else {
+                    write!(formatter, "{source} -> path '{path}'")
+                }
+            }
+            Self::Synthetic { source, transform } => {
+                write!(formatter, "{source} -> {transform}")
             }
         }
     }
@@ -163,6 +198,12 @@ impl WithOrigin {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct Pointer<'a>(pub &'a str);
+
+impl fmt::Display for Pointer<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
 
 impl<'a> Pointer<'a> {
     pub(crate) fn segments(self) -> impl Iterator<Item = &'a str> {

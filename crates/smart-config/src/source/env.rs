@@ -3,12 +3,22 @@ use std::{env, sync::Arc};
 use anyhow::Context as _;
 
 use super::{ConfigContents, ConfigSource};
-use crate::value::{Map, ValueOrigin, WithOrigin};
+use crate::value::{FileFormat, Map, ValueOrigin, WithOrigin};
 
 /// Configuration sourced from environment variables.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Environment {
+    origin: Arc<ValueOrigin>,
     map: Map<String>,
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self {
+            origin: Arc::new(ValueOrigin::EnvVars),
+            map: Map::new(),
+        }
+    }
 }
 
 impl Environment {
@@ -23,29 +33,38 @@ impl Environment {
         K: AsRef<str> + Into<String>,
         V: Into<String>,
     {
+        let origin = Arc::new(ValueOrigin::EnvVars);
         let map = env.into_iter().filter_map(|(name, value)| {
             let retained_name = name.as_ref().strip_prefix(prefix)?.to_lowercase();
             Some((
                 retained_name,
                 WithOrigin {
                     inner: value.into(),
-                    origin: Arc::new(ValueOrigin::EnvVar(name.into())),
+                    origin: Arc::new(ValueOrigin::Path {
+                        source: origin.clone(),
+                        path: name.into(),
+                    }),
                 },
             ))
         });
-        Self { map: map.collect() }
+        let map = map.collect();
+        Self { origin, map }
     }
 
     /// Adds additional variables to this environment. This is useful if the added vars don't have the necessary prefix.
     #[must_use]
     pub fn with_vars(mut self, var_names: &[&str]) -> Self {
+        let origin = Arc::new(ValueOrigin::EnvVars);
         let defined_vars = var_names.iter().filter_map(|&name| {
             let value = env::var_os(name)?.into_string().ok()?;
             Some((
                 name.to_owned(),
                 WithOrigin {
                     inner: value,
-                    origin: Arc::new(ValueOrigin::EnvVar(name.to_owned())),
+                    origin: Arc::new(ValueOrigin::Path {
+                        source: origin.clone(),
+                        path: name.to_owned(),
+                    }),
                 },
             ))
         });
@@ -54,7 +73,11 @@ impl Environment {
     }
 
     #[doc(hidden)] // FIXME: functionally incomplete ('' strings, interpolation, comments after vars)
-    pub fn from_dotenv(contents: &str) -> anyhow::Result<Self> {
+    pub fn from_dotenv(filename: &str, contents: &str) -> anyhow::Result<Self> {
+        let origin = Arc::new(ValueOrigin::File {
+            name: filename.to_owned(),
+            format: FileFormat::Dotenv,
+        });
         let mut map = Map::default();
         for line in contents.lines().map(str::trim) {
             if line.is_empty() || line.starts_with('#') {
@@ -68,11 +91,14 @@ impl Environment {
                 name.to_lowercase(),
                 WithOrigin {
                     inner: variable_value.to_owned(),
-                    origin: Arc::new(ValueOrigin::EnvVar(name.into())),
+                    origin: Arc::new(ValueOrigin::Path {
+                        source: origin.clone(),
+                        path: name.into(),
+                    }),
                 },
             );
         }
-        Ok(Self { map })
+        Ok(Self { origin, map })
     }
 
     /// Strips a prefix from all contained vars and returns the filtered vars.
@@ -84,12 +110,17 @@ impl Environment {
             .into_iter()
             .filter_map(|(name, value)| Some((name.strip_prefix(&prefix)?.to_owned(), value)));
         Self {
+            origin: self.origin,
             map: filtered.collect(),
         }
     }
 }
 
 impl ConfigSource for Environment {
+    fn origin(&self) -> Arc<ValueOrigin> {
+        self.origin.clone()
+    }
+
     fn into_contents(self) -> ConfigContents {
         ConfigContents::KeyValue(self.map)
     }
@@ -104,6 +135,7 @@ mod tests {
     #[test]
     fn parsing_dotenv_contents() {
         let env = Environment::from_dotenv(
+            "test.env",
             r#"
             APP_TEST=what
             APP_OTHER="test string"
@@ -116,13 +148,21 @@ mod tests {
 
         assert_eq!(env.map.len(), 2, "{:?}", env.map);
         assert_eq!(env.map["app_test"].inner, "42");
-        assert_matches!(env.map["app_test"].origin.as_ref(), ValueOrigin::EnvVar(name) if name == "APP_TEST");
+        let origin = &env.map["app_test"].origin;
+        let ValueOrigin::Path { path, source } = origin.as_ref() else {
+            panic!("unexpected origin: {origin:?}");
+        };
+        assert_eq!(path, "APP_TEST");
+        assert_matches!(
+            source.as_ref(),
+            ValueOrigin::File { name, format: FileFormat::Dotenv } if name == "test.env"
+        );
         assert_eq!(env.map["app_other"].inner, "test string");
 
         let env = env.strip_prefix("app_");
         assert_eq!(env.map.len(), 2, "{:?}", env.map);
         assert_eq!(env.map["test"].inner, "42");
-        assert_matches!(env.map["test"].origin.as_ref(), ValueOrigin::EnvVar(name) if name == "APP_TEST");
+        assert_matches!(env.map["test"].origin.as_ref(), ValueOrigin::Path { path, .. } if path == "APP_TEST");
         assert_eq!(env.map["other"].inner, "test string");
     }
 }

@@ -12,6 +12,7 @@ use std::{
     },
     path::PathBuf,
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 
@@ -24,7 +25,7 @@ use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
     metadata::{BasicType, ParamMetadata, SchemaType, SizeUnit, TimeUnit},
-    value::{Value, WithOrigin},
+    value::{Value, ValueOrigin, WithOrigin},
     ByteSize,
 };
 
@@ -525,10 +526,18 @@ impl<T: WellKnownArray> DeserializeParam<T> for Delimited {
             return T::DE.deserialize_param(ctx, param);
         };
 
-        let array_items = s
-            .split(self.0)
-            .map(|part| WithOrigin::new(Value::String(part.to_owned()), origin.clone()));
-        let array = WithOrigin::new(Value::Array(array_items.collect()), origin.clone());
+        let array_origin = Arc::new(ValueOrigin::Synthetic {
+            source: origin.clone(),
+            transform: format!("{:?}-delimited string", self.0),
+        });
+        let array_items = s.split(self.0).enumerate().map(|(i, part)| {
+            let item_origin = ValueOrigin::Path {
+                source: array_origin.clone(),
+                path: i.to_string(),
+            };
+            WithOrigin::new(Value::String(part.to_owned()), Arc::new(item_origin))
+        });
+        let array = WithOrigin::new(Value::Array(array_items.collect()), array_origin);
         T::DE.deserialize_param(ctx.patched(&array), param)
     }
 }

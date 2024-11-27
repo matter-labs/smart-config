@@ -29,6 +29,8 @@ pub enum ConfigContents {
 
 /// Source of configuration parameters that can be added to a [`ConfigRepository`].
 pub trait ConfigSource {
+    /// Returns the origin of the entire source (e.g., [`ValueOrigin::File`] for JSON and YAML files).
+    fn origin(&self) -> Arc<ValueOrigin>;
     /// Converts this source into config contents.
     fn into_contents(self) -> ConfigContents;
 }
@@ -69,10 +71,12 @@ impl<'a> ConfigRepository<'a> {
     /// Extends this environment with a new configuration source.
     #[must_use]
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
+        let source_origin = source.origin();
         match source.into_contents() {
             ConfigContents::KeyValue(mut kv) => {
                 for &object_ptr in self.all_prefixes_with_aliases.iter().rev() {
-                    self.merged.copy_key_value_entries(object_ptr, &mut kv);
+                    self.merged
+                        .copy_key_value_entries(object_ptr, &source_origin, &mut kv);
                 }
             }
             ConfigContents::Hierarchical(map) => {
@@ -228,7 +232,12 @@ impl WithOrigin {
         }
     }
 
-    fn copy_key_value_entries(&mut self, at: Pointer<'_>, entries: &mut Map<String>) {
+    fn copy_key_value_entries(
+        &mut self,
+        at: Pointer<'_>,
+        source_origin: &Arc<ValueOrigin>,
+        entries: &mut Map<String>,
+    ) {
         let matching_entries: Vec<_> = Self::take_matching_kv_entries(entries, at)
             .into_iter()
             .map(|(key, value)| {
@@ -245,7 +254,11 @@ impl WithOrigin {
         if matching_entries.is_empty() {
             return;
         }
-        self.ensure_object(at, |_| Arc::default())
+        let origin = Arc::new(ValueOrigin::Synthetic {
+            source: source_origin.clone(),
+            transform: format!("nesting kv entries for '{at}'"),
+        });
+        self.ensure_object(at, |_| origin.clone())
             .extend(matching_entries);
     }
 
@@ -280,11 +293,18 @@ impl WithOrigin {
         let map = self
             .get(target_prefix)
             .and_then(|val| val.inner.as_object());
+        let Some((alias_map, alias_origin)) = self
+            .get(alias.prefix)
+            .and_then(|val| Some((val.inner.as_object()?, &val.origin)))
+        else {
+            return; // No values at the alias
+        };
+
         let new_entries = alias.param_names.iter().filter_map(|&param_name| {
             if map.map_or(false, |map| map.contains_key(param_name)) {
                 None // Variable is already set
             } else {
-                let value = self.get(Pointer(&alias.prefix.join(param_name))).cloned()?;
+                let value = alias_map.get(param_name).cloned()?;
                 Some((param_name.to_owned(), value))
             }
         });
@@ -293,8 +313,14 @@ impl WithOrigin {
             return;
         }
 
-        // TODO: use better origin
-        self.ensure_object(target_prefix, |_| Arc::new(ValueOrigin::Unknown))
+        let origin = Arc::new(ValueOrigin::Synthetic {
+            source: alias_origin.clone(),
+            transform: format!(
+                "copy of '{}' to '{target_prefix}' per aliasing rules",
+                alias.prefix
+            ),
+        });
+        self.ensure_object(target_prefix, |_| origin.clone())
             .extend(new_entries);
     }
 
