@@ -130,11 +130,14 @@ impl fmt::Display for BasicType {
 }
 
 /// Human-readable description for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct SchemaType {
     /// `None` means that arbitrary values are accepted.
     pub(crate) base: Option<BasicType>,
-    pub(crate) qualifier: Option<&'static str>, // FIXME: Cow
+    qualifier: Option<&'static str>,
+    // Ideally, we'd want to use `Cow<'static, str>` here. It doesn't work because it cannot be dropped
+    // in const contexts, which is necessary to implement `with_qualifier()`.
+    dyn_qualifier: Option<String>,
     pub(crate) unit: Option<UnitOfMeasurement>,
 }
 
@@ -143,6 +146,7 @@ impl SchemaType {
     pub const ANY: Self = Self {
         base: None,
         qualifier: None,
+        dyn_qualifier: None,
         unit: None,
     };
 
@@ -156,20 +160,27 @@ impl SchemaType {
 
     /// Adds a qualifier.
     #[must_use]
-    pub const fn with_qualifier(self, qualifier: &'static str) -> Self {
-        Self {
-            qualifier: Some(qualifier),
-            ..self
-        }
+    pub const fn with_qualifier(mut self, qualifier: &'static str) -> Self {
+        self.qualifier = Some(qualifier);
+        self
+    }
+
+    #[must_use]
+    pub(crate) fn with_dyn_qualifier(mut self, qualifier: String) -> Self {
+        self.qualifier = None;
+        self.dyn_qualifier = Some(qualifier);
+        self
     }
 
     /// Adds a unit of measurement.
     #[must_use]
-    pub const fn with_unit(self, unit: UnitOfMeasurement) -> Self {
-        Self {
-            unit: Some(unit),
-            ..self
-        }
+    pub const fn with_unit(mut self, unit: UnitOfMeasurement) -> Self {
+        self.unit = Some(unit);
+        self
+    }
+
+    fn qualifier(&self) -> Option<&str> {
+        self.dyn_qualifier.as_deref().or(self.qualifier)
     }
 }
 
@@ -180,7 +191,7 @@ impl fmt::Display for SchemaType {
         } else {
             formatter.write_str("any")?;
         }
-        if let Some(qualifier) = self.qualifier {
+        if let Some(qualifier) = self.qualifier() {
             write!(formatter, ", {qualifier}")?;
         }
         if let Some(unit) = self.unit {

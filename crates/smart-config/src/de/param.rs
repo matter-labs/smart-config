@@ -86,7 +86,7 @@ pub trait WellKnownArray: WellKnown {}
 /// This deserializer assumes that the value is required. Hence, optional params should be wrapped in [`Optional`] to work correctly.
 impl<T: DeserializeOwned> DeserializeParam<T> for SchemaType {
     fn expecting(&self) -> SchemaType {
-        *self
+        self.clone()
     }
 
     fn deserialize_param(
@@ -510,7 +510,7 @@ pub struct Delimited(pub &'static str);
 
 impl<T: WellKnownArray> DeserializeParam<T> for Delimited {
     fn expecting(&self) -> SchemaType {
-        SchemaType::ANY.with_qualifier("array or delimited string")
+        SchemaType::ANY.with_dyn_qualifier(format!("array or {:?}-delimited string", self.0))
     }
 
     fn deserialize_param(

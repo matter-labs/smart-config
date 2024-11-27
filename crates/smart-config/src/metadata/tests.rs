@@ -67,6 +67,10 @@ fn describing_complex_types() {
         .unwrap();
     let expecting = array_param.deserializer.expecting();
     assert_eq!(expecting.base, None);
+    assert_eq!(
+        expecting.qualifier().unwrap(),
+        "array or \",\"-delimited string"
+    );
 
     let assumed_param = metadata
         .params
