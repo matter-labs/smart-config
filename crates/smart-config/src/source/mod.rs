@@ -35,7 +35,48 @@ pub trait ConfigSource {
     fn into_contents(self) -> ConfigContents;
 }
 
-/// Configuration repository containing zero or more configuration sources.
+/// Configuration repository containing zero or more [configuration sources](ConfigSource).
+/// Sources are preprocessed and merged according to the provided [`ConfigSchema`].
+///
+/// # Type coercion
+///
+/// When processing [`ConfigSource`]s, values can be *coerced* depending on the [expected type](BasicType)
+/// at the corresponding location [as indicated](crate::de::DeserializeParam::expecting()) by the param deserializer.
+/// Currently, coercion only happens if the original value is a string.
+///
+/// - If the expected type is [`BasicType::Integer`], [`BasicType::Float`], or [`BasicType::Bool`],
+///   the number / Boolean is [parsed](str::parse()) from the string. If parsing succeeds, the value is replaced.
+/// - If the expected type is [`BasicType::Array`] or [`BasicType::Object`], then the original string
+///   is considered to be a JSON array / object. If JSON parsing succeeds, and the parsed value has the expected shape,
+///   then it replaces the original value.
+///
+/// Coercion is not performed if the param deserializer doesn't specify an expected type.
+///
+/// This means that it's possible to supply values for structured params from env vars without much hassle:
+///
+/// ```rust
+/// # use std::collections::HashMap;
+/// use smart_config::{testing, DescribeConfig, DeserializeConfig, Environment};
+///
+/// #[derive(Debug, DescribeConfig, DeserializeConfig)]
+/// struct CoercingConfig {
+///     flag: bool,
+///     ints: Vec<u64>,
+///     map: HashMap<String, u32>,
+/// }
+///
+/// let env = Environment::from_iter("APP_", [
+///     ("APP_FLAG", "true"),
+///     ("APP_INTS", "[2, 3, 5]"),
+///     ("APP_MAP", r#"{ "value": 5 }"#),
+/// ]);
+/// // `testing` functions create a repository internally
+/// let config: CoercingConfig = testing::test(env)?;
+/// assert!(config.flag);
+/// assert_eq!(config.ints, [2, 3, 5]);
+/// assert_eq!(config.map, HashMap::from([("value".into(), 5)]));
+/// # anyhow::Ok(())
+/// ```
 #[derive(Debug, Clone)]
 pub struct ConfigRepository<'a> {
     schema: &'a ConfigSchema,
