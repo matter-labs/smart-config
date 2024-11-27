@@ -4,10 +4,12 @@ use std::{
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
     time::Duration,
 };
 
+use anyhow::Context as _;
 use assert_matches::assert_matches;
 use serde::Deserialize;
 
@@ -126,6 +128,23 @@ pub(crate) enum DefaultingEnumConfig {
     },
 }
 
+#[derive(Debug, Default, PartialEq, Deserialize)]
+#[serde(transparent)]
+pub(crate) struct MapOrString(pub HashMap<String, u64>);
+
+impl FromStr for MapOrString {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let entries = s.split(',').map(|entry| {
+            let (key, value) = entry.split_once('=').context("incorrect entry")?;
+            let value: u64 = value.parse().context("invalid value")?;
+            anyhow::Ok((key.to_owned(), value))
+        });
+        entries.collect::<anyhow::Result<_>>().map(Self)
+    }
+}
+
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ConfigWithComplexTypes {
@@ -145,6 +164,8 @@ pub(crate) struct ConfigWithComplexTypes {
     pub memory_size_mb: Option<ByteSize>,
     #[config(default, with = de::Delimited(":"))]
     pub paths: Vec<PathBuf>,
+    #[config(default, with = de::OrString)]
+    pub map_or_string: MapOrString,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {

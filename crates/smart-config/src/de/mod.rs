@@ -41,7 +41,7 @@ pub use self::{
     deserializer::DeserializerOptions,
     param::{
         Delimited, DeserializeParam, DeserializerWrapper, ObjectSafeDeserializer, Optional,
-        TagDeserializer, WellKnown, WithDefault,
+        OrString, TagDeserializer, WellKnown, WithDefault,
     },
 };
 use crate::{

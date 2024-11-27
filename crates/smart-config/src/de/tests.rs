@@ -15,7 +15,7 @@ use crate::{
     testonly::{
         extract_env_var_name, test_deserialize, test_deserialize_missing, wrap_into_value,
         CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig,
-        DefaultingEnumConfig, EnumConfig, NestedConfig, SimpleEnum, TestParam,
+        DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig, SimpleEnum, TestParam,
     },
     value::{Pointer, Value, ValueOrigin},
     ByteSize, DescribeConfig, Environment, ParseError,
@@ -354,6 +354,7 @@ fn parsing_complex_types() {
             path: "./test".into(),
             memory_size_mb: Some(ByteSize::new(128, SizeUnit::MiB)),
             paths: vec![],
+            map_or_string: MapOrString::default(),
         }
     );
 
@@ -365,6 +366,7 @@ fn parsing_complex_types() {
         "path": "/mnt",
         "paths": "/usr/bin:/usr/local/bin",
         "memory_size_mb": 64,
+        "map_or_string": "test=1,other=2",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -378,6 +380,7 @@ fn parsing_complex_types() {
             path: "/mnt".into(),
             memory_size_mb: Some(ByteSize::new(64, SizeUnit::MiB)),
             paths: vec!["/usr/bin".into(), "/usr/local/bin".into()],
+            map_or_string: MapOrString(HashMap::from([("test".into(), 1), ("other".into(), 2),])),
         }
     );
 
@@ -389,6 +392,10 @@ fn parsing_complex_types() {
         "short_dur": 1000,
         "memory_size_mb": (),
         "paths": ["/usr/bin", "/mnt"],
+        "map_or_string": serde_json::json!({
+            "test": 42,
+            "other": 23,
+        }),
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -402,6 +409,7 @@ fn parsing_complex_types() {
             path: "./test".into(),
             memory_size_mb: None,
             paths: vec!["/usr/bin".into(), "/mnt".into()],
+            map_or_string: MapOrString(HashMap::from([("test".into(), 42), ("other".into(), 23),])),
         }
     );
 }
@@ -429,6 +437,25 @@ fn error_parsing_array_from_string() {
         ValueOrigin::Path { source, path }
             if path == "array" && matches!(source.as_ref(), ValueOrigin::File { .. })
     );
+}
+
+#[test]
+fn error_parsing_string_or_complex_value() {
+    let json = config!("array": [4, 5], "map_or_string": "??");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "map_or_string");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("incorrect entry"), "{inner}");
+
+    let json = config!("array": [4, 5], "map_or_string": "test=what");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "map_or_string");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid value"), "{inner}");
 }
 
 #[test]

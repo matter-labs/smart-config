@@ -542,6 +542,80 @@ impl<T: WellKnownArray> DeserializeParam<T> for Delimited {
     }
 }
 
+/// Deserializer that supports parsing either from a default format (usually an object or array) via [`Deserialize`](serde::Deserialize),
+/// or from string via [`FromStr`].
+///
+/// # Examples
+///
+/// ```
+/// # use std::{collections::HashSet, str::FromStr};
+/// use anyhow::Context as _;
+/// # use serde::Deserialize;
+/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(Deserialize)]
+/// #[serde(transparent)]
+/// struct MySet(HashSet<u64>);
+///
+/// impl FromStr for MySet {
+///     type Err = anyhow::Error;
+///
+///     fn from_str(s: &str) -> Result<Self, Self::Err> {
+///         s.split(',')
+///             .map(|part| part.trim().parse().context("invalid value"))
+///             .collect::<anyhow::Result<_>>()
+///             .map(Self)
+///     }
+/// }
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(with = de::OrString)]
+///     value: MySet,
+/// }
+///
+/// let sample = smart_config::config!("value": "2, 3, 2");
+/// let config: TestConfig = testing::test(sample)?;
+/// assert_eq!(config.value.0, HashSet::from([2, 3]));
+///
+/// // Parsing from array works, too
+/// let sample = smart_config::config!("value": [2, 3, 2]);
+/// let config: TestConfig = testing::test(sample)?;
+/// assert_eq!(config.value.0, HashSet::from([2, 3]));
+/// # anyhow::Ok(())
+/// ```
+#[derive(Debug)]
+pub struct OrString;
+
+impl<T> DeserializeParam<T> for OrString
+where
+    T: DeserializeOwned + FromStr,
+    T::Err: fmt::Display,
+{
+    fn expecting(&self) -> SchemaType {
+        SchemaType::ANY.with_qualifier("string ot structured value")
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        let Some(WithOrigin {
+            inner: Value::String(s),
+            origin,
+        }) = ctx.current_value()
+        else {
+            return SchemaType::ANY.deserialize_param(ctx, param);
+        };
+
+        T::from_str(s).map_err(|err| {
+            let err = serde_json::Error::custom(err);
+            ErrorWithOrigin::new(err, origin.clone())
+        })
+    }
+}
+
 /// Object-safe part of parameter deserializer. Stored in param metadata.
 #[doc(hidden)]
 pub trait ObjectSafeDeserializer: 'static + fmt::Debug + Send + Sync {
