@@ -5,9 +5,11 @@ use assert_matches::assert_matches;
 use super::*;
 use crate::{
     schema::Alias,
+    testing,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, CompoundConfig,
         ConfigWithNesting, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum,
+        ValueCoercingConfig,
     },
 };
 
@@ -379,4 +381,70 @@ fn using_env_config_overrides() {
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 555);
     assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
+}
+
+#[test]
+fn parsing_complex_param() {
+    let json = config!(
+        "param": serde_json::json!({
+            "int": 4,
+            "string": "??",
+            "repeated": ["first"],
+        }),
+        "set": [1, 2, 3],
+    );
+    let config: ValueCoercingConfig = testing::test(json).unwrap();
+    assert_eq!(config.param.int, 4);
+    assert_eq!(config.param.string, "??");
+    assert_eq!(config.param.repeated, HashSet::from([SimpleEnum::First]));
+    assert_eq!(config.set, HashSet::from([1, 2, 3]));
+
+    let env = Environment::from_iter(
+        "",
+        [
+            (
+                "PARAM",
+                r#"{ "int": 3, "string": "!!", "repeated": ["second"] }"#,
+            ),
+            ("SET", "[2, 3]"),
+        ],
+    );
+    let config: ValueCoercingConfig = testing::test(env).unwrap();
+    assert_eq!(config.param.int, 3);
+    assert_eq!(config.param.string, "!!");
+    assert_eq!(config.param.repeated, HashSet::from([SimpleEnum::Second]));
+    assert_eq!(config.set, HashSet::from([2, 3]));
+}
+
+#[test]
+fn parsing_complex_param_errors() {
+    let env = Environment::from_iter("", [("PARAM", r#"{ "int": "???" }"#)]);
+    let err = testing::test::<ValueCoercingConfig>(env).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "param");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid digit"), "{inner}");
+    assert_eq!(
+        err.origin().to_string(),
+        "env variable 'PARAM' -> parsed JSON string -> path 'int'"
+    );
+
+    let env = Environment::from_iter(
+        "APP_",
+        [
+            ("APP_PARAM", r#"{ "int": 42, "string": "!" }"#),
+            ("APP_SET", "[1, false]"),
+        ],
+    );
+    let err = testing::test::<ValueCoercingConfig>(env).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "set");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid type"), "{inner}");
+    assert_eq!(
+        err.origin().to_string(),
+        "env variable 'APP_SET' -> parsed JSON string -> path '1'"
+    );
 }

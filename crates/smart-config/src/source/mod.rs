@@ -122,7 +122,7 @@ impl<'a> ConfigRepository<'a> {
         // since any aliases were copied on the previous step.
         for (prefix, config_data) in self.schema.iter() {
             if let Some(config_map) = self.merged.get_mut(prefix) {
-                config_map.normalize_value_types(config_data.metadata);
+                config_map.coerce_value_types(config_data.metadata);
             }
         }
 
@@ -325,7 +325,8 @@ impl WithOrigin {
     }
 
     /// This is necessary to prevent `deserialize_any` errors
-    fn normalize_value_types(&mut self, metadata: &ConfigMetadata) {
+    // TODO: log coercion errors
+    fn coerce_value_types(&mut self, metadata: &ConfigMetadata) {
         let Value::Object(map) = &mut self.inner else {
             unreachable!("expected an object due to previous preprocessing steps");
         };
@@ -347,6 +348,20 @@ impl WithOrigin {
                     Some(BasicType::Integer | BasicType::Float) => {
                         if let Ok(number) = str.parse::<serde_json::Number>() {
                             value.inner = Value::Number(number);
+                        }
+                    }
+                    Some(ty @ (BasicType::Array | BasicType::Object)) => {
+                        let Ok(val) = serde_json::from_str::<serde_json::Value>(str) else {
+                            continue;
+                        };
+                        if (val.is_array() && ty == BasicType::Array)
+                            || (val.is_object() && ty == BasicType::Object)
+                        {
+                            let root_origin = Arc::new(ValueOrigin::Synthetic {
+                                source: value.origin.clone(),
+                                transform: "parsed JSON string".into(),
+                            });
+                            *value = Json::map_value(val, &root_origin, String::new());
                         }
                     }
                     _ => { /* Do nothing */ }

@@ -75,7 +75,7 @@ impl Json {
         debug_assert!(matches!(&self.inner.inner, Value::Object(_)));
     }
 
-    fn map_value(
+    pub(crate) fn map_value(
         value: serde_json::Value,
         file_origin: &Arc<ValueOrigin>,
         path: String,

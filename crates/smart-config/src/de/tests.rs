@@ -13,9 +13,10 @@ use crate::{
     de::DeserializerOptions,
     metadata::SizeUnit,
     testonly::{
-        extract_env_var_name, test_deserialize, test_deserialize_missing, wrap_into_value,
-        CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig,
-        DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig, SimpleEnum, TestParam,
+        extract_env_var_name, extract_json_name, test_deserialize, test_deserialize_missing,
+        wrap_into_value, CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting,
+        DefaultingConfig, DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig, SimpleEnum,
+        TestParam,
     },
     value::{Pointer, Value, ValueOrigin},
     ByteSize, DescribeConfig, Environment, ParseError,
@@ -23,20 +24,18 @@ use crate::{
 
 #[test]
 fn parsing_param() {
-    let env = Environment::from_iter(
-        "",
-        [
-            ("int", "1"),
-            ("bool", "true"),
-            ("string", "??"),
-            ("array", "1,2,3"),
-            ("repeated", "second,first"),
-        ],
+    let json = config!(
+        // Strings should be coerced to numbers / bools inside the deserializer
+        "int": "1",
+        "bool": "true",
+        "string": "??",
+        "array": [1, 2, 3],
+        "repeated": ["second", "first"],
     );
-    let env = wrap_into_value(env);
 
     let mut options = DeserializerOptions::default();
-    let config = TestParam::deserialize(ValueDeserializer::new(&env, &options)).unwrap();
+    let deserializer = ValueDeserializer::new(json.inner(), &options);
+    let config = TestParam::deserialize(deserializer).unwrap();
     assert_eq!(config.int, 1);
     assert_eq!(config.optional, None);
     assert!(config.bool);
@@ -47,23 +46,24 @@ fn parsing_param() {
         HashSet::from([SimpleEnum::First, SimpleEnum::Second])
     );
 
-    let env = Environment::from_iter(
-        "",
-        [
-            ("int", "42"),
-            ("string", "!!"),
-            ("repeated", "FIRST,SECOND"),
-        ],
+    let json = config!(
+        "int": 42,
+        "string": "!!",
+        "repeated": ["FIRST", "SECOND"],
     );
-    let env = wrap_into_value(env);
-
-    let err = TestParam::deserialize(ValueDeserializer::new(&env, &options)).unwrap_err();
+    let deserializer = ValueDeserializer::new(json.inner(), &options);
+    let err = TestParam::deserialize(deserializer).unwrap_err();
     let inner = err.inner.to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
-    assert_eq!(extract_env_var_name(&err.origin), "repeated");
+    let ValueOrigin::Path { path, source } = err.origin.as_ref() else {
+        panic!("unexpected origin: {:?}", err.origin);
+    };
+    assert_eq!(path, "repeated.0");
+    extract_json_name(source);
 
     options.coerce_shouting_variant_names = true;
-    let config = TestParam::deserialize(ValueDeserializer::new(&env, &options)).unwrap();
+    let deserializer = ValueDeserializer::new(json.inner(), &options);
+    let config = TestParam::deserialize(deserializer).unwrap();
     assert_eq!(config.int, 42);
     assert_eq!(config.optional, None);
     assert!(!config.bool);

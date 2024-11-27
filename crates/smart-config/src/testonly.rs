@@ -15,7 +15,7 @@ use serde::Deserialize;
 
 use crate::{
     de::{self, DeserializeContext, DeserializeParam, DeserializerOptions},
-    metadata::{BasicType, SchemaType, SizeUnit, TimeUnit},
+    metadata::{BasicType, SizeUnit, TimeUnit},
     source::ConfigContents,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
@@ -29,10 +29,9 @@ pub(crate) enum SimpleEnum {
 }
 
 impl de::WellKnown for SimpleEnum {
-    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::String);
+    const DE: &'static dyn DeserializeParam<Self> = &BasicType::String;
 }
 
-// FIXME: test embedding into config
 #[derive(Debug, Deserialize)]
 pub(crate) struct TestParam {
     pub int: u64,
@@ -44,6 +43,18 @@ pub(crate) struct TestParam {
     pub array: Vec<u32>,
     #[serde(default)]
     pub repeated: HashSet<SimpleEnum>,
+}
+
+impl de::WellKnown for TestParam {
+    const DE: &'static dyn DeserializeParam<Self> = &BasicType::Object;
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ValueCoercingConfig {
+    pub param: TestParam,
+    #[config(default)]
+    pub set: HashSet<u64>,
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
