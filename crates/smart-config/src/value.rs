@@ -32,7 +32,7 @@ impl fmt::Display for FileFormat {
 pub enum ValueOrigin {
     /// Unknown / default origin.
     #[default]
-    Unknown, // FIXME: remove?
+    Unknown,
     /// Environment variables.
     EnvVars,
     /// File source.
