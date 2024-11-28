@@ -63,7 +63,7 @@ fn check_params(
 ) {
     for param in metadata.params {
         if sample.get(Pointer(param.name)).is_none() {
-            missing_params.insert(current_path.join(param.name), param.ty);
+            missing_params.insert(current_path.join(param.name), param.rust_type);
         }
     }
     for nested in metadata.nested_configs {

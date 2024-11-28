@@ -326,7 +326,7 @@ impl ConfigSchema {
         }
 
         let kind = param.expecting;
-        let ty = format!("{kind} [Rust: {}]", param.ty.name_in_code());
+        let ty = format!("{kind} [Rust: {}]", param.rust_type.name_in_code());
         let default = if let Some(default) = param.default_value() {
             format!(", default: {default:?}")
         } else {
@@ -395,7 +395,7 @@ mod tests {
         assert_eq!(str_metadata.name, "str");
         assert_eq!(str_metadata.aliases, ["string"]);
         assert_eq!(str_metadata.help, "String value.");
-        assert_eq!(str_metadata.ty.name_in_code(), "String");
+        assert_eq!(str_metadata.rust_type.name_in_code(), "String");
         assert_eq!(
             format!("{:?}", str_metadata.default_value().unwrap()),
             "\"default\""
@@ -405,7 +405,7 @@ mod tests {
         assert_eq!(optional_metadata.name, "optional");
         assert_eq!(optional_metadata.aliases, [] as [&str; 0]);
         assert_eq!(optional_metadata.help, "Optional value.");
-        assert_eq!(optional_metadata.ty.name_in_code(), "Option"); // FIXME: does `Option<u32>` get printed only for nightly Rust?
+        assert_eq!(optional_metadata.rust_type.name_in_code(), "Option"); // FIXME: does `Option<u32>` get printed only for nightly Rust?
         assert_eq!(optional_metadata.expecting, BasicTypes::INTEGER);
     }
 
