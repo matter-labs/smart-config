@@ -17,9 +17,9 @@ pub struct ConfigMetadata {
     /// Help regarding the config itself.
     pub help: &'static str,
     /// Parameters included in the config.
-    pub params: Box<[ParamMetadata]>,
+    pub params: &'static [ParamMetadata],
     /// Nested configs included in the config.
-    pub nested_configs: Box<[NestedConfigMetadata]>,
+    pub nested_configs: &'static [NestedConfigMetadata],
 }
 
 impl ConfigMetadata {
@@ -59,7 +59,7 @@ impl ParamMetadata {
 /// Representation of a Rust type.
 #[derive(Clone, Copy)]
 pub struct RustType {
-    id: any::TypeId,
+    id: fn() -> any::TypeId,
     name_in_code: &'static str,
 }
 
@@ -77,15 +77,15 @@ impl PartialEq for RustType {
 
 impl RustType {
     /// Creates a new type.
-    pub fn of<T: 'static>(name_in_code: &'static str) -> Self {
+    pub const fn of<T: 'static>(name_in_code: &'static str) -> Self {
         Self {
-            id: any::TypeId::of::<T>(),
+            id: any::TypeId::of::<T>,
             name_in_code,
         }
     }
 
     pub(crate) fn id(&self) -> any::TypeId {
-        self.id
+        (self.id)()
     }
 
     /// Returns the name of this type as specified in code.

@@ -31,7 +31,7 @@ impl<C: DescribeConfig> Alias<C> {
     pub fn prefix(prefix: &'static str) -> Self {
         Self {
             prefix: Pointer(prefix),
-            param_names: C::describe_config()
+            param_names: C::DESCRIPTION
                 .params
                 .iter()
                 .flat_map(|param| param.aliases.iter().copied().chain([param.name]))
@@ -179,7 +179,7 @@ impl ConfigSchema {
     /// Returns an error if the configuration is not registered or has more than one mount point.
     #[allow(clippy::missing_panics_doc)] // false positive
     pub fn single_mut<C: DescribeConfig>(&mut self) -> anyhow::Result<ConfigMut<'_, C>> {
-        let metadata = C::describe_config();
+        let metadata = &C::DESCRIPTION;
         let mut it = self.locate(metadata);
         let first_prefix = it.next().with_context(|| {
             format!(
@@ -225,7 +225,7 @@ impl ConfigSchema {
     where
         C: DescribeConfig,
     {
-        let metadata = C::describe_config();
+        let metadata = &C::DESCRIPTION;
         self.insert_inner(
             prefix.into(),
             any::TypeId::of::<C>(),
@@ -237,9 +237,9 @@ impl ConfigSchema {
 
         // Insert all nested configs recursively.
         let mut pending_configs: Vec<_> =
-            Self::list_nested_configs(prefix, &metadata.nested_configs).collect();
+            Self::list_nested_configs(prefix, metadata.nested_configs).collect();
         while let Some((prefix, metadata)) = pending_configs.pop() {
-            let new_configs = Self::list_nested_configs(&prefix, &metadata.nested_configs);
+            let new_configs = Self::list_nested_configs(&prefix, metadata.nested_configs);
             pending_configs.extend(new_configs);
 
             self.insert_inner(prefix.into(), metadata.ty.id(), ConfigData::new(metadata));
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn getting_config_metadata() {
-        let metadata = TestConfig::describe_config();
+        let metadata = &TestConfig::DESCRIPTION;
         assert_eq!(metadata.ty.name_in_code(), "TestConfig");
         assert_eq!(metadata.help, "# Test configuration\nExtended description.");
         assert_eq!(metadata.help_header(), Some("Test configuration"));
@@ -439,9 +439,9 @@ optional
 
         let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
         assert_eq!(all_prefixes, HashSet::from([Pointer("test"), Pointer("")]));
-        let config_prefixes: Vec<_> = schema.locate(TestConfig::describe_config()).collect();
+        let config_prefixes: Vec<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
         assert_eq!(config_prefixes, ["test"]);
-        let config_ref = schema.single(TestConfig::describe_config()).unwrap();
+        let config_ref = schema.single(&TestConfig::DESCRIPTION).unwrap();
         assert_eq!(config_ref.prefix(), "test");
         assert_eq!(config_ref.aliases().count(), 1);
 
@@ -478,9 +478,9 @@ optional
             all_prefixes,
             HashSet::from([Pointer("test"), Pointer(""), Pointer("deprecated")])
         );
-        let config_prefixes: Vec<_> = schema.locate(TestConfig::describe_config()).collect();
+        let config_prefixes: Vec<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
         assert_eq!(config_prefixes, ["test"]);
-        let config_ref = schema.single(TestConfig::describe_config()).unwrap();
+        let config_ref = schema.single(&TestConfig::DESCRIPTION).unwrap();
         assert_eq!(config_ref.prefix(), "test");
         assert_eq!(config_ref.aliases().count(), 2);
 
@@ -513,13 +513,13 @@ optional
             HashSet::from([Pointer(""), Pointer("hierarchical")])
         );
 
-        let config_prefixes: Vec<_> = schema.locate(NestingConfig::describe_config()).collect();
+        let config_prefixes: Vec<_> = schema.locate(&NestingConfig::DESCRIPTION).collect();
         assert_eq!(config_prefixes, [""]);
-        let config_prefixes: HashSet<_> = schema.locate(TestConfig::describe_config()).collect();
+        let config_prefixes: HashSet<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
         assert_eq!(config_prefixes, HashSet::from(["", "hierarchical"]));
 
         let err = schema
-            .single(TestConfig::describe_config())
+            .single(&TestConfig::DESCRIPTION)
             .unwrap_err()
             .to_string();
         assert!(err.contains("at least 2 locations"), "{err}");

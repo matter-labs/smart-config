@@ -8,7 +8,7 @@ use crate::{
 
 #[test]
 fn describing_enum_config() {
-    let metadata: &ConfigMetadata = EnumConfig::describe_config();
+    let metadata = &EnumConfig::DESCRIPTION;
     assert_eq!(metadata.nested_configs.len(), 1);
     assert_eq!(metadata.nested_configs[0].name, "");
 
@@ -44,7 +44,7 @@ fn describing_enum_config() {
 
 #[test]
 fn describing_defaulting_enum_config() {
-    let metadata: &ConfigMetadata = DefaultingEnumConfig::describe_config();
+    let metadata = &DefaultingEnumConfig::DESCRIPTION;
     let tag_param = metadata
         .params
         .iter()
@@ -56,7 +56,7 @@ fn describing_defaulting_enum_config() {
 
 #[test]
 fn describing_complex_types() {
-    let metadata: &ConfigMetadata = ConfigWithComplexTypes::describe_config();
+    let metadata = &ConfigWithComplexTypes::DESCRIPTION;
     let array_param = metadata
         .params
         .iter()

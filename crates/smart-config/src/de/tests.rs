@@ -149,7 +149,7 @@ fn parsing_enum_config_missing_tag() {
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
     assert_eq!(err.path(), "type");
-    assert_eq!(err.config().ty, EnumConfig::describe_config().ty);
+    assert_eq!(err.config().ty, EnumConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "type");
 }
 
@@ -163,7 +163,7 @@ fn parsing_enum_config_unknown_tag() {
     let inner = err.inner().to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
     assert_eq!(err.path(), "type");
-    assert_eq!(err.config().ty, EnumConfig::describe_config().ty);
+    assert_eq!(err.config().ty, EnumConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "type");
 }
 
@@ -231,7 +231,7 @@ fn parsing_compound_config_missing_nested_value() {
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
     assert_eq!(err.path(), "nested.renamed");
-    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
 
@@ -309,7 +309,7 @@ fn type_mismatch_parsing_error() {
 
     assert!(err.inner().to_string().contains("invalid type"), "{err}");
     assert_eq!(extract_env_var_name(err.origin()), "other_int");
-    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "other_int");
 }
 
@@ -322,7 +322,7 @@ fn missing_parameter_parsing_error() {
     let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
-    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
 
@@ -335,7 +335,7 @@ fn missing_nested_config_parsing_error() {
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
     assert_eq!(err.path(), "nested.renamed");
-    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
 
@@ -418,7 +418,6 @@ fn parsing_complex_types() {
 fn error_parsing_array_from_string() {
     let json = config!("array": "4,what");
     let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
-    dbg!(&err);
     assert_eq!(err.len(), 1);
     let err = err.first();
     assert_eq!(err.path(), "array");

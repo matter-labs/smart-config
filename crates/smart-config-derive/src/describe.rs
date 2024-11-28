@@ -103,7 +103,7 @@ impl ConfigField {
         quote_spanned! {self.name.span()=>
             #cr::metadata::NestedConfigMetadata {
                 name: #config_name,
-                meta: <#ty as #cr::DescribeConfig>::describe_config(),
+                meta: &<#ty as #cr::DescribeConfig>::DESCRIPTION,
             }
         }
     }
@@ -147,15 +147,12 @@ impl ConfigContainer {
 
         quote! {
             impl #cr::DescribeConfig for #name {
-                fn describe_config() -> &'static #meta_mod::ConfigMetadata {
-                    static METADATA_CELL: #cr::Lazy<#meta_mod::ConfigMetadata> = #cr::Lazy::new(|| #meta_mod::ConfigMetadata {
-                        ty: #meta_mod::RustType::of::<#name>(#name_str),
-                        help: #help,
-                        params: ::std::boxed::Box::new([#(#params,)*]),
-                        nested_configs: ::std::boxed::Box::new([#(#nested_configs,)*]),
-                    });
-                    &METADATA_CELL
-                }
+                const DESCRIPTION: #meta_mod::ConfigMetadata = #meta_mod::ConfigMetadata {
+                    ty: #meta_mod::RustType::of::<#name>(#name_str),
+                    help: #help,
+                    params: &[#(#params,)*],
+                    nested_configs: &[#(#nested_configs,)*],
+                };
             }
         }
     }

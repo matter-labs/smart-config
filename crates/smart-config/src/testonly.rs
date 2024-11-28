@@ -210,7 +210,7 @@ pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result
         &de_options,
         val,
         String::new(),
-        C::describe_config(),
+        &C::DESCRIPTION,
         &mut errors,
     );
     match C::deserialize_config(ctx) {
@@ -227,7 +227,7 @@ pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, Pars
         &de_options,
         &val,
         "test".into(),
-        C::describe_config(),
+        &C::DESCRIPTION,
         &mut errors,
     );
     match C::deserialize_config(ctx) {

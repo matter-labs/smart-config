@@ -35,7 +35,7 @@ pub fn test_complete<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<
     let schema = ConfigSchema::default().insert::<C>("");
     let repo = ConfigRepository::new(&schema).with(sample);
 
-    let metadata = C::describe_config();
+    let metadata = &C::DESCRIPTION;
     let mut missing_params = HashMap::new();
     let mut missing_configs = HashMap::new();
     check_params(
@@ -61,12 +61,12 @@ fn check_params(
     missing_params: &mut HashMap<String, RustType>,
     missing_configs: &mut HashMap<String, RustType>,
 ) {
-    for param in &*metadata.params {
+    for param in metadata.params {
         if sample.get(Pointer(param.name)).is_none() {
             missing_params.insert(current_path.join(param.name), param.ty);
         }
     }
-    for nested in &*metadata.nested_configs {
+    for nested in metadata.nested_configs {
         let Some(child) = sample.get(Pointer(nested.name)) else {
             missing_configs.insert(current_path.join(nested.name), nested.meta.ty);
             continue;

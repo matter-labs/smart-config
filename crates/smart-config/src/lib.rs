@@ -141,7 +141,7 @@ pub mod value;
 /// Describes a configuration (i.e., a group of related parameters).
 pub trait DescribeConfig: 'static {
     /// Provides the config description.
-    fn describe_config() -> &'static ConfigMetadata;
+    const DESCRIPTION: ConfigMetadata;
 }
 
 #[cfg(doctest)]
