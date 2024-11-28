@@ -35,7 +35,7 @@ impl ConfigField {
             quote!(#with)
         } else {
             let ty = &self.ty;
-            quote_spanned!(ty.span()=> <#ty as #cr::de::WellKnown>::DE)
+            quote_spanned!(ty.span()=> ())
         };
         let default_fn = self.default_fn();
 
@@ -85,6 +85,7 @@ impl ConfigField {
                 aliases: &[#(#aliases,)*],
                 help: #help,
                 ty: #meta_mod::RustType::of::<#ty>(#ty_in_code),
+                expecting: const { #cr::de::extract_expected_types::<#ty, _>(&#deserializer) },
                 deserializer: const { &#cr::de::DeserializerWrapper::<#ty, _>::new(#deserializer) },
                 default_value: #default_value,
             }

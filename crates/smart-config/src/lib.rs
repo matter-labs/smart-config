@@ -85,8 +85,8 @@
 //! ```
 //! use std::collections::HashMap;
 //! use smart_config::{
-//!     de::{DeserializeParam, WellKnown},
-//!     metadata::BasicType, DescribeConfig, DeserializeConfig,
+//!     de::ExpectParam, metadata::BasicTypes,
+//!     DescribeConfig, DeserializeConfig,
 //! };
 //!
 //! #[derive(Debug, serde::Deserialize)]
@@ -95,10 +95,10 @@
 //!     Second,
 //! }
 //!
-//! impl WellKnown for CustomEnum {
+//! impl ExpectParam<CustomEnum> for () {
 //!     // signals that the type should be deserialized via `serde`
 //!     // and the expected input is a string
-//!     const DE: &'static dyn DeserializeParam<Self> = &BasicType::String;
+//!     const EXPECTING: BasicTypes = BasicTypes::STRING;
 //! }
 //!
 //! // Then, the type can be used in configs basically everywhere:

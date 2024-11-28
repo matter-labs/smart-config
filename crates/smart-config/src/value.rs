@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, fmt, iter, sync::Arc};
 
-use crate::metadata::BasicType;
+use crate::metadata::BasicTypes;
 
 /// Supported file formats.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -99,16 +99,18 @@ pub enum Value {
 }
 
 impl Value {
-    pub(crate) fn basic_type(&self) -> Option<BasicType> {
-        Some(match self {
-            Self::Null => return None,
-            Self::Bool(_) => BasicType::Bool,
-            Self::Number(number) if number.is_u64() || number.is_i64() => BasicType::Integer,
-            Self::Number(_) => BasicType::Float,
-            Self::String(_) => BasicType::String,
-            Self::Array(_) => BasicType::Array,
-            Self::Object(_) => BasicType::Object,
-        })
+    pub(crate) fn is_supported_by(&self, types: BasicTypes) -> bool {
+        match self {
+            Self::Null => true,
+            Self::Bool(_) => types.contains(BasicTypes::BOOL),
+            Self::Number(number) if number.is_u64() || number.is_i64() => {
+                types.contains(BasicTypes::INTEGER)
+            }
+            Self::Number(_) => types.contains(BasicTypes::FLOAT),
+            Self::String(_) => types.contains(BasicTypes::STRING),
+            Self::Array(_) => types.contains(BasicTypes::ARRAY),
+            Self::Object(_) => types.contains(BasicTypes::OBJECT),
+        }
     }
 
     /// Attempts to convert this value to an object.

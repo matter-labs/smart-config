@@ -418,6 +418,7 @@ fn parsing_complex_types() {
 fn error_parsing_array_from_string() {
     let json = config!("array": "4,what");
     let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    dbg!(&err);
     assert_eq!(err.len(), 1);
     let err = err.first();
     assert_eq!(err.path(), "array");
@@ -489,7 +490,7 @@ fn parsing_complex_types_errors() {
     let err = errors.first();
     let inner = err.inner().to_string();
     assert!(
-        inner.contains("invalid type") && inner.contains("expected float"),
+        inner.contains("invalid type") && inner.contains("expected integer | float"),
         "{inner}"
     );
     assert_eq!(err.path(), "assumed");

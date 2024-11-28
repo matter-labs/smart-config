@@ -22,7 +22,7 @@
 //!
 //! ## Universal deserializers
 //!
-//! [`BasicType`](crate::metadata::BasicType) and [`SchemaType`](crate::metadata::SchemaType) can deserialize
+//! [`BasicType`](crate::metadata::BasicType) and [`SchemaType`](crate::metadata::TypeQualifiers) can deserialize
 //! any param implementing [`serde::Deserialize`]. An important caveat is that these deserializers require
 //! the input `Value` to be present; otherwise, they'll fail with a "missing value" error. As such,
 //! for [`Option`]al types, it's necessary to wrap a deserializer in the [`Optional`] decorator.
@@ -40,13 +40,13 @@ use self::deserializer::ValueDeserializer;
 pub use self::{
     deserializer::DeserializerOptions,
     param::{
-        Delimited, DeserializeParam, DeserializerWrapper, ObjectSafeDeserializer, Optional,
-        OrString, TagDeserializer, WellKnown, WithDefault,
+        Delimited, DeserializeParam, DeserializerWrapper, ExpectParam, ObjectSafeDeserializer,
+        Optional, OrString, Serde, TagDeserializer, WithDefault,
     },
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
-    metadata::{ConfigMetadata, ParamMetadata},
+    metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
     value::{Pointer, ValueOrigin, WithOrigin},
     DescribeConfig, ParseError, ParseErrors,
 };
@@ -55,6 +55,11 @@ mod deserializer;
 mod param;
 #[cfg(test)]
 mod tests;
+
+#[doc(hidden)] // used by proc macros
+pub const fn extract_expected_types<T, De: ExpectParam<T>>(_: &De) -> BasicTypes {
+    <De as ExpectParam<T>>::EXPECTING
+}
 
 /// Context for deserializing a configuration.
 #[derive(Debug)]

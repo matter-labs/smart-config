@@ -3,7 +3,7 @@ use std::{collections::BTreeSet, marker::PhantomData, mem, sync::Arc};
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
-    metadata::{BasicType, ConfigMetadata},
+    metadata::{BasicTypes, ConfigMetadata},
     schema::{Alias, ConfigRef, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseError, ParseErrors,
@@ -368,6 +368,8 @@ impl WithOrigin {
     /// This is necessary to prevent `deserialize_any` errors
     // TODO: log coercion errors
     fn coerce_value_types(&mut self, metadata: &ConfigMetadata) {
+        const STRUCTURED: BasicTypes = BasicTypes::ARRAY.or(BasicTypes::OBJECT);
+
         let Value::Object(map) = &mut self.inner else {
             unreachable!("expected an object due to previous preprocessing steps");
         };
@@ -379,25 +381,28 @@ impl WithOrigin {
                 };
 
                 // Attempt to transform the type to the expected type
-                let expecting = param.deserializer.expecting();
-                match expecting.base {
-                    Some(BasicType::Bool) => {
+                let expecting = param.expecting;
+                match expecting {
+                    // We intentionally use exact comparisons; if a type supports multiple primitive representations,
+                    // we do nothing.
+                    BasicTypes::BOOL => {
                         if let Ok(bool_value) = str.parse::<bool>() {
                             value.inner = Value::Bool(bool_value);
                         }
                     }
-                    Some(BasicType::Integer | BasicType::Float) => {
+                    BasicTypes::INTEGER | BasicTypes::FLOAT => {
                         if let Ok(number) = str.parse::<serde_json::Number>() {
                             value.inner = Value::Number(number);
                         }
                     }
-                    Some(ty @ (BasicType::Array | BasicType::Object)) => {
+
+                    ty if STRUCTURED.contains(ty) => {
                         let Ok(val) = serde_json::from_str::<serde_json::Value>(str) else {
                             continue;
                         };
-                        if (val.is_array() && ty == BasicType::Array)
-                            || (val.is_object() && ty == BasicType::Object)
-                        {
+                        let is_value_supported = (val.is_array() && ty.contains(BasicTypes::ARRAY))
+                            || (val.is_object() && ty.contains(BasicTypes::OBJECT));
+                        if is_value_supported {
                             let root_origin = Arc::new(ValueOrigin::Synthetic {
                                 source: value.origin.clone(),
                                 transform: "parsed JSON string".into(),

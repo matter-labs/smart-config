@@ -1,6 +1,6 @@
 //! Configuration metadata.
 
-use std::{any, fmt};
+use std::{any, borrow::Cow, fmt};
 
 use crate::de::ObjectSafeDeserializer;
 
@@ -41,6 +41,8 @@ pub struct ParamMetadata {
     pub help: &'static str,
     /// Rust type of the parameter.
     pub ty: RustType,
+    /// Basic type(s) expected by the param deserializer.
+    pub expecting: BasicTypes,
     #[doc(hidden)] // implementation detail
     pub deserializer: &'static dyn ObjectSafeDeserializer,
     #[doc(hidden)] // implementation detail
@@ -92,107 +94,118 @@ impl RustType {
     }
 }
 
-/// Basic value type in the JSON object model.
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[non_exhaustive]
-pub enum BasicType {
+/// One or more basic types in the JSON object model.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BasicTypes(u8);
+
+impl BasicTypes {
     /// Boolean value.
-    Bool,
+    pub const BOOL: Self = Self(1);
     /// Integer value.
-    Integer,
+    pub const INTEGER: Self = Self(2);
     /// Floating-point value.
-    Float,
+    pub const FLOAT: Self = Self(4 | 2);
     /// String.
-    String,
+    pub const STRING: Self = Self(8);
     /// Array of values.
-    Array,
+    pub const ARRAY: Self = Self(16);
     /// Object / map of values.
-    Object,
+    pub const OBJECT: Self = Self(32);
+    /// Any value.
+    pub const ANY: Self = Self(63);
+
+    const COMPONENTS: &'static [(Self, &'static str)] = &[
+        (Self::BOOL, "Boolean"),
+        (Self::INTEGER, "integer"),
+        (Self::FLOAT, "float"),
+        (Self::STRING, "string"),
+        (Self::ARRAY, "array"),
+        (Self::OBJECT, "object"),
+    ];
+
+    pub(crate) const fn from_raw(raw: u8) -> Self {
+        assert!(raw != 0, "Raw `BasicTypes` cannot be 0");
+        assert!(
+            raw <= Self::ANY.0,
+            "Unused set bits in `BasicTypes` raw value"
+        );
+        Self(raw)
+    }
+
+    #[doc(hidden)] // should only be used via macros
+    pub const fn raw(self) -> u8 {
+        self.0
+    }
+
+    #[must_use]
+    pub const fn or(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+
+    pub const fn contains(self, needle: Self) -> bool {
+        self.0 & needle.0 == needle.0
+    }
 }
 
-impl BasicType {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Bool => "Boolean",
-            Self::Integer => "integer",
-            Self::Float => "floating-point value",
-            Self::String => "string",
-            Self::Array => "array",
-            Self::Object => "object",
+impl fmt::Display for BasicTypes {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if *self == Self::ANY {
+            formatter.write_str("any")
+        } else {
+            let mut is_empty = true;
+            for &(component, name) in Self::COMPONENTS {
+                if self.contains(component) {
+                    if !is_empty {
+                        formatter.write_str(" | ")?;
+                    }
+                    formatter.write_str(name)?;
+                    is_empty = false;
+                }
+            }
+            Ok(())
         }
     }
 }
 
-impl fmt::Display for BasicType {
+impl fmt::Debug for BasicTypes {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
+        fmt::Display::fmt(self, formatter)
     }
 }
 
 /// Human-readable description for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
-#[derive(Debug, Clone)]
-pub struct SchemaType {
-    /// `None` means that arbitrary values are accepted.
-    pub(crate) base: Option<BasicType>,
-    qualifier: Option<&'static str>,
-    // Ideally, we'd want to use `Cow<'static, str>` here. It doesn't work because it cannot be dropped
-    // in const contexts, which is necessary to implement `with_qualifier()`.
-    dyn_qualifier: Option<String>,
-    pub(crate) unit: Option<UnitOfMeasurement>,
+#[derive(Debug, Clone, Default)]
+pub struct TypeQualifiers {
+    description: Option<Cow<'static, str>>,
+    unit: Option<UnitOfMeasurement>,
 }
 
-impl SchemaType {
-    /// "Any" type.
-    pub const ANY: Self = Self {
-        base: None,
-        qualifier: None,
-        dyn_qualifier: None,
-        unit: None,
-    };
-
-    /// Creates a new type description with the specified `base` type.
-    pub const fn new(base: BasicType) -> Self {
-        Self {
-            base: Some(base),
-            ..Self::ANY
-        }
-    }
-
-    /// Adds a qualifier.
+impl TypeQualifiers {
+    /// Adds a qualifying description.
     #[must_use]
-    pub const fn with_qualifier(mut self, qualifier: &'static str) -> Self {
-        self.qualifier = Some(qualifier);
+    pub fn with_description(mut self, description: &'static str) -> Self {
+        self.description = Some(Cow::Borrowed(description));
         self
     }
 
     #[must_use]
-    pub(crate) fn with_dyn_qualifier(mut self, qualifier: String) -> Self {
-        self.qualifier = None;
-        self.dyn_qualifier = Some(qualifier);
+    pub(crate) fn with_dyn_description(mut self, description: String) -> Self {
+        self.description = Some(Cow::Owned(description));
         self
     }
 
     /// Adds a unit of measurement.
     #[must_use]
-    pub const fn with_unit(mut self, unit: UnitOfMeasurement) -> Self {
+    pub fn with_unit(mut self, unit: UnitOfMeasurement) -> Self {
         self.unit = Some(unit);
         self
     }
-
-    fn qualifier(&self) -> Option<&str> {
-        self.dyn_qualifier.as_deref().or(self.qualifier)
-    }
 }
 
-impl fmt::Display for SchemaType {
+impl fmt::Display for TypeQualifiers {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(base) = &self.base {
-            fmt::Display::fmt(base, formatter)?;
-        } else {
-            formatter.write_str("any")?;
-        }
-        if let Some(qualifier) = self.qualifier() {
-            write!(formatter, ", {qualifier}")?;
+        if let Some(description) = &self.description {
+            write!(formatter, ", {description}")?;
         }
         if let Some(unit) = self.unit {
             write!(formatter, " [unit: {unit}]")?;

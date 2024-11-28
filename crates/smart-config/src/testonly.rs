@@ -14,11 +14,11 @@ use assert_matches::assert_matches;
 use serde::Deserialize;
 
 use crate::{
-    de::{self, DeserializeContext, DeserializeParam, DeserializerOptions},
-    metadata::{BasicType, SizeUnit, TimeUnit},
+    de::{self, DeserializeContext, DeserializerOptions, ExpectParam},
+    metadata::{BasicTypes, SizeUnit, TimeUnit},
     source::ConfigContents,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
+    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors, Serde,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
@@ -28,8 +28,8 @@ pub(crate) enum SimpleEnum {
     Second,
 }
 
-impl de::WellKnown for SimpleEnum {
-    const DE: &'static dyn DeserializeParam<Self> = &BasicType::String;
+impl ExpectParam<SimpleEnum> for () {
+    const EXPECTING: BasicTypes = BasicTypes::STRING;
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,8 +45,8 @@ pub(crate) struct TestParam {
     pub repeated: HashSet<SimpleEnum>,
 }
 
-impl de::WellKnown for TestParam {
-    const DE: &'static dyn DeserializeParam<Self> = &BasicType::Object;
+impl ExpectParam<TestParam> for () {
+    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -143,6 +143,10 @@ pub(crate) enum DefaultingEnumConfig {
 #[serde(transparent)]
 pub(crate) struct MapOrString(pub HashMap<String, u64>);
 
+impl ExpectParam<MapOrString> for () {
+    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
+}
+
 impl FromStr for MapOrString {
     type Err = anyhow::Error;
 
@@ -164,7 +168,7 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(with = de::Delimited(","))]
     pub array: [NonZeroUsize; 2],
     pub choices: Option<Vec<SimpleEnum>>,
-    #[config(with = de::Optional(BasicType::Float))]
+    #[config(with = de::Optional(Serde![BasicTypes::FLOAT]))]
     pub assumed: Option<serde_json::Value>,
     #[config(default_t = Duration::from_millis(100), with = TimeUnit::Millis)]
     pub short_dur: Duration,
