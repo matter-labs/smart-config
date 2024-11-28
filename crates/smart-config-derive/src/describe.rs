@@ -70,7 +70,7 @@ impl ConfigField {
         };
 
         let aliases_validation = aliases.clone().map(
-            |alias| quote_spanned!(name_span=> #meta_mod::validation::assert_param_name(#alias);),
+            |alias| quote_spanned!(alias.span()=> #meta_mod::validation::assert_param_name(#alias);),
         );
         let deserializer = self.deserializer(cr);
 
