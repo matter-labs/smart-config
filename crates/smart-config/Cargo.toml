@@ -1,0 +1,27 @@
+[package]
+name = "smart-config"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+
+[dependencies]
+anyhow.workspace = true
+compile-fmt.workspace = true
+once_cell.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_yaml.workspace = true # TODO: optional?
+smart-config-derive.workspace = true
+
+[dev-dependencies]
+assert_matches.workspace = true
+doc-comment.workspace = true
+version-sync.workspace = true
+
+[lints]
+workspace = true
