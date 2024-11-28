@@ -174,11 +174,12 @@ impl WithOrigin {
             })
     }
 
-    /// Only objects are meaningfully merged; all other values are replaced.
-    pub(crate) fn merge(&mut self, other: Self) {
+    /// Deep-merges self and `other`, with `other` having higher priority. Only objects are meaningfully merged;
+    /// all other values are replaced.
+    pub(crate) fn deep_merge(&mut self, other: Self) {
         match (&mut self.inner, other.inner) {
             (Value::Object(this), Value::Object(other)) => {
-                Self::merge_into_map(this, other);
+                Self::deep_merge_into_map(this, other);
             }
             (this, value) => {
                 *this = value;
@@ -187,10 +188,10 @@ impl WithOrigin {
         }
     }
 
-    fn merge_into_map(dest: &mut Map, source: Map) {
+    fn deep_merge_into_map(dest: &mut Map, source: Map) {
         for (key, value) in source {
             if let Some(existing_value) = dest.get_mut(&key) {
-                existing_value.merge(value);
+                existing_value.deep_merge(value);
             } else {
                 dest.insert(key, value);
             }

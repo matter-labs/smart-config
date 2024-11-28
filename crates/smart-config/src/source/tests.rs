@@ -358,7 +358,7 @@ fn using_env_config_overrides() {
     let env = Environment::from_iter(
         "",
         [
-            ("DEPRECATED_VALUE", "777"), // should not be used (aliases have lower priorities)
+            ("DEPRECATED_VALUE", "777"),
             ("TEST_NESTED_RENAMED", "second"),
         ],
     );
@@ -369,7 +369,7 @@ fn using_env_config_overrides() {
     extract_env_var_name(&enum_value.origin);
 
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
-    assert_eq!(config.value, 321);
+    assert_eq!(config.value, 777);
     assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
 
     let env = Environment::from_iter("", [("TEST_VALUE", "555")]);

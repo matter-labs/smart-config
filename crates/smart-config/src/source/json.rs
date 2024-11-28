@@ -71,7 +71,7 @@ impl Json {
             &mut self.inner
         };
 
-        merge_point.merge(value);
+        merge_point.deep_merge(value);
         debug_assert!(matches!(&self.inner.inner, Value::Object(_)));
     }
 

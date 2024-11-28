@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, marker::PhantomData, mem, sync::Arc};
+use std::{collections::BTreeSet, marker::PhantomData, sync::Arc};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
@@ -37,6 +37,11 @@ pub trait ConfigSource {
 
 /// Configuration repository containing zero or more [configuration sources](ConfigSource).
 /// Sources are preprocessed and merged according to the provided [`ConfigSchema`].
+///
+/// # Merging sources
+///
+/// [`Self::with()`] merges a new source into this repo. The new source has higher priority and will overwrite
+/// values defined in old sources, including via parameter aliases.
 ///
 /// # Type coercion
 ///
@@ -113,36 +118,44 @@ impl<'a> ConfigRepository<'a> {
     #[must_use]
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
         let source_origin = source.origin();
-        match source.into_contents() {
-            ConfigContents::KeyValue(mut kv) => {
+        let mut source_value = match source.into_contents() {
+            ConfigContents::KeyValue(kv) => {
+                let mut value = WithOrigin {
+                    inner: Value::Object(Map::default()),
+                    origin: source_origin.clone(),
+                };
                 for &object_ptr in self.all_prefixes_with_aliases.iter().rev() {
-                    self.merged
-                        .copy_key_value_entries(object_ptr, &source_origin, &mut kv);
+                    value.copy_key_value_entries(object_ptr, &source_origin, &kv);
                 }
+                value
             }
-            ConfigContents::Hierarchical(map) => {
-                self.merged.merge(WithOrigin {
-                    inner: Value::Object(map),
-                    origin: Arc::default(), // will not be used
-                });
-            }
-        }
+            ConfigContents::Hierarchical(map) => WithOrigin {
+                inner: Value::Object(map),
+                origin: source_origin,
+            },
+        };
 
+        self.preprocess_source(&mut source_value);
+        self.merged.deep_merge(source_value);
+        self
+    }
+
+    fn preprocess_source(&self, source_value: &mut WithOrigin) {
         // Copy all globally aliased values.
         for (prefix, config_data) in self.schema.iter() {
             for alias in &config_data.aliases {
-                self.merged.merge_alias(prefix, alias);
+                source_value.merge_alias(prefix, alias);
             }
         }
 
         // Copy all locally aliased values.
         for (prefix, config_data) in self.schema.iter() {
-            let Some(config_object) = self.merged.get_mut(prefix) else {
+            let Some(config_object) = source_value.get_mut(prefix) else {
                 continue;
             };
             let Value::Object(config_object) = &mut config_object.inner else {
-                // FIXME: is it possible to break invariants (e.g., overwrite objects at mounting points)?
-                unreachable!();
+                // TODO: log warning
+                continue;
             };
 
             for param in config_data.metadata.params {
@@ -162,12 +175,10 @@ impl<'a> ConfigRepository<'a> {
         // Normalize types of all copied values. At this point we only care about canonical names,
         // since any aliases were copied on the previous step.
         for (prefix, config_data) in self.schema.iter() {
-            if let Some(config_map) = self.merged.get_mut(prefix) {
+            if let Some(config_map) = source_value.get_mut(prefix) {
                 config_map.coerce_value_types(config_data.metadata);
             }
         }
-
-        self
     }
 
     // TODO: probably makes sense to make public
@@ -277,20 +288,20 @@ impl WithOrigin {
         &mut self,
         at: Pointer<'_>,
         source_origin: &Arc<ValueOrigin>,
-        entries: &mut Map<String>,
+        entries: &Map<String>,
     ) {
-        let matching_entries: Vec<_> = Self::take_matching_kv_entries(entries, at)
-            .into_iter()
-            .map(|(key, value)| {
-                (
-                    key,
-                    WithOrigin {
-                        inner: Value::String(value.inner),
-                        origin: value.origin,
-                    },
-                )
-            })
-            .collect();
+        let env_prefix = Self::kv_prefix(at.0);
+        let matching_entries = entries.iter().filter_map(|(name, value)| {
+            let name_suffix = name.strip_prefix(&env_prefix)?;
+            Some((
+                name_suffix.to_owned(),
+                WithOrigin {
+                    inner: Value::String(value.inner.clone()),
+                    origin: value.origin.clone(),
+                },
+            ))
+        });
+        let matching_entries: Vec<_> = matching_entries.collect();
 
         if matching_entries.is_empty() {
             return;
@@ -301,24 +312,6 @@ impl WithOrigin {
         });
         self.ensure_object(at, |_| origin.clone())
             .extend(matching_entries);
-    }
-
-    fn take_matching_kv_entries(
-        from: &mut Map<String>,
-        prefix: Pointer,
-    ) -> Vec<(String, WithOrigin<String>)> {
-        let mut matching_entries = vec![];
-        let env_prefix = Self::kv_prefix(prefix.0);
-        from.retain(|name, value| {
-            if let Some(name_suffix) = name.strip_prefix(&env_prefix) {
-                let value = mem::take(value);
-                matching_entries.push((name_suffix.to_owned(), value));
-                false
-            } else {
-                true
-            }
-        });
-        matching_entries
     }
 
     /// Converts a logical prefix like `api.limits` to `api_limits_`.
