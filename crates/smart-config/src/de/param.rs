@@ -61,7 +61,7 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     ) -> Result<T, ErrorWithOrigin>;
 }
 
-/// Deserializer powered by `serde`. Usually created with the help of [`Serde!`](macro@Serde) macro;
+/// Deserializer powered by `serde`. Usually created with the help of [`Serde!`](crate::Serde!) macro;
 /// see its docs for the examples of usage.
 pub struct Serde<const EXPECTING: u8>;
 
@@ -72,66 +72,6 @@ impl<const EXPECTING: u8> fmt::Debug for Serde<EXPECTING> {
             .field(&BasicTypes::from_raw(EXPECTING))
             .finish()
     }
-}
-
-/// Constructor of [`Serde`](struct@Serde) types / instances.
-///
-/// The macro accepts a comma-separated list of expected basic types from the following set: `bool`, `int`,
-/// `float`, `str`, `array`, `object`.
-///
-/// # Examples
-///
-/// ```
-/// # use smart_config::{Serde, de::ExpectParam, metadata::BasicTypes};
-/// type MySerde = Serde![int, str, object];
-/// ```
-#[allow(non_snake_case)]
-#[macro_export]
-macro_rules! Serde {
-    (@expand bool $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::BOOL.or($crate::Serde!(@expand $($tail)+))
-    };
-    (@expand int $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::INTEGER.or($crate::Serde!(@expand $($tail)+))
-    };
-    (@expand float $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::FLOAT.or($crate::Serde!(@expand $($tail)+))
-    };
-    (@expand str $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::STRING.or($crate::Serde!(@expand $($tail)+))
-    };
-    (@expand array $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::ARRAY.or($crate::Serde!(@expand $($tail)+))
-    };
-    (@expand object $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::OBJECT.or($crate::Serde!(@expand $($tail)+))
-    };
-
-    (@expand bool) => {
-        $crate::metadata::BasicTypes::BOOL
-    };
-    (@expand int) => {
-        $crate::metadata::BasicTypes::INTEGER
-    };
-    (@expand float) => {
-        $crate::metadata::BasicTypes::FLOAT
-    };
-    (@expand str) => {
-        $crate::metadata::BasicTypes::STRING
-    };
-    (@expand array) => {
-        $crate::metadata::BasicTypes::ARRAY
-    };
-    (@expand object) => {
-        $crate::metadata::BasicTypes::OBJECT
-    };
-    (@expand any) => {
-        $crate::metadata::BasicTypes::ANY
-    };
-
-    ($($expecting:tt),+ $(,)?) => {
-        $crate::de::Serde::<{ $crate::metadata::BasicTypes::raw($crate::Serde!(@expand $($expecting)+)) }>
-    };
 }
 
 impl<T: DeserializeOwned, const EXPECTING: u8> ExpectParam<T> for Serde<EXPECTING> {
@@ -684,7 +624,7 @@ where
 /// # use std::{collections::HashSet, str::FromStr};
 /// use anyhow::Context as _;
 /// # use serde::Deserialize;
-/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig, Serde};
+/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
 ///
 /// #[derive(Deserialize)]
 /// #[serde(transparent)]
@@ -703,7 +643,7 @@ where
 ///
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct TestConfig {
-///     #[config(with = de::OrString(Serde![array]))]
+///     #[config(with = de::OrString(de::Serde![array]))]
 ///     value: MySet,
 /// }
 ///

@@ -14,11 +14,11 @@ use assert_matches::assert_matches;
 use serde::Deserialize;
 
 use crate::{
-    de::{self, DeserializeContext, DeserializerOptions, ExpectParam},
+    de::{self, DeserializeContext, DeserializerOptions, ExpectParam, Serde},
     metadata::{BasicTypes, SizeUnit, TimeUnit},
     source::ConfigContents,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors, Serde,
+    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]

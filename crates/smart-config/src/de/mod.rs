@@ -21,7 +21,7 @@
 //!
 //! ## Universal deserializers
 //!
-//! [`BasicType`](crate::metadata::BasicType) and [`SchemaType`](crate::metadata::TypeQualifiers) can deserialize
+//! [`Serde`](struct@Serde) (usually instantiated via [the eponymous macro](macro@Serde)) can deserialize
 //! any param implementing [`serde::Deserialize`]. An important caveat is that these deserializers require
 //! the input `Value` to be present; otherwise, they'll fail with a "missing value" error. As such,
 //! for [`Option`]al types, it's necessary to wrap a deserializer in the [`Optional`] decorator.
@@ -36,12 +36,12 @@
 use serde::de::Error as DeError;
 
 use self::deserializer::ValueDeserializer;
+#[doc(hidden)]
+pub use self::param::{Erased, ErasedDeserializer, TagDeserializer};
 pub use self::{
     deserializer::DeserializerOptions,
-    param::{
-        Delimited, DeserializeParam, Erased, ErasedDeserializer, ExpectParam, Optional, OrString,
-        Serde, TagDeserializer, WithDefault,
-    },
+    macros::Serde,
+    param::{Delimited, DeserializeParam, ExpectParam, Optional, OrString, Serde, WithDefault},
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
@@ -51,6 +51,7 @@ use crate::{
 };
 
 mod deserializer;
+mod macros;
 mod param;
 #[cfg(test)]
 mod tests;

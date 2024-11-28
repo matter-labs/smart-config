@@ -52,7 +52,7 @@ smart-config = "0.1.0"
 use std::{collections::{HashMap, HashSet}, path::PathBuf, time::Duration};
 use serde::Deserialize;
 use smart_config::{
-    de::Optional, metadata::*, ByteSize, DescribeConfig, DeserializeConfig, Serde,
+    de::{Optional, Serde}, metadata::*, ByteSize, DescribeConfig, DeserializeConfig,
 };
 
 #[derive(Debug, Deserialize)]

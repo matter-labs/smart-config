@@ -40,13 +40,13 @@ pub trait ConfigSource {
 ///
 /// # Type coercion
 ///
-/// When processing [`ConfigSource`]s, values can be *coerced* depending on the [expected type](BasicType)
-/// at the corresponding location [as indicated](crate::de::DeserializeParam::expecting()) by the param deserializer.
+/// When processing [`ConfigSource`]s, values can be *coerced* depending on the [expected type](BasicTypes)
+/// at the corresponding location [as indicated](crate::de::ExpectParam::EXPECTING) by the param deserializer.
 /// Currently, coercion only happens if the original value is a string.
 ///
-/// - If the expected type is [`BasicType::Integer`], [`BasicType::Float`], or [`BasicType::Bool`],
+/// - If the expected type is [`BasicTypes::INTEGER`], [`BasicTypes::FLOAT`], or [`BasicTypes::BOOL`],
 ///   the number / Boolean is [parsed](str::parse()) from the string. If parsing succeeds, the value is replaced.
-/// - If the expected type is [`BasicType::Array`] or [`BasicType::Object`], then the original string
+/// - If the expected type is [`BasicTypes::ARRAY`], [`BasicTypes::OBJECT`], or their union, then the original string
 ///   is considered to be a JSON array / object. If JSON parsing succeeds, and the parsed value has the expected shape,
 ///   then it replaces the original value.
 ///
