@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DeserializeContext","DeserializerOptions","Optional","WithDefault"],"trait":["DeserializeConfig","DeserializeParam","WellKnown"]};

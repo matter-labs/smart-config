@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BasicType","SizeUnit","TimeUnit","UnitOfMeasurement"],"struct":["ConfigMetadata","NestedConfigMetadata","ParamMetadata","RustType","SchemaType"]};

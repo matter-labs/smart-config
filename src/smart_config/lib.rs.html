@@ -1,0 +1,297 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/smart-config/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-970bf1bf55bd1c15.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="smart_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0-nightly (28a58f2fa 2024-07-31)" data-channel="nightly" data-search-js="search-ef54e092fea9c776.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-f9142fe437216fc3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! `smart-config` – schema-driven layered configuration system with support of multiple configuration formats.
+//!
+//! # Overview
+//!
+//! The task solved by the library is merging configuration input from a variety of prioritized [sources](ConfigSource)
+//! (JSON and YAML files, env variables, command-line args etc.) and converting this input to strongly typed
+//! representation (i.e., config structs or enums). As with other config systems, config input follows the JSON object model
+//! (see [`Value`](value::Value)), with each value enriched with its [origin](value::ValueOrigin) (e.g., a path in a specific JSON file,
+//! or a specific env var). This allows attributing errors during deserialization.
+//!
+//! The defining feature of `smart-config` is its schema-driven design. Each config type has associated [metadata](ConfigMetadata)
+//! defined with the help of the [`DescribeConfig`] derive macro; deserialization is handled by the accompanying [`DeserializeConfig`] macro.
+//! Metadata includes a variety of info extracted from the config type:
+//!
+//! - [Parameter info](metadata::ParamMetadata): name (including aliases and renaming), help (extracted from doc comments),
+//!   type, [deserializer for the param](de::DeserializeParam) etc.
+//! - [Nested configurations](metadata::NestedConfigMetadata).
+//!
+//! Multiple configurations are collected into a global [`ConfigSchema`]. Each configuration is *mounted* at a specific path.
+//! E.g., if a large app has an HTTP server component, it may be mounted at `api.http`. Multiple config types may be mounted
+//! at the same path (e.g., flattened configs); conversely, a single config type may be mounted at multiple places.
+//! As a result, there doesn't need to be a god object uniting all configs in the app; they may be dynamically collected and deserialized
+//! inside relevant components.
+//!
+//! This information provides rich human-readable info about configs. It also assists when preprocessing and merging config inputs.
+//! For example, env vars are a flat string -&gt; string map; with the help of a schema, it's possible to:
+//!
+//! - Correctly nest vars (e.g., transform the `API_HTTP_PORT` var into a `port` var inside `http` object inside `api` object)
+//! - Transform value types from strings to expected types.
+//!
+//! Preprocessing and merging config sources is encapsulated in [`ConfigRepository`].
+//!
+//! # Features
+//!
+//! - Rich, self-documenting configuration schema.
+//! - Utilizes the schema to enrich configuration sources and intelligently merge them.
+//! - Doesn't require a god object uniting all configs in the app; they may be dynamically collected and deserialized
+//!   inside relevant components.
+//! - Supports lazy parsing for complex / multi-component apps (only the used configs are parsed; other configs are not required).
+//! - Supports multiple configuration formats and programmable source priorities (e.g., `base.yml` + overrides from the
+//!   `overrides/` dir in the alphabetic order + env vars).
+//! - Rich and complete deserialization errors including locations and value origins.
+//!
+//! # Examples
+//!
+//! ## Basic workflow
+//!
+//! ```
+//! use smart_config::{
+//!     config, ConfigSchema, ConfigRepository, DescribeConfig, DeserializeConfig, Yaml, Environment,
+//! };
+//!
+//! #[derive(Debug, DescribeConfig, DeserializeConfig)]
+//! pub struct TestConfig {
+//!     pub port: u16,
+//!     #[config(default_t = "test".into())]
+//!     pub name: String,
+//!     #[config(default_t = true)]
+//!     pub tracing: bool,
+//! }
+//!
+//! let schema = ConfigSchema::default().insert::&lt;TestConfig&gt;("test");
+//! // Assume we use two config sources: a YAML file and env vars,
+//! // the latter having higher priority.
+//! let yaml = r"
+//! test:
+//!   port: 4000
+//!   name: app
+//! ";
+//! let yaml = Yaml::new("test.yml", serde_yaml::from_str(yaml)?)?;
+//! let env = Environment::from_iter("APP_", [("APP_TEST_PORT", "8000")]);
+//! // Add both sources to a repo.
+//! let repo = ConfigRepository::new(&amp;schema).with(yaml).with(env);
+//! // Get the parser for the config.
+//! let parser = repo.single::&lt;TestConfig&gt;()?;
+//! let config = parser.parse()?;
+//! assert_eq!(config.port, 8_000); // from the env var
+//! assert_eq!(config.name, "app"); // from YAML
+//! assert!(config.tracing); // from the default value
+//! # anyhow::Ok(())
+//! ```
+//!
+//! ## Declaring type as well-known
+//!
+//! ```
+//! use std::collections::HashMap;
+//! use smart_config::{
+//!     de::{DeserializeParam, WellKnown},
+//!     metadata::BasicType, DescribeConfig, DeserializeConfig,
+//! };
+//!
+//! #[derive(Debug, serde::Deserialize)]
+//! enum CustomEnum {
+//!     First,
+//!     Second,
+//! }
+//!
+//! impl WellKnown for CustomEnum {
+//!     // signals that the type should be deserialized via `serde`
+//!     // and the expected input is a string
+//!     const DE: &amp;'static dyn DeserializeParam&lt;Self&gt; = &amp;BasicType::String;
+//! }
+//!
+//! // Then, the type can be used in configs basically everywhere:
+//! #[derive(Debug, DescribeConfig, DeserializeConfig)]
+//! struct TestConfig {
+//!     value: CustomEnum,
+//!     optional: Option&lt;CustomEnum&gt;,
+//!     repeated: Vec&lt;CustomEnum&gt;,
+//!     map: HashMap&lt;String, CustomEnum&gt;,
+//! }
+//! ```
+
+</span><span class="comment">// Documentation settings
+</span><span class="attr">#![doc(html_root_url = <span class="string">"https://docs.rs/smart-config/0.1.0"</span>)]
+
+#[doc(hidden)] </span><span class="comment">// used in the derive macro
+</span><span class="kw">pub use </span>once_cell::sync::Lazy;
+<span class="kw">pub use </span>smart_config_derive::{DescribeConfig, DeserializeConfig};
+
+<span class="kw">use </span><span class="self">self</span>::metadata::ConfigMetadata;
+<span class="kw">pub use </span><span class="self">self</span>::{
+    de::DeserializeConfig,
+    error::{ParseError, ParseErrors},
+    schema::{Alias, ConfigMut, ConfigRef, ConfigSchema},
+    source::{ConfigParser, ConfigRepository, ConfigSource, Environment, Json, Yaml},
+    types::ByteSize,
+};
+
+<span class="kw">pub mod </span>de;
+<span class="kw">mod </span>error;
+<span class="kw">pub mod </span>metadata;
+<span class="kw">mod </span>schema;
+<span class="kw">mod </span>source;
+<span class="kw">pub mod </span>testing;
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>testonly;
+<span class="kw">mod </span>types;
+<span class="kw">pub mod </span>value;
+
+<span class="doccomment">/// Describes a configuration (i.e., a group of related parameters).
+</span><span class="kw">pub trait </span>DescribeConfig: <span class="lifetime">'static </span>{
+    <span class="doccomment">/// Provides the config description.
+    </span><span class="kw">fn </span>describe_config() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>ConfigMetadata;
+}
+
+<span class="attr">#[cfg(doctest)]
+</span><span class="macro">doc_comment::doctest!</span>(<span class="string">"../README.md"</span>);
+</code></pre></div></section></main></body></html>
