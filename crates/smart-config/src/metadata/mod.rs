@@ -2,7 +2,7 @@
 
 use std::{any, borrow::Cow, fmt};
 
-use crate::de::ObjectSafeDeserializer;
+use crate::de::ErasedDeserializer;
 
 #[cfg(test)]
 mod tests;
@@ -44,7 +44,7 @@ pub struct ParamMetadata {
     /// Basic type(s) expected by the param deserializer.
     pub expecting: BasicTypes,
     #[doc(hidden)] // implementation detail
-    pub deserializer: &'static dyn ObjectSafeDeserializer,
+    pub deserializer: &'static dyn ErasedDeserializer,
     #[doc(hidden)] // implementation detail
     pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
 }
@@ -94,7 +94,7 @@ impl RustType {
     }
 }
 
-/// One or more basic types in the JSON object model.
+/// Set of one or more basic types in the JSON object model.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BasicTypes(u8);
 
@@ -137,11 +137,13 @@ impl BasicTypes {
         self.0
     }
 
+    /// Returns a union of two sets of basic types.
     #[must_use]
     pub const fn or(self, rhs: Self) -> Self {
         Self(self.0 | rhs.0)
     }
 
+    /// Checks whether the `needle` is fully contained in this set.
     pub const fn contains(self, needle: Self) -> bool {
         self.0 & needle.0 == needle.0
     }

@@ -86,7 +86,7 @@ impl ConfigField {
                 help: #help,
                 ty: #meta_mod::RustType::of::<#ty>(#ty_in_code),
                 expecting: const { #cr::de::extract_expected_types::<#ty, _>(&#deserializer) },
-                deserializer: const { &#cr::de::DeserializerWrapper::<#ty, _>::new(#deserializer) },
+                deserializer: const { &#cr::de::Erased::<#ty, _>::new(#deserializer) },
                 default_value: #default_value,
             }
         }}

@@ -83,7 +83,7 @@ pub struct TestConfig {
     
     // For custom types, you can specify a custom deserializer. The deserializer below
     // expects a string and works for all types implementing `serde::Deserialize`.
-    #[config(with = Serde![BasicTypes::STRING])]
+    #[config(with = Serde![str])]
     #[config(default_t = CustomEnum::First)]
     pub custom: CustomEnum,
     

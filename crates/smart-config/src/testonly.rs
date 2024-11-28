@@ -168,7 +168,7 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(with = de::Delimited(","))]
     pub array: [NonZeroUsize; 2],
     pub choices: Option<Vec<SimpleEnum>>,
-    #[config(with = de::Optional(Serde![BasicTypes::FLOAT]))]
+    #[config(with = de::Optional(Serde![float]))]
     pub assumed: Option<serde_json::Value>,
     #[config(default_t = Duration::from_millis(100), with = TimeUnit::Millis)]
     pub short_dur: Duration,
@@ -179,7 +179,7 @@ pub(crate) struct ConfigWithComplexTypes {
     pub memory_size_mb: Option<ByteSize>,
     #[config(default, with = de::Delimited(":"))]
     pub paths: Vec<PathBuf>,
-    #[config(default, with = de::OrString)]
+    #[config(default, with = de::OrString(Serde![object]))]
     pub map_or_string: MapOrString,
 }
 

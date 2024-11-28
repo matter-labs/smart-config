@@ -29,20 +29,26 @@ use crate::{
     ByteSize,
 };
 
-// FIXME: add diagnostic
-pub trait ExpectParam<T>: fmt::Debug + Send + Sync + 'static {
+/// Marks the param as well-known for a [deserializer](DeserializeParam).
+#[diagnostic::on_unimplemented(
+    message = "`{T}` param cannot be deserialized",
+    note = "Add #[config(with = _)] attribute to specify deserializer to use",
+    note = "Or, if you own the type, implement `ExpectParam<{T}> for {Self}`"
+)]
+pub trait ExpectParam<T>: DeserializeParam<T> {
     /// Describes which parameter this deserializer is expecting.
     const EXPECTING: BasicTypes;
+    /// Marks whether the underlying value is required.
     const IS_REQUIRED: bool = true;
 
+    /// Provides an extended type description.
     fn type_qualifiers(&self) -> TypeQualifiers {
         TypeQualifiers::default()
     }
 }
 
 /// Deserializes a parameter of the specified type.
-pub trait DeserializeParam<T>: ExpectParam<T> {
-    // FIXME: reverse relationship?
+pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     /// Performs deserialization given the context and param metadata.
     ///
     /// # Errors
@@ -55,6 +61,8 @@ pub trait DeserializeParam<T>: ExpectParam<T> {
     ) -> Result<T, ErrorWithOrigin>;
 }
 
+/// Deserializer powered by `serde`. Usually created with the help of [`Serde!`](macro@Serde) macro;
+/// see its docs for the examples of usage.
 pub struct Serde<const EXPECTING: u8>;
 
 impl<const EXPECTING: u8> fmt::Debug for Serde<EXPECTING> {
@@ -66,11 +74,63 @@ impl<const EXPECTING: u8> fmt::Debug for Serde<EXPECTING> {
     }
 }
 
+/// Constructor of [`Serde`](struct@Serde) types / instances.
+///
+/// The macro accepts a comma-separated list of expected basic types from the following set: `bool`, `int`,
+/// `float`, `str`, `array`, `object`.
+///
+/// # Examples
+///
+/// ```
+/// # use smart_config::{Serde, de::ExpectParam, metadata::BasicTypes};
+/// type MySerde = Serde![int, str, object];
+/// ```
 #[allow(non_snake_case)]
 #[macro_export]
 macro_rules! Serde {
-    ($expecting:expr) => {
-        $crate::de::Serde::<{ $crate::metadata::BasicTypes::raw($expecting) }>
+    (@expand bool $($tail:tt)+) => {
+        $crate::metadata::BasicTypes::BOOL.or($crate::Serde!(@expand $($tail)+))
+    };
+    (@expand int $($tail:tt)+) => {
+        $crate::metadata::BasicTypes::INTEGER.or($crate::Serde!(@expand $($tail)+))
+    };
+    (@expand float $($tail:tt)+) => {
+        $crate::metadata::BasicTypes::FLOAT.or($crate::Serde!(@expand $($tail)+))
+    };
+    (@expand str $($tail:tt)+) => {
+        $crate::metadata::BasicTypes::STRING.or($crate::Serde!(@expand $($tail)+))
+    };
+    (@expand array $($tail:tt)+) => {
+        $crate::metadata::BasicTypes::ARRAY.or($crate::Serde!(@expand $($tail)+))
+    };
+    (@expand object $($tail:tt)+) => {
+        $crate::metadata::BasicTypes::OBJECT.or($crate::Serde!(@expand $($tail)+))
+    };
+
+    (@expand bool) => {
+        $crate::metadata::BasicTypes::BOOL
+    };
+    (@expand int) => {
+        $crate::metadata::BasicTypes::INTEGER
+    };
+    (@expand float) => {
+        $crate::metadata::BasicTypes::FLOAT
+    };
+    (@expand str) => {
+        $crate::metadata::BasicTypes::STRING
+    };
+    (@expand array) => {
+        $crate::metadata::BasicTypes::ARRAY
+    };
+    (@expand object) => {
+        $crate::metadata::BasicTypes::OBJECT
+    };
+    (@expand any) => {
+        $crate::metadata::BasicTypes::ANY
+    };
+
+    ($($expecting:tt),+ $(,)?) => {
+        $crate::de::Serde::<{ $crate::metadata::BasicTypes::raw($crate::Serde!(@expand $($expecting)+)) }>
     };
 }
 
@@ -178,7 +238,7 @@ impl_well_known_int!(
     NonZeroIsize
 );
 
-impl<T> ExpectParam<Option<T>> for ()
+impl<T: DeserializeOwned> ExpectParam<Option<T>> for ()
 where
     Self: ExpectParam<T>,
 {
@@ -289,7 +349,7 @@ impl<T: 'static, De: DeserializeParam<T>> WithDefault<T, De> {
     }
 }
 
-impl<T: 'static, De: DeserializeParam<T>> ExpectParam<T> for WithDefault<T, De> {
+impl<T: 'static, De: ExpectParam<T>> ExpectParam<T> for WithDefault<T, De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
     const IS_REQUIRED: bool = false;
 
@@ -314,11 +374,10 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
 
 /// Deserializer decorator that wraps the output of the underlying decorator in `Some` and returns `None`
 /// if the input for the param is missing.
-// FIXME: obsolete now?
 #[derive(Debug)]
 pub struct Optional<De>(pub De);
 
-impl<T, De: DeserializeParam<T>> ExpectParam<Option<T>> for Optional<De> {
+impl<T, De: ExpectParam<T>> ExpectParam<Option<T>> for Optional<De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
     const IS_REQUIRED: bool = false;
 }
@@ -548,6 +607,20 @@ impl DeserializeParam<ByteSize> for SizeUnit {
 /// assert_eq!(config.ints, HashSet::from([12, 34]));
 /// # anyhow::Ok(())
 /// ```
+///
+/// The wrapping logic is smart enough to catch in compile time an attempt to apply `Delimited` to a type
+/// that cannot be deserialized from an array:
+///
+/// ```compile_fail
+/// use smart_config::{de, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct Fail {
+///     // will fail with "evaluation of `<Delimited as ExpectParam<u64>>::EXPECTING` failed"
+///     #[config(default, with = de::Delimited(","))]
+///     test: u64,
+/// }
+/// ```
 #[derive(Debug)]
 pub struct Delimited(pub &'static str);
 
@@ -559,7 +632,7 @@ where
         let base = <() as ExpectParam<T>>::EXPECTING;
         assert!(
             base.contains(BasicTypes::ARRAY),
-            "can only apply `Delimited` to arrays"
+            "can only apply `Delimited` to types that support deserialization from array"
         );
         base.or(BasicTypes::STRING)
     };
@@ -611,7 +684,7 @@ where
 /// # use std::{collections::HashSet, str::FromStr};
 /// use anyhow::Context as _;
 /// # use serde::Deserialize;
-/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig, Serde};
 ///
 /// #[derive(Deserialize)]
 /// #[serde(transparent)]
@@ -630,7 +703,7 @@ where
 ///
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct TestConfig {
-///     #[config(with = de::OrString)]
+///     #[config(with = de::OrString(Serde![array]))]
 ///     value: MySet,
 /// }
 ///
@@ -645,22 +718,22 @@ where
 /// # anyhow::Ok(())
 /// ```
 #[derive(Debug)]
-pub struct OrString; // FIXME: make a decorator?
+pub struct OrString<De>(pub De);
 
-impl<T> ExpectParam<T> for OrString
+impl<T, De> ExpectParam<T> for OrString<De>
 where
     T: FromStr,
     T::Err: fmt::Display,
-    (): ExpectParam<T>,
+    De: ExpectParam<T>,
 {
-    const EXPECTING: BasicTypes = <() as ExpectParam<T>>::EXPECTING.or(BasicTypes::STRING);
+    const EXPECTING: BasicTypes = <De as ExpectParam<T>>::EXPECTING.or(BasicTypes::STRING);
 }
 
-impl<T> DeserializeParam<T> for OrString
+impl<T, De> DeserializeParam<T> for OrString<De>
 where
-    T: DeserializeOwned + FromStr,
+    T: FromStr,
     T::Err: fmt::Display,
-    (): ExpectParam<T>,
+    De: ExpectParam<T>,
 {
     fn deserialize_param(
         &self,
@@ -672,7 +745,7 @@ where
             origin,
         }) = ctx.current_value()
         else {
-            return ().deserialize_param(ctx, param);
+            return self.0.deserialize_param(ctx, param);
         };
 
         T::from_str(s).map_err(|err| {
@@ -682,37 +755,26 @@ where
     }
 }
 
-/// Object-safe part of parameter deserializer. Stored in param metadata.
+/// Erased counterpart of a parameter deserializer. Stored in param metadata.
 #[doc(hidden)]
-pub trait ObjectSafeDeserializer: 'static + fmt::Debug + Send + Sync {
-    /// Describes which parameter this deserializer is expecting.
+pub trait ErasedDeserializer: DeserializeParam<Box<dyn any::Any>> {
     fn type_qualifiers(&self) -> TypeQualifiers;
-
-    /// Performs deserialization given the context and param metadata and wraps the output in a type-erased `Box`.
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<Box<dyn any::Any>, ErrorWithOrigin>;
 }
 
-/// Wrapper transforming [`DeserializeParam`] to [`ObjectSafeDeserializer`].
+/// Wrapper transforming [`DeserializeParam`] to [`ErasedDeserializer`].
 #[doc(hidden)]
-pub struct DeserializerWrapper<T, De> {
+pub struct Erased<T, De> {
     inner: De,
     _ty: PhantomData<fn(T)>,
 }
 
-impl<T, D: fmt::Debug> fmt::Debug for DeserializerWrapper<T, D> {
+impl<T, D: fmt::Debug> fmt::Debug for Erased<T, D> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_tuple("DeserializerWrapper")
-            .field(&self.inner)
-            .finish()
+        formatter.debug_tuple("Erased").field(&self.inner).finish()
     }
 }
 
-impl<T: 'static, De: DeserializeParam<T>> DeserializerWrapper<T, De> {
+impl<T: 'static, De: DeserializeParam<T>> Erased<T, De> {
     pub const fn new(inner: De) -> Self {
         Self {
             inner,
@@ -721,11 +783,7 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializerWrapper<T, De> {
     }
 }
 
-impl<T: 'static, De: DeserializeParam<T>> ObjectSafeDeserializer for DeserializerWrapper<T, De> {
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        self.inner.type_qualifiers()
-    }
-
+impl<T: 'static, De: ExpectParam<T>> DeserializeParam<Box<dyn any::Any>> for Erased<T, De> {
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -734,5 +792,11 @@ impl<T: 'static, De: DeserializeParam<T>> ObjectSafeDeserializer for Deserialize
         self.inner
             .deserialize_param(ctx, param)
             .map(|val| Box::new(val) as _)
+    }
+}
+
+impl<T: 'static, De: ExpectParam<T>> ErasedDeserializer for Erased<T, De> {
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        self.inner.type_qualifiers()
     }
 }

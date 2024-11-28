@@ -15,9 +15,8 @@
 //!
 //! # Deserializers
 //!
-//! The default deserializer is extracted from the param type with the help of [`WellKnown`] trait.
-//! If you have a custom type defined locally which you want to use in configs, the easiest solution
-//! would be to implement `WellKnown` for it.
+//! The default deserializer is `()`. If you have a custom type defined locally which you want to use in configs, the easiest solution
+//! would be to implement [`ExpectParam`]`<YourType> for ()`.
 //! Alternatively, it's possible to specify a custom deserializer using `#[config(with = _)]` attribute.
 //!
 //! ## Universal deserializers
@@ -40,8 +39,8 @@ use self::deserializer::ValueDeserializer;
 pub use self::{
     deserializer::DeserializerOptions,
     param::{
-        Delimited, DeserializeParam, DeserializerWrapper, ExpectParam, ObjectSafeDeserializer,
-        Optional, OrString, Serde, TagDeserializer, WithDefault,
+        Delimited, DeserializeParam, Erased, ErasedDeserializer, ExpectParam, Optional, OrString,
+        Serde, TagDeserializer, WithDefault,
     },
 };
 use crate::{
