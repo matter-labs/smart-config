@@ -53,6 +53,8 @@ use crate::{
 
 mod deserializer;
 mod param;
+#[cfg(feature = "primitive-types")]
+mod primitive_types_impl;
 #[cfg(test)]
 mod tests;
 

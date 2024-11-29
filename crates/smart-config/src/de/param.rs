@@ -29,6 +29,15 @@ use crate::{
 };
 
 /// Deserializes a parameter of the specified type.
+///
+/// # Implementations
+///
+/// `DeserializeParam` includes the following implementations:
+///
+/// - [`BasicType`], [`SchemaType`] allow deserializing any type implementing [`serde::Deserialize`].
+/// - [`Optional`] decorates a deserializer for `T` turning it into a deserializer for `Option<T>`
+/// - [`TimeUnit`] allows deserializing [`Duration`] from a number
+/// - [`SizeUnit`] similarly allows deserializing [`ByteSize`]
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     /// Describes which parameter this deserializer is expecting.
     fn expecting(&self) -> SchemaType;
@@ -66,6 +75,23 @@ where
 ///
 /// Conceptually, this means that the type is known to behave well when deserializing data from a [`Value`]
 /// (ordinarily, using [`serde::Deserialize`]).
+///
+/// # Implementations
+///
+/// Basic well-known types include:
+///
+/// - `bool`
+/// - [`String`]
+/// - [`PathBuf`]
+/// - Signed and unsigned integers, including non-zero variants
+/// - `f32`, `f64`
+///
+/// It is also implemented for collections, items of which implement `WellKnown`:
+///
+/// - [`Option`]
+/// - [`Vec`], arrays up to 32 elements (which is a `serde` restriction, not a local one)
+/// - [`HashSet`], [`BTreeSet`]
+/// - [`HashMap`], [`BTreeMap`]
 #[diagnostic::on_unimplemented(
     message = "`{Self}` param cannot be deserialized",
     note = "Add #[config(with = _)] attribute to specify deserializer to use"
@@ -75,6 +101,9 @@ pub trait WellKnown: 'static {
     const DE: &'static dyn DeserializeParam<Self>;
 }
 
+/// Uses [`serde::Deserialize`] to deserialize any supported type. If [`BasicType`] is specified, it is checked beforehand;
+/// thus, the caller is responsible to specify the correct type.
+///
 /// This deserializer assumes that the value is required. Hence, optional params should be wrapped in [`Optional`] to work correctly.
 impl<T: DeserializeOwned> DeserializeParam<T> for SchemaType {
     fn expecting(&self) -> SchemaType {
