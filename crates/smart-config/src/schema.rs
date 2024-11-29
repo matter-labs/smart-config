@@ -98,7 +98,7 @@ pub struct ConfigMut<'a, C> {
     _config: PhantomData<C>,
 }
 
-impl<'a, C: DescribeConfig> ConfigMut<'a, C> {
+impl<C: DescribeConfig> ConfigMut<'_, C> {
     /// Gets the config prefix.
     pub fn prefix(&self) -> &str {
         &self.prefix

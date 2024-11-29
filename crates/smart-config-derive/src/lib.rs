@@ -7,8 +7,6 @@
 #![doc(html_root_url = "https://docs.rs/smart-config-derive/0.1.0")]
 // General settings
 #![recursion_limit = "128"]
-// Linter settings
-#![allow(missing_docs)] // Adding docs here would interfere with docs in the main crate
 
 extern crate proc_macro;
 

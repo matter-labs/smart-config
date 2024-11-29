@@ -35,7 +35,6 @@ version-sync = "0.9.5"
 smart-config-derive = { version = "=0.1.0", path = "crates/smart-config-derive" }
 
 [workspace.lints.rust]
-missing_docs = "warn"
 missing_debug_implementations = "warn"
 unreachable_pub = "warn"
 
