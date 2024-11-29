@@ -183,22 +183,23 @@ pub struct TypeQualifiers {
 }
 
 impl TypeQualifiers {
-    /// Adds a qualifying description.
-    #[must_use]
-    pub fn with_description(mut self, description: &'static str) -> Self {
-        self.description = Some(Cow::Borrowed(description));
-        self
+    pub(crate) const fn new(description: &'static str) -> Self {
+        Self {
+            description: Some(Cow::Borrowed(description)),
+            unit: None,
+        }
     }
 
-    #[must_use]
-    pub(crate) fn with_dyn_description(mut self, description: String) -> Self {
-        self.description = Some(Cow::Owned(description));
-        self
+    pub(crate) fn dynamic(description: String) -> Self {
+        Self {
+            description: Some(description.into()),
+            unit: None,
+        }
     }
 
     /// Adds a unit of measurement.
     #[must_use]
-    pub fn with_unit(mut self, unit: UnitOfMeasurement) -> Self {
+    pub const fn with_unit(mut self, unit: UnitOfMeasurement) -> Self {
         self.unit = Some(unit);
         self
     }

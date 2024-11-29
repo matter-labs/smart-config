@@ -41,9 +41,7 @@ pub use self::param::{Erased, ErasedDeserializer, TagDeserializer};
 pub use self::{
     deserializer::DeserializerOptions,
     macros::Serde,
-    param::{
-        Delimited, DeserializeParam, ExpectParam, Optional, OrString, Serde, WellKnown, WithDefault,
-    },
+    param::{Delimited, DeserializeParam, Optional, OrString, Serde, WellKnown, WithDefault},
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
@@ -61,8 +59,8 @@ mod param;
 mod tests;
 
 #[doc(hidden)] // used by proc macros
-pub const fn extract_expected_types<T, De: ExpectParam<T>>(_: &De) -> BasicTypes {
-    <De as ExpectParam<T>>::EXPECTING
+pub const fn extract_expected_types<T, De: DeserializeParam<T>>(_: &De) -> BasicTypes {
+    <De as DeserializeParam<T>>::EXPECTING
 }
 
 /// Context for deserializing a configuration.
