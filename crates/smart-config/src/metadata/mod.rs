@@ -145,6 +145,11 @@ impl BasicTypes {
         Self(self.0 | rhs.0)
     }
 
+    pub(crate) fn and(self, rhs: Self) -> Option<Self> {
+        let raw = self.0 & rhs.0;
+        (raw > 0).then_some(Self(raw))
+    }
+
     /// Checks whether the `needle` is fully contained in this set.
     pub const fn contains(self, needle: Self) -> bool {
         self.0 & needle.0 == needle.0

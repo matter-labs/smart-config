@@ -16,7 +16,7 @@ use crate::{
 /// Propagates parsing errors, which allows testing negative cases.
 #[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible (?)
 pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {
-    let schema = ConfigSchema::default().insert::<C>("");
+    let schema = ConfigSchema::default().insert::<C>("").unwrap();
     let repo = ConfigRepository::new(&schema).with(sample);
     repo.single::<C>().unwrap().parse()
 }
@@ -32,7 +32,7 @@ pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseE
 ///
 /// Propagates parsing errors, which allows testing negative cases.
 pub fn test_complete<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {
-    let schema = ConfigSchema::default().insert::<C>("");
+    let schema = ConfigSchema::default().insert::<C>("").unwrap();
     let repo = ConfigRepository::new(&schema).with(sample);
 
     let metadata = &C::DESCRIPTION;

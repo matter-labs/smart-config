@@ -214,3 +214,5 @@ impl ConfigMetadata {
         }
     }
 }
+
+// TODO: validate param types (non-empty intersection)

@@ -15,7 +15,7 @@ use crate::{
 
 #[test]
 fn parsing_enum_config_with_schema() {
-    let schema = ConfigSchema::default().insert::<EnumConfig>("");
+    let schema = ConfigSchema::default().insert::<EnumConfig>("").unwrap();
 
     let json = config!(
         "type": "Nested",
@@ -103,7 +103,9 @@ fn parsing_enum_config_with_schema() {
 
 #[test]
 fn parsing_defaulting_config_from_missing_value_with_schema() {
-    let schema = ConfigSchema::default().insert::<DefaultingConfig>("test");
+    let schema = ConfigSchema::default()
+        .insert::<DefaultingConfig>("test")
+        .unwrap();
     let json = config!("unrelated": 123);
     let repo = ConfigRepository::new(&schema).with(json);
     let config: DefaultingConfig = repo.single().unwrap().parse().unwrap();
@@ -118,7 +120,9 @@ fn parsing_compound_config_with_schema() {
         "other_int": 123,
     );
 
-    let schema = ConfigSchema::default().insert::<CompoundConfig>("");
+    let schema = ConfigSchema::default()
+        .insert::<CompoundConfig>("")
+        .unwrap();
     let repo = ConfigRepository::new(&schema).with(json);
     let config: CompoundConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(
@@ -151,7 +155,9 @@ fn nesting_json() {
         ],
     );
 
-    let schema = ConfigSchema::default().insert::<ConfigWithNesting>("");
+    let schema = ConfigSchema::default()
+        .insert::<ConfigWithNesting>("")
+        .unwrap();
     let map = ConfigRepository::new(&schema).with(env).merged;
 
     assert_eq!(
@@ -181,7 +187,9 @@ fn merging_config_parts() {
     );
 
     let alias = Alias::prefix("deprecated").exclude(|name| name == "not_merged");
-    let mut schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("", [alias]);
+    let mut schema = ConfigSchema::default()
+        .insert_aliased::<ConfigWithNesting>("", [alias])
+        .unwrap();
     schema
         .single_mut::<NestedConfig>()
         .unwrap()
@@ -214,7 +222,9 @@ fn merging_config_parts_with_env() {
     let env = Environment::from_iter("", [("deprecated_value", "4"), ("nested_renamed", "first")]);
 
     let alias = Alias::prefix("deprecated").exclude(|name| name == "not_merged");
-    let mut schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("", [alias]);
+    let mut schema = ConfigSchema::default()
+        .insert_aliased::<ConfigWithNesting>("", [alias])
+        .unwrap();
     schema
         .single_mut::<NestedConfig>()
         .unwrap()
@@ -323,7 +333,9 @@ fn merging_configs() {
 #[test]
 fn using_aliases_with_object_config() {
     let alias = Alias::prefix("deprecated");
-    let schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("test", [alias]);
+    let schema = ConfigSchema::default()
+        .insert_aliased::<ConfigWithNesting>("test", [alias])
+        .unwrap();
 
     let json = config!(
         "value": 123, // Should not be used.
@@ -341,7 +353,9 @@ fn using_aliases_with_object_config() {
 #[test]
 fn using_env_config_overrides() {
     let alias = Alias::prefix("deprecated");
-    let schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("test", [alias]);
+    let schema = ConfigSchema::default()
+        .insert_aliased::<ConfigWithNesting>("test", [alias])
+        .unwrap();
 
     let base = config!(
         "value": 123, // Should not be used.

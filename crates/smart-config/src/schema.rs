@@ -3,7 +3,7 @@
 use std::{
     any,
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     io, iter,
     marker::PhantomData,
 };
@@ -11,7 +11,7 @@ use std::{
 use anyhow::Context;
 
 use crate::{
-    metadata::{ConfigMetadata, NestedConfigMetadata, ParamMetadata},
+    metadata::{BasicTypes, ConfigMetadata, NestedConfigMetadata, ParamMetadata},
     value::Pointer,
     DescribeConfig,
 };
@@ -19,7 +19,8 @@ use crate::{
 const INDENT: &str = "    ";
 
 /// Alias specification for a config.
-#[derive(Debug)]
+// FIXME: simplify aliases by removing param names?
+#[derive(Debug, Clone)]
 pub struct Alias<C> {
     pub(crate) prefix: Pointer<'static>,
     pub(crate) param_names: HashSet<&'static str>,
@@ -56,7 +57,7 @@ impl<C: DescribeConfig> Alias<C> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ConfigData {
     pub metadata: &'static ConfigMetadata,
     pub aliases: Vec<Alias<()>>,
@@ -110,15 +111,28 @@ impl<C: DescribeConfig> ConfigMut<'_, C> {
     }
 
     /// Pushes an additional alias for the config.
+    // FIXME: update mounting points; maybe leave as the only way to add aliases
     pub fn push_alias(&mut self, alias: Alias<C>) {
         self.data.aliases.push(alias.drop_type_param());
     }
 }
 
+/// Mounting point info sufficient to resolve the mounted config / param.
+// TODO: add refs
+#[derive(Debug, Clone)]
+enum MountingPoint {
+    /// Contains type IDs of mounted config(s).
+    Config,
+    Param {
+        expecting: BasicTypes,
+    },
+}
+
 /// Schema for configuration. Can contain multiple configs bound to different paths.
-#[derive(Default, Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct ConfigSchema {
     configs: HashMap<(any::TypeId, Cow<'static, str>), ConfigData>,
+    mounting_points: BTreeMap<String, MountingPoint>,
 }
 
 impl ConfigSchema {
@@ -207,8 +221,16 @@ impl ConfigSchema {
     }
 
     /// Inserts a new configuration type at the specified place.
-    #[must_use]
-    pub fn insert<C>(self, prefix: &'static str) -> Self
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if adding a config leads to violations of fundamental invariants:
+    ///
+    /// - If a parameter in the new config (taking aliases into account, and params in nested / flattened configs)
+    ///   is mounted at the location of an existing config.
+    /// - Vice versa, if a config or nested config is mounted at the location of an existing param.
+    /// - If a parameter is mounted at the location of a parameter with disjoint [expected types](ParamMetadata.expecting).
+    pub fn insert<C>(self, prefix: &'static str) -> anyhow::Result<Self>
     where
         C: DescribeConfig,
     {
@@ -216,48 +238,27 @@ impl ConfigSchema {
     }
 
     /// Inserts a new configuration type at the specified place with potential aliases.
-    #[must_use]
+    ///
+    /// # Errors
+    ///
+    /// Returns errors in the same situations as [`Self::insert()`], with aliases for configs / params
+    /// extended to both local aliases and aliases passed as the second arg.
     pub fn insert_aliased<C>(
         mut self,
         prefix: &'static str,
         aliases: impl IntoIterator<Item = Alias<C>>,
-    ) -> Self
+    ) -> anyhow::Result<Self>
     where
         C: DescribeConfig,
     {
         let metadata = &C::DESCRIPTION;
-        self.insert_inner(
-            prefix.into(),
-            any::TypeId::of::<C>(),
-            ConfigData {
-                aliases: aliases.into_iter().map(Alias::drop_type_param).collect(),
-                metadata,
-            },
-        );
+        let config_id = any::TypeId::of::<C>();
+        let aliases = aliases.into_iter().map(Alias::drop_type_param).collect();
 
-        // Insert all nested configs recursively.
-        let mut pending_configs: Vec<_> =
-            Self::list_nested_configs(prefix, metadata.nested_configs).collect();
-        while let Some((prefix, metadata)) = pending_configs.pop() {
-            let new_configs = Self::list_nested_configs(&prefix, metadata.nested_configs);
-            pending_configs.extend(new_configs);
-
-            self.insert_inner(prefix.into(), metadata.ty.id(), ConfigData::new(metadata));
-        }
-        self
-    }
-
-    fn list_nested_configs<'a>(
-        prefix: &'a str,
-        nested: &'a [NestedConfigMetadata],
-    ) -> impl Iterator<Item = (String, &'static ConfigMetadata)> + 'a {
-        nested
-            .iter()
-            .map(|nested| (Pointer(prefix).join(nested.name), nested.meta))
-    }
-
-    fn insert_inner(&mut self, prefix: Cow<'static, str>, type_id: any::TypeId, data: ConfigData) {
-        self.configs.insert((type_id, prefix), data);
+        let mut patched = PatchedSchema::new(&mut self);
+        patched.insert_new_config(prefix, aliases, config_id, metadata)?;
+        patched.commit();
+        Ok(self)
     }
 
     /// Writes help about this schema to the provided writer. `param_filter` can be used to filter displayed parameters.
@@ -290,39 +291,41 @@ impl ConfigSchema {
         Ok(())
     }
 
+    fn all_names<'a>(
+        canonical_prefix: &'a str,
+        param: &'a ParamMetadata,
+        config_data: &'a ConfigData,
+    ) -> impl Iterator<Item = (&'a str, &'a str)> + 'a {
+        let local_aliases = iter::once(param.name).chain(param.aliases.iter().copied());
+        let local_aliases_ = local_aliases.clone();
+        let global_aliases = config_data.aliases.iter().flat_map(move |alias| {
+            local_aliases_.clone().filter_map(|name| {
+                alias
+                    .param_names
+                    .contains(name)
+                    .then_some((alias.prefix.0, name))
+            })
+        });
+        let local_aliases = local_aliases
+            .clone()
+            .map(move |name| (canonical_prefix, name));
+        local_aliases.chain(global_aliases)
+    }
+
     fn write_parameter(
         writer: &mut impl io::Write,
         prefix: &str,
         param: &ParamMetadata,
         config_data: &ConfigData,
     ) -> io::Result<()> {
-        let prefix_sep = if prefix.is_empty() || prefix.ends_with('.') {
-            ""
-        } else {
-            "."
-        };
-        writeln!(writer, "{prefix}{prefix_sep}{}", param.name)?;
-
-        let local_aliases = param.aliases.iter().copied();
-        let global_aliases = config_data.aliases.iter().flat_map(|alias| {
-            local_aliases
-                .clone()
-                .chain([param.name])
-                .filter_map(|name| {
-                    alias
-                        .param_names
-                        .contains(name)
-                        .then_some((alias.prefix.0, name))
-                })
-        });
-        let local_aliases = local_aliases.clone().map(|name| (prefix, name));
-        for (prefix, alias) in local_aliases.chain(global_aliases) {
+        let all_names = Self::all_names(prefix, param, config_data);
+        for (prefix, name) in all_names {
             let prefix_sep = if prefix.is_empty() || prefix.ends_with('.') {
                 ""
             } else {
                 "."
             };
-            writeln!(writer, "{prefix}{prefix_sep}{alias}")?;
+            writeln!(writer, "{prefix}{prefix_sep}{name}")?;
         }
 
         let kind = param.expecting;
@@ -343,8 +346,135 @@ impl ConfigSchema {
     }
 }
 
+/// [`ConfigSchema`] together with a patch that can be atomically committed.
+#[derive(Debug)]
+#[must_use = "Should be `commit()`ted"]
+struct PatchedSchema<'a> {
+    base: &'a mut ConfigSchema,
+    patch: ConfigSchema,
+}
+
+impl<'a> PatchedSchema<'a> {
+    fn new(base: &'a mut ConfigSchema) -> Self {
+        Self {
+            base,
+            patch: ConfigSchema::default(),
+        }
+    }
+
+    fn mount(&self, path: &str) -> Option<&MountingPoint> {
+        self.patch
+            .mounting_points
+            .get(path)
+            .or_else(|| self.base.mounting_points.get(path))
+    }
+
+    fn insert_new_config(
+        &mut self,
+        prefix: &'static str,
+        aliases: Vec<Alias<()>>,
+        config_id: any::TypeId,
+        metadata: &'static ConfigMetadata,
+    ) -> anyhow::Result<()> {
+        self.insert_inner(prefix.into(), config_id, ConfigData { metadata, aliases })?;
+
+        // Insert all nested configs recursively.
+        let mut pending_configs: Vec<_> =
+            Self::list_nested_configs(prefix, metadata.nested_configs).collect();
+        while let Some((prefix, metadata)) = pending_configs.pop() {
+            let new_configs = Self::list_nested_configs(&prefix, metadata.nested_configs);
+            pending_configs.extend(new_configs);
+
+            self.insert_inner(prefix.into(), metadata.ty.id(), ConfigData::new(metadata))?;
+        }
+        Ok(())
+    }
+
+    fn list_nested_configs<'i>(
+        prefix: &'i str,
+        nested: &'i [NestedConfigMetadata],
+    ) -> impl Iterator<Item = (String, &'static ConfigMetadata)> + 'i {
+        nested
+            .iter()
+            .map(|nested| (Pointer(prefix).join(nested.name), nested.meta))
+    }
+
+    fn insert_inner(
+        &mut self,
+        prefix: Cow<'static, str>,
+        type_id: any::TypeId,
+        data: ConfigData,
+    ) -> anyhow::Result<()> {
+        let config_name = data.metadata.ty.name_in_code();
+        let config_paths = data.aliases.iter().map(|alias| alias.prefix.0);
+        let config_paths = iter::once(prefix.as_ref()).chain(config_paths);
+
+        for path in config_paths {
+            if let Some(mount) = self.mount(path) {
+                match mount {
+                    MountingPoint::Config => { /* OK */ }
+                    MountingPoint::Param { .. } => {
+                        anyhow::bail!(
+                            "Cannot mount config `{}` at `{path}` because parameter(s) are already mounted at this path",
+                            data.metadata.ty.name_in_code()
+                        );
+                    }
+                }
+            }
+            self.patch
+                .mounting_points
+                .insert(path.to_owned(), MountingPoint::Config);
+        }
+
+        for param in data.metadata.params {
+            let all_names = ConfigSchema::all_names(&prefix, param, &data);
+            for (prefix, name) in all_names {
+                let full_name = Pointer(prefix).join(name);
+                let prev_expecting = if let Some(mount) = self.mount(&full_name) {
+                    match mount {
+                        MountingPoint::Param { expecting } => *expecting,
+                        MountingPoint::Config => {
+                            anyhow::bail!(
+                                "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
+                                 config(s) are already mounted at this path",
+                                name = param.name,
+                                field = param.rust_field_name
+                            );
+                        }
+                    }
+                } else {
+                    BasicTypes::ANY
+                };
+
+                let Some(expecting) = prev_expecting.and(param.expecting) else {
+                    anyhow::bail!(
+                        "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
+                         it expects {expecting}, while the existing param(s) mounted at this path expect {prev_expecting}",
+                        name = param.name,
+                        field = param.rust_field_name,
+                        expecting = param.expecting
+                    );
+                };
+                self.patch
+                    .mounting_points
+                    .insert(full_name, MountingPoint::Param { expecting });
+            }
+        }
+
+        self.patch.configs.insert((type_id, prefix), data);
+        Ok(())
+    }
+
+    fn commit(self) {
+        self.base.configs.extend(self.patch.configs);
+        self.base.mounting_points.extend(self.patch.mounting_points);
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use assert_matches::assert_matches;
+
     use super::*;
     use crate::{
         metadata::BasicTypes, value::Value, ConfigRepository, DescribeConfig, DeserializeConfig,
@@ -425,7 +555,7 @@ optional
 
     #[test]
     fn printing_schema_help() {
-        let schema = ConfigSchema::default().insert::<TestConfig>("");
+        let schema = ConfigSchema::default().insert::<TestConfig>("").unwrap();
         let mut buffer = vec![];
         schema.write_help(&mut buffer, |_| true).unwrap();
         let buffer = String::from_utf8(buffer).unwrap();
@@ -434,8 +564,9 @@ optional
 
     #[test]
     fn using_alias() {
-        let schema =
-            ConfigSchema::default().insert_aliased::<TestConfig>("test", [Alias::prefix("")]);
+        let schema = ConfigSchema::default()
+            .insert_aliased::<TestConfig>("test", [Alias::prefix("")])
+            .unwrap();
 
         let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
         assert_eq!(all_prefixes, HashSet::from([Pointer("test"), Pointer("")]));
@@ -465,13 +596,15 @@ optional
 
     #[test]
     fn using_multiple_aliases() {
-        let schema = ConfigSchema::default().insert_aliased::<TestConfig>(
-            "test",
-            [
-                Alias::prefix("").exclude(|name| name == "optional"),
-                Alias::prefix("deprecated"),
-            ],
-        );
+        let schema = ConfigSchema::default()
+            .insert_aliased::<TestConfig>(
+                "test",
+                [
+                    Alias::prefix("").exclude(|name| name == "optional"),
+                    Alias::prefix("deprecated"),
+                ],
+            )
+            .unwrap();
 
         let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
         assert_eq!(
@@ -505,7 +638,7 @@ optional
 
     #[test]
     fn using_nesting() {
-        let schema = ConfigSchema::default().insert::<NestingConfig>("");
+        let schema = ConfigSchema::default().insert::<NestingConfig>("").unwrap();
 
         let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
         assert_eq!(
@@ -556,5 +689,97 @@ optional
         assert_eq!(config.hierarchical.optional_int, None);
         assert_eq!(config.flattened.str, "!!!");
         assert_eq!(config.flattened.optional_int, Some(777));
+    }
+
+    #[derive(Debug, DescribeConfig)]
+    #[config(crate = crate)]
+    struct BogusParamConfig {
+        #[allow(dead_code)]
+        hierarchical: u64,
+    }
+
+    #[derive(Debug, DescribeConfig)]
+    #[config(crate = crate)]
+    struct BogusParamTypeConfig {
+        #[allow(dead_code)]
+        bool_value: u64,
+    }
+
+    #[derive(Debug, DescribeConfig)]
+    #[config(crate = crate)]
+    struct BogusNestedConfig {
+        #[allow(dead_code)]
+        #[config(nest)]
+        str: TestConfig,
+    }
+
+    #[test]
+    fn mountpoint_errors() {
+        let schema = ConfigSchema::default()
+            .insert::<NestingConfig>("test")
+            .unwrap();
+        assert_matches!(
+            schema.mounting_points["test.hierarchical"],
+            MountingPoint::Config
+        );
+        assert_matches!(
+            schema.mounting_points["test.bool_value"],
+            MountingPoint::Param {
+                expecting: BasicTypes::BOOL
+            }
+        );
+        assert_matches!(
+            schema.mounting_points["test.str"],
+            MountingPoint::Param {
+                expecting: BasicTypes::STRING
+            }
+        );
+        assert_matches!(
+            schema.mounting_points["test.string"],
+            MountingPoint::Param {
+                expecting: BasicTypes::STRING
+            }
+        );
+        assert_matches!(
+            schema.mounting_points["test.hierarchical.str"],
+            MountingPoint::Param {
+                expecting: BasicTypes::STRING
+            }
+        );
+
+        let err = schema
+            .clone()
+            .insert::<BogusParamConfig>("test")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("[Rust field: `hierarchical`]"), "{err}");
+        assert!(err.contains("config(s) are already mounted"), "{err}");
+
+        let err = schema
+            .clone()
+            .insert::<BogusNestedConfig>("test")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Cannot mount config"), "{err}");
+        assert!(err.contains("at `test.str`"), "{err}");
+        assert!(err.contains("parameter(s) are already mounted"), "{err}");
+
+        let err = schema
+            .clone()
+            .insert::<BogusNestedConfig>("test.bool_value")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Cannot mount config"), "{err}");
+        assert!(err.contains("at `test.bool_value`"), "{err}");
+        assert!(err.contains("parameter(s) are already mounted"), "{err}");
+
+        let err = schema
+            .clone()
+            .insert::<BogusParamTypeConfig>("test")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Cannot insert param"), "{err}");
+        assert!(err.contains("at `test.bool_value`"), "{err}");
+        assert!(err.contains("expects integer"), "{err}");
     }
 }
