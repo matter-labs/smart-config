@@ -41,7 +41,9 @@ pub use self::param::{Erased, ErasedDeserializer, TagDeserializer};
 pub use self::{
     deserializer::DeserializerOptions,
     macros::Serde,
-    param::{Delimited, DeserializeParam, ExpectParam, Optional, OrString, Serde, WithDefault},
+    param::{
+        Delimited, DeserializeParam, ExpectParam, Optional, OrString, Serde, WellKnown, WithDefault,
+    },
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
@@ -53,8 +55,8 @@ use crate::{
 mod deserializer;
 mod macros;
 mod param;
-#[cfg(feature = "primitive-types")]
-mod primitive_types_impl;
+//#[cfg(feature = "primitive-types")]
+//mod primitive_types_impl;
 #[cfg(test)]
 mod tests;
 

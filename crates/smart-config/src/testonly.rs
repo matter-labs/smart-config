@@ -14,8 +14,8 @@ use assert_matches::assert_matches;
 use serde::Deserialize;
 
 use crate::{
-    de::{self, DeserializeContext, DeserializerOptions, ExpectParam, Serde},
-    metadata::{BasicTypes, SizeUnit, TimeUnit},
+    de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
+    metadata::{SizeUnit, TimeUnit},
     source::ConfigContents,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
@@ -28,8 +28,9 @@ pub(crate) enum SimpleEnum {
     Second,
 }
 
-impl ExpectParam<SimpleEnum> for () {
-    const EXPECTING: BasicTypes = BasicTypes::STRING;
+impl WellKnown for SimpleEnum {
+    type Deserializer = Serde![str];
+    const DE: Self::Deserializer = Serde![str];
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,8 +46,9 @@ pub(crate) struct TestParam {
     pub repeated: HashSet<SimpleEnum>,
 }
 
-impl ExpectParam<TestParam> for () {
-    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
+impl WellKnown for TestParam {
+    type Deserializer = Serde![object];
+    const DE: Self::Deserializer = Serde![object];
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -143,8 +145,9 @@ pub(crate) enum DefaultingEnumConfig {
 #[serde(transparent)]
 pub(crate) struct MapOrString(pub HashMap<String, u64>);
 
-impl ExpectParam<MapOrString> for () {
-    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
+impl WellKnown for MapOrString {
+    type Deserializer = Serde![str];
+    const DE: Self::Deserializer = Serde![str];
 }
 
 impl FromStr for MapOrString {

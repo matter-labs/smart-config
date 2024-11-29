@@ -17,7 +17,7 @@ use std::{
 };
 
 use serde::{
-    de::{value::UnitDeserializer, DeserializeOwned, Error as DeError},
+    de::{DeserializeOwned, Error as DeError},
     Deserialize,
 };
 
@@ -29,6 +29,29 @@ use crate::{
     ByteSize,
 };
 
+pub trait WellKnown: Sized {
+    type Deserializer: ExpectParam<Self>;
+    const DE: Self::Deserializer;
+}
+
+impl<T: WellKnown> DeserializeParam<T> for () {
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        T::DE.deserialize_param(ctx, param)
+    }
+}
+
+impl<T: WellKnown> ExpectParam<T> for () {
+    const EXPECTING: BasicTypes = <T::Deserializer as ExpectParam<T>>::EXPECTING;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        T::DE.type_qualifiers()
+    }
+}
+
 /// Marks the param as well-known for a [deserializer](DeserializeParam).
 #[diagnostic::on_unimplemented(
     message = "`{T}` param cannot be deserialized",
@@ -39,7 +62,6 @@ pub trait ExpectParam<T>: DeserializeParam<T> {
     /// Describes which parameter this deserializer is expecting.
     const EXPECTING: BasicTypes;
     /// Marks whether the underlying value is required.
-    const IS_REQUIRED: bool = true;
 
     /// Provides an extended type description.
     fn type_qualifiers(&self) -> TypeQualifiers {
@@ -105,30 +127,6 @@ impl<const EXPECTING: u8> fmt::Debug for Serde<EXPECTING> {
 
 impl<T: DeserializeOwned, const EXPECTING: u8> ExpectParam<T> for Serde<EXPECTING> {
     const EXPECTING: BasicTypes = BasicTypes::from_raw(EXPECTING);
-    const IS_REQUIRED: bool = true;
-}
-
-impl BasicTypes {
-    fn deserialize_param<T: DeserializeOwned>(
-        self,
-        ctx: &DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-        is_required: bool,
-    ) -> Result<T, ErrorWithOrigin> {
-        let Some(current_value) = ctx.current_value() else {
-            if is_required {
-                return Err(DeError::missing_field(param.name));
-            }
-            return T::deserialize(UnitDeserializer::new());
-        };
-
-        let deserializer = ValueDeserializer::new(current_value, ctx.de_options);
-        let type_matches = deserializer.value().is_supported_by(self);
-        if !type_matches {
-            return Err(deserializer.invalid_type(&self.to_string()));
-        }
-        T::deserialize(deserializer)
-    }
 }
 
 impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXPECTING> {
@@ -137,57 +135,52 @@ impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXP
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
-        <Self as ExpectParam<T>>::EXPECTING.deserialize_param(&ctx, param, true)
+        let expecting = BasicTypes::from_raw(EXPECTING);
+        let Some(current_value) = ctx.current_value() else {
+            return Err(DeError::missing_field(param.name));
+        };
+
+        let deserializer = ValueDeserializer::new(current_value, ctx.de_options);
+        let type_matches = deserializer.value().is_supported_by(expecting);
+        if !type_matches {
+            return Err(deserializer.invalid_type(&expecting.to_string()));
+        }
+        T::deserialize(deserializer)
     }
 }
 
-impl<T> DeserializeParam<T> for ()
-where
-    T: DeserializeOwned,
-    Self: ExpectParam<T>,
-{
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<T, ErrorWithOrigin> {
-        <Self as ExpectParam<T>>::EXPECTING.deserialize_param(
-            &ctx,
-            param,
-            <Self as ExpectParam<T>>::IS_REQUIRED,
-        )
-    }
+impl WellKnown for bool {
+    type Deserializer = super::Serde![bool];
+    const DE: Self::Deserializer = super::Serde![bool];
 }
 
-impl ExpectParam<bool> for () {
-    const EXPECTING: BasicTypes = BasicTypes::BOOL;
+impl WellKnown for String {
+    type Deserializer = super::Serde![str];
+    const DE: Self::Deserializer = super::Serde![str];
 }
 
-impl ExpectParam<String> for () {
-    const EXPECTING: BasicTypes = BasicTypes::STRING;
+// FIXME: qualifier
+impl WellKnown for PathBuf {
+    type Deserializer = super::Serde![str];
+    const DE: Self::Deserializer = super::Serde![str];
 }
 
-impl ExpectParam<PathBuf> for () {
-    const EXPECTING: BasicTypes = BasicTypes::STRING;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::default().with_description("filesystem path")
-    }
+impl WellKnown for f32 {
+    type Deserializer = super::Serde![float];
+    const DE: Self::Deserializer = super::Serde![float];
 }
 
-impl ExpectParam<f32> for () {
-    const EXPECTING: BasicTypes = BasicTypes::FLOAT;
-}
-
-impl ExpectParam<f64> for () {
-    const EXPECTING: BasicTypes = BasicTypes::FLOAT;
+impl WellKnown for f64 {
+    type Deserializer = super::Serde![float];
+    const DE: Self::Deserializer = super::Serde![float];
 }
 
 macro_rules! impl_well_known_int {
     ($($int:ty),+) => {
         $(
-        impl ExpectParam<$int> for () {
-            const EXPECTING: BasicTypes = BasicTypes::INTEGER;
+        impl WellKnown for $int {
+            type Deserializer = super::Serde![int];
+            const DE: Self::Deserializer = super::Serde![int];
         }
         )+
     };
@@ -207,92 +200,65 @@ impl_well_known_int!(
     NonZeroIsize
 );
 
-impl<T: DeserializeOwned> ExpectParam<Option<T>> for ()
-where
-    Self: ExpectParam<T>,
-{
-    const EXPECTING: BasicTypes = <Self as ExpectParam<T>>::EXPECTING;
-    const IS_REQUIRED: bool = false;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        ExpectParam::<T>::type_qualifiers(&()) // copy qualifiers of the base param
-    }
+impl<T: WellKnown> WellKnown for Option<T> {
+    type Deserializer = Optional<T::Deserializer>;
+    const DE: Self::Deserializer = Optional(T::DE);
 }
 
-impl<T: DeserializeOwned> ExpectParam<Vec<T>> for ()
-where
-    Self: ExpectParam<T>,
-{
-    const EXPECTING: BasicTypes = BasicTypes::ARRAY;
+impl<T: WellKnown + DeserializeOwned> WellKnown for Vec<T> {
+    type Deserializer = super::Serde![array];
+    const DE: Self::Deserializer = super::Serde![array];
 }
 
-impl<T, const N: usize> ExpectParam<[T; N]> for ()
+// FIXME: qualifier
+impl<T, const N: usize> WellKnown for [T; N]
 where
     [T; N]: DeserializeOwned, // `serde` implements `Deserialize` for separate lengths rather for generics
-    Self: ExpectParam<T>,
 {
-    const EXPECTING: BasicTypes = BasicTypes::ARRAY;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::default().with_dyn_description(format!("with {N} elements"))
-    }
+    type Deserializer = super::Serde![array];
+    const DE: Self::Deserializer = super::Serde![array];
 }
 
 // Heterogeneous tuples don't look like a good idea to mark as well-known because they wouldn't look well-structured
 // (it'd be better to define either multiple params or a struct param).
 
-impl<T, S> ExpectParam<HashSet<T, S>> for ()
+impl<T, S> WellKnown for HashSet<T, S>
 where
-    T: Eq + Hash + DeserializeOwned,
+    T: Eq + Hash + DeserializeOwned + WellKnown,
     S: 'static + Default + BuildHasher,
-    Self: ExpectParam<T>,
 {
-    const EXPECTING: BasicTypes = BasicTypes::ARRAY;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::default().with_description("set")
-    }
+    type Deserializer = super::Serde![array];
+    const DE: Self::Deserializer = super::Serde![array];
 }
 
-impl<T> ExpectParam<BTreeSet<T>> for ()
+impl<T> WellKnown for BTreeSet<T>
 where
-    T: Eq + Ord + DeserializeOwned,
-    Self: ExpectParam<T>,
+    T: Eq + Ord + DeserializeOwned + WellKnown,
 {
-    const EXPECTING: BasicTypes = BasicTypes::ARRAY;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::default().with_description("set")
-    }
+    type Deserializer = super::Serde![array];
+    const DE: Self::Deserializer = super::Serde![array];
 }
 
 /// Keys are intentionally restricted by [`FromStr`] in order to prevent runtime errors when dealing with keys
 /// that do not serialize to strings.
-impl<K, V, S> ExpectParam<HashMap<K, V, S>> for ()
+impl<K, V, S> WellKnown for HashMap<K, V, S>
 where
     K: 'static + DeserializeOwned + Eq + Hash + FromStr,
-    V: DeserializeOwned,
+    V: DeserializeOwned + WellKnown,
     S: 'static + Default + BuildHasher,
-    Self: ExpectParam<V>,
 {
-    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::default().with_description("map")
-    }
+    type Deserializer = super::Serde![object];
+    const DE: Self::Deserializer = super::Serde![object];
 }
 
-impl<K, V> ExpectParam<BTreeMap<K, V>> for ()
+impl<K, V> WellKnown for BTreeMap<K, V>
 where
     K: 'static + DeserializeOwned + Eq + Ord + FromStr,
-    V: DeserializeOwned,
+    V: DeserializeOwned + WellKnown,
     Self: ExpectParam<V>,
 {
-    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::default().with_description("map")
-    }
+    type Deserializer = super::Serde![object];
+    const DE: Self::Deserializer = super::Serde![object];
 }
 
 /// Deserializer decorator that defaults to the provided value if the input for the param is missing.
@@ -320,7 +286,6 @@ impl<T: 'static, De: DeserializeParam<T>> WithDefault<T, De> {
 
 impl<T: 'static, De: ExpectParam<T>> ExpectParam<T> for WithDefault<T, De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
-    const IS_REQUIRED: bool = false;
 
     fn type_qualifiers(&self) -> TypeQualifiers {
         self.inner.type_qualifiers()
@@ -348,7 +313,6 @@ pub struct Optional<De>(pub De);
 
 impl<T, De: ExpectParam<T>> ExpectParam<Option<T>> for Optional<De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
-    const IS_REQUIRED: bool = false;
 }
 
 impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
