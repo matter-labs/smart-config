@@ -254,25 +254,29 @@ fn mountpoint_errors() {
     assert_matches!(
         schema.mounting_points["test.bool_value"],
         MountingPoint::Param {
-            expecting: BasicTypes::BOOL
+            expecting: BasicTypes::BOOL,
+            is_canonical: true,
         }
     );
     assert_matches!(
         schema.mounting_points["test.str"],
         MountingPoint::Param {
-            expecting: BasicTypes::STRING
+            expecting: BasicTypes::STRING,
+            is_canonical: true,
         }
     );
     assert_matches!(
         schema.mounting_points["test.string"],
         MountingPoint::Param {
-            expecting: BasicTypes::STRING
+            expecting: BasicTypes::STRING,
+            is_canonical: false,
         }
     );
     assert_matches!(
         schema.mounting_points["test.hierarchical.str"],
         MountingPoint::Param {
-            expecting: BasicTypes::STRING
+            expecting: BasicTypes::STRING,
+            is_canonical: true,
         }
     );
 

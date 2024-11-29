@@ -172,11 +172,11 @@ impl<'a> ConfigRepository<'a> {
             }
         }
 
-        // Normalize types of all copied values. At this point we only care about canonical names,
+        // Coerce types of all copied values. At this point we only care about canonical names,
         // since any aliases were copied on the previous step.
-        for (prefix, config_data) in self.schema.iter() {
-            if let Some(config_map) = source_value.get_mut(prefix) {
-                config_map.coerce_value_types(config_data.metadata);
+        for (path, expecting) in self.schema.canonical_params() {
+            if let Some(val) = source_value.get_mut(path) {
+                val.coerce_value_type(expecting);
             }
         }
     }
@@ -363,52 +363,43 @@ impl WithOrigin {
 
     /// This is necessary to prevent `deserialize_any` errors
     // TODO: log coercion errors
-    fn coerce_value_types(&mut self, metadata: &ConfigMetadata) {
+    fn coerce_value_type(&mut self, expecting: BasicTypes) {
         const STRUCTURED: BasicTypes = BasicTypes::ARRAY.or(BasicTypes::OBJECT);
 
-        let Value::Object(map) = &mut self.inner else {
-            unreachable!("expected an object due to previous preprocessing steps");
+        let Value::String(str) = &self.inner else {
+            return;
         };
 
-        for param in metadata.params {
-            if let Some(value) = map.get_mut(param.name) {
-                let Value::String(str) = &value.inner else {
-                    continue;
-                };
-
-                // Attempt to transform the type to the expected type
-                let expecting = param.expecting;
-                match expecting {
-                    // We intentionally use exact comparisons; if a type supports multiple primitive representations,
-                    // we do nothing.
-                    BasicTypes::BOOL => {
-                        if let Ok(bool_value) = str.parse::<bool>() {
-                            value.inner = Value::Bool(bool_value);
-                        }
-                    }
-                    BasicTypes::INTEGER | BasicTypes::FLOAT => {
-                        if let Ok(number) = str.parse::<serde_json::Number>() {
-                            value.inner = Value::Number(number);
-                        }
-                    }
-
-                    ty if STRUCTURED.contains(ty) => {
-                        let Ok(val) = serde_json::from_str::<serde_json::Value>(str) else {
-                            continue;
-                        };
-                        let is_value_supported = (val.is_array() && ty.contains(BasicTypes::ARRAY))
-                            || (val.is_object() && ty.contains(BasicTypes::OBJECT));
-                        if is_value_supported {
-                            let root_origin = Arc::new(ValueOrigin::Synthetic {
-                                source: value.origin.clone(),
-                                transform: "parsed JSON string".into(),
-                            });
-                            *value = Json::map_value(val, &root_origin, String::new());
-                        }
-                    }
-                    _ => { /* Do nothing */ }
+        // Attempt to transform the type to the expected type
+        match expecting {
+            // We intentionally use exact comparisons; if a type supports multiple primitive representations,
+            // we do nothing.
+            BasicTypes::BOOL => {
+                if let Ok(bool_value) = str.parse::<bool>() {
+                    self.inner = Value::Bool(bool_value);
                 }
             }
+            BasicTypes::INTEGER | BasicTypes::FLOAT => {
+                if let Ok(number) = str.parse::<serde_json::Number>() {
+                    self.inner = Value::Number(number);
+                }
+            }
+
+            ty if STRUCTURED.contains(ty) => {
+                let Ok(val) = serde_json::from_str::<serde_json::Value>(str) else {
+                    return;
+                };
+                let is_value_supported = (val.is_array() && ty.contains(BasicTypes::ARRAY))
+                    || (val.is_object() && ty.contains(BasicTypes::OBJECT));
+                if is_value_supported {
+                    let root_origin = Arc::new(ValueOrigin::Synthetic {
+                        source: self.origin.clone(),
+                        transform: "parsed JSON string".into(),
+                    });
+                    *self = Json::map_value(val, &root_origin, String::new());
+                }
+            }
+            _ => { /* Do nothing */ }
         }
     }
 }

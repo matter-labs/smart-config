@@ -96,6 +96,8 @@ enum MountingPoint {
     Config,
     Param {
         expecting: BasicTypes,
+        /// Is this the canonical path to at least one of params mounted here?
+        is_canonical: bool,
     },
 }
 
@@ -119,6 +121,20 @@ impl ConfigSchema {
         self.configs
             .iter()
             .map(|((_, prefix), data)| (Pointer(prefix), data))
+    }
+
+    pub(crate) fn canonical_params(&self) -> impl Iterator<Item = (Pointer<'_>, BasicTypes)> + '_ {
+        self.mounting_points.iter().filter_map(|(path, mount)| {
+            let expecting = match mount {
+                MountingPoint::Param {
+                    expecting,
+                    is_canonical,
+                } if *is_canonical => *expecting,
+
+                _ => return None,
+            };
+            Some((Pointer(path), expecting))
+        })
     }
 
     /// Lists all prefixes for the specified config. This does not include aliases.
@@ -250,13 +266,13 @@ impl ConfigSchema {
         param: &'a ParamMetadata,
         config_data: &'a ConfigData,
     ) -> impl Iterator<Item = (&'a str, &'a str)> + 'a {
-        let local_aliases = iter::once(param.name).chain(param.aliases.iter().copied());
-        let local_aliases_ = local_aliases.clone();
+        let local_names = iter::once(param.name).chain(param.aliases.iter().copied());
+        let local_names_ = local_names.clone();
         let global_aliases = config_data
             .aliases
             .iter()
-            .flat_map(move |alias| local_aliases_.clone().map(move |name| (alias.0, name)));
-        let local_aliases = local_aliases
+            .flat_map(move |alias| local_names_.clone().map(move |name| (alias.0, name)));
+        let local_aliases = local_names
             .clone()
             .map(move |name| (canonical_prefix, name));
         local_aliases.chain(global_aliases)
@@ -395,11 +411,19 @@ impl<'a> PatchedSchema<'a> {
 
         for param in data.metadata.params {
             let all_names = ConfigSchema::all_names(&prefix, param, &data);
-            for (prefix, name) in all_names {
+
+            for (i, (prefix, name)) in all_names.enumerate() {
+                // The canonical path is always returned first from `all_names()`
+                let is_canonical = i == 0;
                 let full_name = Pointer(prefix).join(name);
-                let prev_expecting = if let Some(mount) = self.mount(&full_name) {
+
+                let (prev_expecting, was_canonical) = if let Some(mount) = self.mount(&full_name) {
                     match mount {
-                        MountingPoint::Param { expecting } => *expecting,
+                        MountingPoint::Param {
+                            expecting,
+                            is_canonical,
+                        } => (*expecting, *is_canonical),
+
                         MountingPoint::Config => {
                             anyhow::bail!(
                                 "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
@@ -410,7 +434,7 @@ impl<'a> PatchedSchema<'a> {
                         }
                     }
                 } else {
-                    BasicTypes::ANY
+                    (BasicTypes::ANY, false)
                 };
 
                 let Some(expecting) = prev_expecting.and(param.expecting) else {
@@ -422,9 +446,15 @@ impl<'a> PatchedSchema<'a> {
                         expecting = param.expecting
                     );
                 };
-                self.patch
-                    .mounting_points
-                    .insert(full_name, MountingPoint::Param { expecting });
+
+                let is_canonical = was_canonical || is_canonical;
+                self.patch.mounting_points.insert(
+                    full_name,
+                    MountingPoint::Param {
+                        expecting,
+                        is_canonical,
+                    },
+                );
             }
         }
 
