@@ -4,7 +4,7 @@ pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
     metadata::{BasicTypes, ConfigMetadata},
-    schema::{Alias, ConfigRef, ConfigSchema},
+    schema::{ConfigRef, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseError, ParseErrors,
 };
@@ -143,8 +143,8 @@ impl<'a> ConfigRepository<'a> {
     fn preprocess_source(&self, source_value: &mut WithOrigin) {
         // Copy all globally aliased values.
         for (prefix, config_data) in self.schema.iter() {
-            for alias in &config_data.aliases {
-                source_value.merge_alias(prefix, alias);
+            for &alias in &config_data.aliases {
+                source_value.copy_from_alias(config_data.metadata, prefix, alias);
             }
         }
 
@@ -323,23 +323,29 @@ impl WithOrigin {
         prefix
     }
 
-    fn merge_alias(&mut self, target_prefix: Pointer<'_>, alias: &Alias<()>) {
+    fn copy_from_alias(
+        &mut self,
+        config: &ConfigMetadata,
+        target_prefix: Pointer<'_>,
+        alias: Pointer<'_>,
+    ) {
         let map = self
             .get(target_prefix)
             .and_then(|val| val.inner.as_object());
         let Some((alias_map, alias_origin)) = self
-            .get(alias.prefix)
+            .get(alias)
             .and_then(|val| Some((val.inner.as_object()?, &val.origin)))
         else {
             return; // No values at the alias
         };
 
-        let new_entries = alias.param_names.iter().filter_map(|&param_name| {
-            if map.map_or(false, |map| map.contains_key(param_name)) {
+        // FIXME: should include local aliases?
+        let new_entries = config.params.iter().filter_map(|param| {
+            if map.map_or(false, |map| map.contains_key(param.name)) {
                 None // Variable is already set
             } else {
-                let value = alias_map.get(param_name).cloned()?;
-                Some((param_name.to_owned(), value))
+                let value = alias_map.get(param.name).cloned()?;
+                Some((param.name.to_owned(), value))
             }
         });
         let new_entries: Vec<_> = new_entries.collect();
@@ -349,10 +355,7 @@ impl WithOrigin {
 
         let origin = Arc::new(ValueOrigin::Synthetic {
             source: alias_origin.clone(),
-            transform: format!(
-                "copy of '{}' to '{target_prefix}' per aliasing rules",
-                alias.prefix
-            ),
+            transform: format!("copy of '{alias}' to '{target_prefix}' per aliasing rules"),
         });
         self.ensure_object(target_prefix, |_| origin.clone())
             .extend(new_entries);

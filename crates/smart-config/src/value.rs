@@ -199,6 +199,7 @@ impl WithOrigin {
     }
 }
 
+// TODO: make public for increased type safety?
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct Pointer<'a>(pub &'a str);
 

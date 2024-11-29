@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use assert_matches::assert_matches;
 
 use super::*;
@@ -80,7 +82,8 @@ optional
 
 #[test]
 fn printing_schema_help() {
-    let schema = ConfigSchema::default().insert::<TestConfig>("").unwrap();
+    let mut schema = ConfigSchema::default();
+    schema.insert::<TestConfig>("").unwrap();
     let mut buffer = vec![];
     schema.write_help(&mut buffer, |_| true).unwrap();
     let buffer = String::from_utf8(buffer).unwrap();
@@ -89,8 +92,11 @@ fn printing_schema_help() {
 
 #[test]
 fn using_alias() {
-    let schema = ConfigSchema::default()
-        .insert_aliased::<TestConfig>("test", [Alias::prefix("")])
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert::<TestConfig>("test")
+        .unwrap()
+        .push_alias("")
         .unwrap();
 
     let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
@@ -120,14 +126,13 @@ fn using_alias() {
 
 #[test]
 fn using_multiple_aliases() {
-    let schema = ConfigSchema::default()
-        .insert_aliased::<TestConfig>(
-            "test",
-            [
-                Alias::prefix("").exclude(|name| name == "optional"),
-                Alias::prefix("deprecated"),
-            ],
-        )
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert::<TestConfig>("test")
+        .unwrap()
+        .push_alias("")
+        .unwrap()
+        .push_alias("deprecated")
         .unwrap();
 
     let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
@@ -145,9 +150,9 @@ fn using_multiple_aliases() {
         "APP_",
         [
             ("APP_TEST_STR", "?"),
-            ("APP_OPTIONAL", "123"), // should not be used (excluded from alias)
+            ("APP_OPTIONAL", "123"),
             ("APP_DEPRECATED_STR", "!"), // should not be used (original var is defined)
-            ("APP_DEPRECATED_OPTIONAL", "321"),
+            ("APP_DEPRECATED_OPTIONAL", "321"), // should not be used (alias has lower priority)
         ],
     );
     let config: TestConfig = ConfigRepository::new(&schema)
@@ -157,12 +162,13 @@ fn using_multiple_aliases() {
         .parse()
         .unwrap();
     assert_eq!(config.str, "?");
-    assert_eq!(config.optional_int, Some(321));
+    assert_eq!(config.optional_int, Some(123));
 }
 
 #[test]
 fn using_nesting() {
-    let schema = ConfigSchema::default().insert::<NestingConfig>("").unwrap();
+    let mut schema = ConfigSchema::default();
+    schema.insert::<NestingConfig>("").unwrap();
 
     let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
     assert_eq!(
@@ -239,9 +245,8 @@ struct BogusNestedConfig {
 
 #[test]
 fn mountpoint_errors() {
-    let schema = ConfigSchema::default()
-        .insert::<NestingConfig>("test")
-        .unwrap();
+    let mut schema = ConfigSchema::default();
+    schema.insert::<NestingConfig>("test").unwrap();
     assert_matches!(
         schema.mounting_points["test.hierarchical"],
         MountingPoint::Config
