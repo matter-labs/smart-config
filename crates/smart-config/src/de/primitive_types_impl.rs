@@ -1,23 +1,23 @@
 use serde::de::DeserializeOwned;
 
 use crate::{
-    de::{DeserializeContext, DeserializeParam, ExpectParam},
+    de::{DeserializeContext, DeserializeParam, Qualified, Serde, WellKnown},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
     value::Value,
 };
+
+const HASH_DE: Qualified<Serde![str]> =
+    Qualified::new(Serde![str], "hex string with optional 0x prefix");
 
 macro_rules! impl_well_known_hash {
     ($($ty:ident),+) => {
         $(
         /// Accepts a hex string with an optional `0x` prefix.
         #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
-        impl ExpectParam<primitive_types::$ty> for () {
-            const EXPECTING: BasicTypes = BasicTypes::STRING;
-
-            fn type_qualifiers(&self) -> TypeQualifiers {
-                TypeQualifiers::default().with_description("hex string with optional 0x prefix")
-            }
+        impl WellKnown for primitive_types::$ty {
+            type Deserializer = Qualified<Serde![str]>;
+            const DE: Self::Deserializer = HASH_DE;
         }
         )+
     };
@@ -28,19 +28,29 @@ impl_well_known_hash!(H128, H160, H256, H384, H512, H768);
 /// Hex deserializer enforcing a `0x` prefix. This prefix is not required by `U*` deserializers,
 /// but the value may be ambiguous otherwise (e.g., `34` being equal to 0x34, not decimal 34).
 #[derive(Debug)]
-struct HexUintDeserializer;
+pub struct HexUintDeserializer;
 
-fn deserialize_hex_uint<T: DeserializeOwned>(
-    ctx: DeserializeContext<'_>,
-    param: &'static ParamMetadata,
-) -> Result<T, ErrorWithOrigin> {
-    let deserializer = ctx.current_value_deserializer(param.name)?;
-    if let Value::String(s) = deserializer.value() {
-        if !s.starts_with("0x") {
-            return Err(deserializer.invalid_type("0x-prefixed hex number"));
-        }
+// This implementation is overly general, but since the struct is private, it's OK.
+impl<T: DeserializeOwned> DeserializeParam<T> for HexUintDeserializer {
+    const EXPECTING: BasicTypes = BasicTypes::STRING;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("0x-prefixed hex number")
     }
-    T::deserialize(deserializer)
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        if let Value::String(s) = deserializer.value() {
+            if !s.starts_with("0x") {
+                return Err(deserializer.invalid_type("0x-prefixed hex number"));
+            }
+        }
+        T::deserialize(deserializer)
+    }
 }
 
 macro_rules! impl_well_known_uint {
@@ -49,23 +59,9 @@ macro_rules! impl_well_known_uint {
         /// Accepts a hex string with an **mandatory** `0x` prefix. This prefix is required to clearly signal hex encoding
         /// so that `"34"` doesn't get mistaken for decimal 34.
         #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
-        impl DeserializeParam<primitive_types::$ty> for () {
-            fn deserialize_param(
-                &self,
-                ctx: DeserializeContext<'_>,
-                param: &'static ParamMetadata,
-            ) -> Result<primitive_types::$ty, ErrorWithOrigin> {
-                deserialize_hex_uint(ctx, param)
-            }
-        }
-
-        #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
-        impl ExpectParam<primitive_types::$ty> for () {
-            const EXPECTING: BasicTypes = BasicTypes::STRING;
-
-            fn type_qualifiers(&self) -> TypeQualifiers {
-                TypeQualifiers::default().with_description("hex string with 0x prefix")
-            }
+        impl WellKnown for primitive_types::$ty {
+            type Deserializer = HexUintDeserializer;
+            const DE: Self::Deserializer = HexUintDeserializer;
         }
         )+
     };
