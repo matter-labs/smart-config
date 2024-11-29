@@ -8,7 +8,7 @@ use crate::{
 
 #[test]
 fn describing_enum_config() {
-    let metadata: &ConfigMetadata = EnumConfig::describe_config();
+    let metadata = &EnumConfig::DESCRIPTION;
     assert_eq!(metadata.nested_configs.len(), 1);
     assert_eq!(metadata.nested_configs[0].name, "");
 
@@ -39,15 +39,12 @@ fn describing_enum_config() {
         .iter()
         .find(|param| param.name == "type")
         .unwrap();
-    assert_eq!(
-        tag_param.deserializer.expecting().base,
-        Some(BasicType::String)
-    );
+    assert_eq!(tag_param.expecting, BasicTypes::STRING);
 }
 
 #[test]
 fn describing_defaulting_enum_config() {
-    let metadata: &ConfigMetadata = DefaultingEnumConfig::describe_config();
+    let metadata = &DefaultingEnumConfig::DESCRIPTION;
     let tag_param = metadata
         .params
         .iter()
@@ -59,15 +56,23 @@ fn describing_defaulting_enum_config() {
 
 #[test]
 fn describing_complex_types() {
-    let metadata: &ConfigMetadata = ConfigWithComplexTypes::describe_config();
+    let metadata = &ConfigWithComplexTypes::DESCRIPTION;
     let array_param = metadata
         .params
         .iter()
         .find(|param| param.name == "array")
         .unwrap();
     assert_eq!(
-        array_param.deserializer.expecting().base,
-        Some(BasicType::Array)
+        array_param.expecting,
+        BasicTypes::ARRAY.or(BasicTypes::STRING)
+    );
+    assert_eq!(
+        array_param
+            .deserializer
+            .type_qualifiers()
+            .description
+            .unwrap(),
+        "using \",\" delimiter"
     );
 
     let assumed_param = metadata
@@ -75,27 +80,24 @@ fn describing_complex_types() {
         .iter()
         .find(|param| param.name == "assumed")
         .unwrap();
-    assert_eq!(
-        assumed_param.deserializer.expecting().base,
-        Some(BasicType::Float)
-    );
+    assert_eq!(assumed_param.expecting, BasicTypes::FLOAT);
 
     let path_param = metadata
         .params
         .iter()
         .find(|param| param.name == "path")
         .unwrap();
-    let expecting = path_param.deserializer.expecting();
-    assert_eq!(expecting.base, Some(BasicType::String));
-    assert_eq!(expecting.qualifier.unwrap(), "filesystem path");
+    assert_eq!(path_param.expecting, BasicTypes::STRING);
+    let qualifiers = path_param.deserializer.type_qualifiers();
+    assert_eq!(qualifiers.description.unwrap(), "filesystem path");
 
     let dur_param = metadata
         .params
         .iter()
         .find(|param| param.name == "short_dur")
         .unwrap();
-    let expecting = dur_param.deserializer.expecting();
-    assert_eq!(expecting.base, Some(BasicType::Integer));
-    assert_eq!(expecting.qualifier.unwrap(), "time duration");
-    assert_eq!(expecting.unit, Some(TimeUnit::Millis.into()));
+    assert_eq!(dur_param.expecting, BasicTypes::INTEGER);
+    let qualifiers = dur_param.deserializer.type_qualifiers();
+    assert_eq!(qualifiers.description.unwrap(), "time duration");
+    assert_eq!(qualifiers.unit, Some(TimeUnit::Millis.into()));
 }

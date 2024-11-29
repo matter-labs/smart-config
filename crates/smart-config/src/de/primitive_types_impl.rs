@@ -1,11 +1,14 @@
 use serde::de::DeserializeOwned;
 
 use crate::{
-    de::{DeserializeContext, DeserializeParam, WellKnown},
+    de::{DeserializeContext, DeserializeParam, Qualified, Serde, WellKnown},
     error::ErrorWithOrigin,
-    metadata::{BasicType, ParamMetadata, SchemaType},
+    metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
     value::Value,
 };
+
+const HASH_DE: Qualified<Serde![str]> =
+    Qualified::new(Serde![str], "hex string with optional 0x prefix");
 
 macro_rules! impl_well_known_hash {
     ($($ty:ident),+) => {
@@ -13,8 +16,8 @@ macro_rules! impl_well_known_hash {
         /// Accepts a hex string with an optional `0x` prefix.
         #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
         impl WellKnown for primitive_types::$ty {
-            const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::String)
-            .with_qualifier("hex string with optional 0x prefix");
+            type Deserializer = Qualified<Serde![str]>;
+            const DE: Self::Deserializer = HASH_DE;
         }
         )+
     };
@@ -25,12 +28,14 @@ impl_well_known_hash!(H128, H160, H256, H384, H512, H768);
 /// Hex deserializer enforcing a `0x` prefix. This prefix is not required by `U*` deserializers,
 /// but the value may be ambiguous otherwise (e.g., `34` being equal to 0x34, not decimal 34).
 #[derive(Debug)]
-struct HexUintDeserializer;
+pub struct HexUintDeserializer;
 
 // This implementation is overly general, but since the struct is private, it's OK.
 impl<T: DeserializeOwned> DeserializeParam<T> for HexUintDeserializer {
-    fn expecting(&self) -> SchemaType {
-        SchemaType::new(BasicType::String).with_qualifier("0x-prefixed hex number")
+    const EXPECTING: BasicTypes = BasicTypes::STRING;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("0x-prefixed hex number")
     }
 
     fn deserialize_param(
@@ -55,7 +60,8 @@ macro_rules! impl_well_known_uint {
         /// so that `"34"` doesn't get mistaken for decimal 34.
         #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
         impl WellKnown for primitive_types::$ty {
-            const DE: &'static dyn DeserializeParam<Self> = &HexUintDeserializer;
+            type Deserializer = HexUintDeserializer;
+            const DE: Self::Deserializer = HexUintDeserializer;
         }
         )+
     };

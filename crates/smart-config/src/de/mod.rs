@@ -22,7 +22,7 @@
 //!
 //! ## Universal deserializers
 //!
-//! [`BasicType`](crate::metadata::BasicType) and [`SchemaType`](crate::metadata::SchemaType) can deserialize
+//! [`Serde`](struct@Serde) (usually instantiated via [the eponymous macro](macro@Serde)) can deserialize
 //! any param implementing [`serde::Deserialize`]. An important caveat is that these deserializers require
 //! the input `Value` to be present; otherwise, they'll fail with a "missing value" error. As such,
 //! for [`Option`]al types, it's necessary to wrap a deserializer in the [`Optional`] decorator.
@@ -37,26 +37,34 @@
 use serde::de::Error as DeError;
 
 use self::deserializer::ValueDeserializer;
+#[doc(hidden)]
+pub use self::param::{Erased, ErasedDeserializer, TagDeserializer};
 pub use self::{
     deserializer::DeserializerOptions,
+    macros::Serde,
     param::{
-        DeserializeParam, DeserializerWrapper, ObjectSafeDeserializer, Optional, TagDeserializer,
-        WellKnown, WithDefault,
+        Delimited, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault,
     },
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
-    metadata::{ConfigMetadata, ParamMetadata},
+    metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
     value::{Pointer, ValueOrigin, WithOrigin},
     DescribeConfig, ParseError, ParseErrors,
 };
 
 mod deserializer;
+mod macros;
 mod param;
 #[cfg(feature = "primitive-types")]
 mod primitive_types_impl;
 #[cfg(test)]
 mod tests;
+
+#[doc(hidden)] // used by proc macros
+pub const fn extract_expected_types<T, De: DeserializeParam<T>>(_: &De) -> BasicTypes {
+    <De as DeserializeParam<T>>::EXPECTING
+}
 
 /// Context for deserializing a configuration.
 #[derive(Debug)]
@@ -64,6 +72,7 @@ pub struct DeserializeContext<'a> {
     de_options: &'a DeserializerOptions,
     root_value: &'a WithOrigin,
     path: String,
+    patched_current_value: Option<&'a WithOrigin>,
     current_config: &'static ConfigMetadata,
     errors: &'a mut ParseErrors,
 }
@@ -80,6 +89,7 @@ impl<'a> DeserializeContext<'a> {
             de_options,
             root_value,
             path,
+            patched_current_value: None,
             current_config,
             errors,
         }
@@ -90,13 +100,27 @@ impl<'a> DeserializeContext<'a> {
             de_options: self.de_options,
             root_value: self.root_value,
             path: Pointer(&self.path).join(path),
+            patched_current_value: None,
+            current_config: self.current_config,
+            errors: self.errors,
+        }
+    }
+
+    /// Allows to pretend that `current_value` is as supplied.
+    fn patched<'s>(&'s mut self, current_value: &'s WithOrigin) -> DeserializeContext<'s> {
+        DeserializeContext {
+            de_options: self.de_options,
+            root_value: self.root_value,
+            path: self.path.clone(),
+            patched_current_value: Some(current_value),
             current_config: self.current_config,
             errors: self.errors,
         }
     }
 
     fn current_value(&self) -> Option<&'a WithOrigin> {
-        self.root_value.get(Pointer(&self.path))
+        self.patched_current_value
+            .or_else(|| self.root_value.get(Pointer(&self.path)))
     }
 
     fn current_value_deserializer(

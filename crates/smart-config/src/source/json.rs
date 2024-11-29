@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use super::{ConfigContents, ConfigSource};
-use crate::value::{Map, Pointer, Value, ValueOrigin, WithOrigin};
+use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// JSON-based configuration source.
 #[derive(Debug)]
 pub struct Json {
-    filename: Arc<str>,
+    origin: Arc<ValueOrigin>,
     inner: WithOrigin,
 }
 
@@ -18,9 +18,12 @@ impl Json {
 
     /// Creates a source with the specified name and contents.
     pub fn new(filename: &str, object: serde_json::Map<String, serde_json::Value>) -> Self {
-        let filename: Arc<str> = filename.into();
-        let inner = Self::map_value(serde_json::Value::Object(object), &filename, String::new());
-        Self { filename, inner }
+        let origin = Arc::new(ValueOrigin::File {
+            name: filename.to_owned(),
+            format: FileFormat::Json,
+        });
+        let inner = Self::map_value(serde_json::Value::Object(object), &origin, String::new());
+        Self { origin, inner }
     }
 
     /// Merges a value at the specified path into JSON.
@@ -39,12 +42,12 @@ impl Json {
             "Cannot overwrite root object"
         );
 
-        let value = Self::map_value(value, &self.filename, at.to_owned());
+        let value = Self::map_value(value, &self.origin, at.to_owned());
 
         let merge_point = if let Some((parent, last_segment)) = Pointer(at).split_last() {
             self.inner.ensure_object(parent, |path| {
-                Arc::new(ValueOrigin::Json {
-                    filename: self.filename.clone(),
+                Arc::new(ValueOrigin::Path {
+                    source: self.origin.clone(),
                     path: path.0.to_owned(),
                 })
             });
@@ -72,7 +75,11 @@ impl Json {
         debug_assert!(matches!(&self.inner.inner, Value::Object(_)));
     }
 
-    fn map_value(value: serde_json::Value, filename: &Arc<str>, path: String) -> WithOrigin {
+    pub(crate) fn map_value(
+        value: serde_json::Value,
+        file_origin: &Arc<ValueOrigin>,
+        path: String,
+    ) -> WithOrigin {
         let inner = match value {
             serde_json::Value::Bool(value) => Value::Bool(value),
             serde_json::Value::Number(value) => Value::Number(value),
@@ -84,7 +91,7 @@ impl Json {
                     .enumerate()
                     .map(|(i, value)| {
                         let child_path = Pointer(&path).join(&i.to_string());
-                        Self::map_value(value, filename, child_path)
+                        Self::map_value(value, file_origin, child_path)
                     })
                     .collect(),
             ),
@@ -92,7 +99,7 @@ impl Json {
                 values
                     .into_iter()
                     .map(|(key, value)| {
-                        let value = Self::map_value(value, filename, Pointer(&path).join(&key));
+                        let value = Self::map_value(value, file_origin, Pointer(&path).join(&key));
                         (key, value)
                     })
                     .collect(),
@@ -101,8 +108,8 @@ impl Json {
 
         WithOrigin {
             inner,
-            origin: Arc::new(ValueOrigin::Json {
-                filename: filename.clone(),
+            origin: Arc::new(ValueOrigin::Path {
+                source: file_origin.clone(),
                 path,
             }),
         }
@@ -115,6 +122,10 @@ impl Json {
 }
 
 impl ConfigSource for Json {
+    fn origin(&self) -> Arc<ValueOrigin> {
+        self.origin.clone()
+    }
+
     fn into_contents(self) -> ConfigContents {
         ConfigContents::Hierarchical(match self.inner.inner {
             Value::Object(map) => map,
@@ -128,6 +139,7 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::*;
+    use crate::testonly::extract_json_name;
 
     #[test]
     fn creating_json_config() {
@@ -147,14 +159,14 @@ mod tests {
         assert_eq!(bool_value.inner, Value::Bool(true));
         assert_matches!(
             bool_value.origin.as_ref(),
-            ValueOrigin::Json { filename, path } if filename.as_ref() == "test.json" && path == "bool_value"
+            ValueOrigin::Path { path, source } if path == "bool_value" && extract_json_name(source) == "test.json"
         );
 
         let str = json.inner.get(Pointer("nested.str")).unwrap();
         assert_eq!(str.inner, Value::String("???".into()));
         assert_matches!(
             str.origin.as_ref(),
-            ValueOrigin::Json { filename, path } if filename.as_ref() == "test.json" && path == "nested.str"
+            ValueOrigin::Path { path, source } if path == "nested.str" && extract_json_name(source) == "test.json"
         );
 
         json.merge("nested.str", "!!!");
@@ -188,14 +200,15 @@ mod tests {
         assert_eq!(bool_value.inner, Value::Bool(true));
         assert_matches!(
             bool_value.origin.as_ref(),
-            ValueOrigin::Json { filename, path } if path == "bool_value" && filename.contains("inline config")
+            ValueOrigin::Path { path, source }
+                if path == "bool_value" && extract_json_name(source).contains("inline config")
         );
 
         let str = json.inner.get(Pointer("nested.str")).unwrap();
         assert_eq!(str.inner, Value::String("???".into()));
         assert_matches!(
             str.origin.as_ref(),
-            ValueOrigin::Json { path, .. } if path == "nested.str"
+            ValueOrigin::Path { path, .. } if path == "nested.str"
         );
     }
 }

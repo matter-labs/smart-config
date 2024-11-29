@@ -1,6 +1,6 @@
 //! `serde`-compatible deserializer based on a value with origin.
 
-use std::{iter::empty, sync::Arc};
+use std::sync::Arc;
 
 use serde::{
     de::{
@@ -156,25 +156,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
 
     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let result = match self.value() {
-            Value::String(s) => {
-                // TODO: remove?
-                if s.is_empty() {
-                    SeqDeserializer::new(empty::<Self>()).deserialize_seq(visitor)
-                } else {
-                    let origin = &self.value.origin;
-                    let items = s.split(',').map(|item| WithOrigin {
-                        inner: Value::String(item.to_owned()),
-                        origin: origin.clone(),
-                    });
-                    let items: Vec<_> = items.collect();
-                    let items = items
-                        .iter()
-                        .map(|val| ValueDeserializer::new(val, self.options));
-                    SeqDeserializer::new(items).deserialize_seq(visitor)
-                }
-            }
             Value::Array(array) => self.parse_array(array, visitor),
-            _ => Err(self.invalid_type("array or comma-separated string")),
+            _ => Err(self.invalid_type("array")),
         };
         result.map_err(|err| err.set_origin_if_unset(&self.value.origin))
     }
@@ -357,7 +340,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
     }
 }
 
-impl<'de> IntoDeserializer<'de, ErrorWithOrigin> for ValueDeserializer<'_> {
+impl IntoDeserializer<'_, ErrorWithOrigin> for ValueDeserializer<'_> {
     type Deserializer = Self;
 
     fn into_deserializer(self) -> Self::Deserializer {

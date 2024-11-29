@@ -12,6 +12,7 @@ use std::{
     },
     path::PathBuf,
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 
@@ -23,8 +24,8 @@ use serde::{
 use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
-    metadata::{BasicType, ParamMetadata, SchemaType, SizeUnit, TimeUnit},
-    value::Value,
+    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeQualifiers},
+    value::{Value, ValueOrigin, WithOrigin},
     ByteSize,
 };
 
@@ -34,13 +35,23 @@ use crate::{
 ///
 /// `DeserializeParam` includes the following implementations:
 ///
-/// - [`BasicType`], [`SchemaType`] allow deserializing any type implementing [`serde::Deserialize`].
+/// - `()` is the default deserializer used unless explicitly overwritten with `#[config(with = _)]`.
+///   It supports types known to deserialize well (see [`WellKnown`]), and can be switched for user-defined types
+///   by implementing `WellKnown` for the type.
+/// - [`Serde`] allows deserializing any type implementing [`serde::Deserialize`].
 /// - [`Optional`] decorates a deserializer for `T` turning it into a deserializer for `Option<T>`
 /// - [`TimeUnit`] allows deserializing [`Duration`] from a number
 /// - [`SizeUnit`] similarly allows deserializing [`ByteSize`]
+/// - [`Delimited`] allows deserializing arrays from delimited string (e.g., comma-delimited)
+/// - [`OrString`] allows to switch between structured and string deserialization
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     /// Describes which parameter this deserializer is expecting.
-    fn expecting(&self) -> SchemaType;
+    const EXPECTING: BasicTypes;
+
+    /// Additional info about the deserialized type, e.g., extended description.
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::default()
+    }
 
     /// Performs deserialization given the context and param metadata.
     ///
@@ -52,23 +63,6 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin>;
-}
-
-impl<T, De> DeserializeParam<T> for &'static De
-where
-    De: DeserializeParam<T> + ?Sized,
-{
-    fn expecting(&self) -> SchemaType {
-        (*self).expecting()
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<T, ErrorWithOrigin> {
-        (*self).deserialize_param(ctx, param)
-    }
 }
 
 /// Parameter type with well-known [deserializer](DeserializeParam).
@@ -94,20 +88,21 @@ where
 /// - [`HashMap`], [`BTreeMap`]
 #[diagnostic::on_unimplemented(
     message = "`{Self}` param cannot be deserialized",
-    note = "Add #[config(with = _)] attribute to specify deserializer to use"
+    note = "Add #[config(with = _)] attribute to specify deserializer to use",
+    note = "If `{Self}` is a config, add #[config(nest)] or #[config(flatten)]"
 )]
-pub trait WellKnown: 'static {
-    /// Standard deserializer for the param.
-    const DE: &'static dyn DeserializeParam<Self>;
+pub trait WellKnown: Sized {
+    /// Type of the deserializer used for this type.
+    type Deserializer: DeserializeParam<Self>;
+    /// Deserializer instance.
+    const DE: Self::Deserializer;
 }
 
-/// Uses [`serde::Deserialize`] to deserialize any supported type. If [`BasicType`] is specified, it is checked beforehand;
-/// thus, the caller is responsible to specify the correct type.
-///
-/// This deserializer assumes that the value is required. Hence, optional params should be wrapped in [`Optional`] to work correctly.
-impl<T: DeserializeOwned> DeserializeParam<T> for SchemaType {
-    fn expecting(&self) -> SchemaType {
-        *self
+impl<T: WellKnown> DeserializeParam<T> for () {
+    const EXPECTING: BasicTypes = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        T::DE.type_qualifiers()
     }
 
     fn deserialize_param(
@@ -115,64 +110,76 @@ impl<T: DeserializeOwned> DeserializeParam<T> for SchemaType {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
-        let deserializer = ctx.current_value_deserializer(param.name)?;
-        // Permissively assume that optional values are allowed.
-        if let (Some(actual_type), Some(expected_type)) =
-            (deserializer.value().basic_type(), self.base)
-        {
-            let types_match = actual_type == expected_type
-                || (expected_type == BasicType::Float && actual_type == BasicType::Integer)
-                // FIXME: probably worth to get rid of
-                || (expected_type == BasicType::Array && actual_type == BasicType::String);
-            if !types_match {
-                return Err(deserializer.invalid_type(expected_type.as_str()));
-            }
+        T::DE.deserialize_param(ctx, param)
+    }
+}
+
+/// Deserializer powered by `serde`. Usually created with the help of [`Serde!`](crate::Serde!) macro;
+/// see its docs for the examples of usage.
+pub struct Serde<const EXPECTING: u8>;
+
+impl<const EXPECTING: u8> fmt::Debug for Serde<EXPECTING> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_tuple("Serde")
+            .field(&BasicTypes::from_raw(EXPECTING))
+            .finish()
+    }
+}
+
+impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXPECTING> {
+    const EXPECTING: BasicTypes = BasicTypes::from_raw(EXPECTING);
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        let expecting = BasicTypes::from_raw(EXPECTING);
+        let Some(current_value) = ctx.current_value() else {
+            return Err(DeError::missing_field(param.name));
+        };
+
+        let deserializer = ValueDeserializer::new(current_value, ctx.de_options);
+        let type_matches = deserializer.value().is_supported_by(expecting);
+        if !type_matches {
+            return Err(deserializer.invalid_type(&expecting.to_string()));
         }
         T::deserialize(deserializer)
     }
 }
 
-/// Proxies to the corresponding [`SchemaType`].
-impl<T: DeserializeOwned> DeserializeParam<T> for BasicType {
-    fn expecting(&self) -> SchemaType {
-        SchemaType::new(*self)
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<T, ErrorWithOrigin> {
-        SchemaType::new(*self).deserialize_param(ctx, param)
-    }
-}
-
 impl WellKnown for bool {
-    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Bool);
+    type Deserializer = super::Serde![bool];
+    const DE: Self::Deserializer = super::Serde![bool];
 }
 
 impl WellKnown for String {
-    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::String);
+    type Deserializer = super::Serde![str];
+    const DE: Self::Deserializer = super::Serde![str];
 }
 
 impl WellKnown for PathBuf {
-    const DE: &'static dyn DeserializeParam<Self> =
-        &SchemaType::new(BasicType::String).with_qualifier("filesystem path");
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "filesystem path");
 }
 
 impl WellKnown for f32 {
-    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Float);
+    type Deserializer = super::Serde![float];
+    const DE: Self::Deserializer = super::Serde![float];
 }
 
 impl WellKnown for f64 {
-    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Float);
+    type Deserializer = super::Serde![float];
+    const DE: Self::Deserializer = super::Serde![float];
 }
 
 macro_rules! impl_well_known_int {
     ($($int:ty),+) => {
         $(
         impl WellKnown for $int {
-            const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Integer);
+            type Deserializer = super::Serde![int];
+            const DE: Self::Deserializer = super::Serde![int];
         }
         )+
     };
@@ -193,18 +200,21 @@ impl_well_known_int!(
 );
 
 impl<T: WellKnown> WellKnown for Option<T> {
-    const DE: &'static dyn DeserializeParam<Self> = &Optional(T::DE);
+    type Deserializer = Optional<T::Deserializer>;
+    const DE: Self::Deserializer = Optional(T::DE);
 }
 
 impl<T: WellKnown + DeserializeOwned> WellKnown for Vec<T> {
-    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Array);
+    type Deserializer = super::Serde![array];
+    const DE: Self::Deserializer = super::Serde![array];
 }
 
-impl<T: WellKnown, const N: usize> WellKnown for [T; N]
+impl<T, const N: usize> WellKnown for [T; N]
 where
     [T; N]: DeserializeOwned, // `serde` implements `Deserialize` for separate lengths rather for generics
 {
-    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::Array);
+    type Deserializer = Qualified<super::Serde![array]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![array], "fixed-size array");
 }
 
 // Heterogeneous tuples don't look like a good idea to mark as well-known because they wouldn't look well-structured
@@ -212,19 +222,19 @@ where
 
 impl<T, S> WellKnown for HashSet<T, S>
 where
-    T: WellKnown + Eq + Hash + DeserializeOwned,
+    T: Eq + Hash + DeserializeOwned + WellKnown,
     S: 'static + Default + BuildHasher,
 {
-    const DE: &'static dyn DeserializeParam<Self> =
-        &SchemaType::new(BasicType::Array).with_qualifier("set");
+    type Deserializer = Qualified<super::Serde![array]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![array], "set");
 }
 
 impl<T> WellKnown for BTreeSet<T>
 where
-    T: WellKnown + Eq + Ord + DeserializeOwned,
+    T: Eq + Ord + DeserializeOwned + WellKnown,
 {
-    const DE: &'static dyn DeserializeParam<Self> =
-        &SchemaType::new(BasicType::Array).with_qualifier("set");
+    type Deserializer = Qualified<super::Serde![array]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![array], "set");
 }
 
 /// Keys are intentionally restricted by [`FromStr`] in order to prevent runtime errors when dealing with keys
@@ -232,20 +242,57 @@ where
 impl<K, V, S> WellKnown for HashMap<K, V, S>
 where
     K: 'static + DeserializeOwned + Eq + Hash + FromStr,
-    V: WellKnown + DeserializeOwned,
+    V: DeserializeOwned + WellKnown,
     S: 'static + Default + BuildHasher,
 {
-    const DE: &'static dyn DeserializeParam<Self> =
-        &SchemaType::new(BasicType::Object).with_qualifier("map");
+    type Deserializer = Qualified<super::Serde![object]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![object], "map");
 }
 
 impl<K, V> WellKnown for BTreeMap<K, V>
 where
     K: 'static + DeserializeOwned + Eq + Ord + FromStr,
-    V: WellKnown + DeserializeOwned,
+    V: DeserializeOwned + WellKnown,
 {
-    const DE: &'static dyn DeserializeParam<Self> =
-        &SchemaType::new(BasicType::Object).with_qualifier("map");
+    type Deserializer = Qualified<super::Serde![object]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![object], "map");
+}
+
+/// [Deserializer](DeserializeParam) decorator that provides additional [qualifiers](TypeQualifiers)
+/// for the deserialized type.
+#[derive(Debug)]
+pub struct Qualified<De> {
+    inner: De,
+    qualifiers: TypeQualifiers,
+}
+
+impl<De> Qualified<De> {
+    /// Creates a new instance with the extended type description.
+    pub const fn new(inner: De, description: &'static str) -> Self {
+        Self {
+            inner,
+            qualifiers: TypeQualifiers::new(description),
+        }
+    }
+}
+
+impl<T, De> DeserializeParam<T> for Qualified<De>
+where
+    De: DeserializeParam<T>,
+{
+    const EXPECTING: BasicTypes = <De as DeserializeParam<T>>::EXPECTING;
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        self.inner.deserialize_param(ctx, param)
+    }
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        self.qualifiers.clone()
+    }
 }
 
 /// Deserializer decorator that defaults to the provided value if the input for the param is missing.
@@ -272,8 +319,10 @@ impl<T: 'static, De: DeserializeParam<T>> WithDefault<T, De> {
 }
 
 impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, De> {
-    fn expecting(&self) -> SchemaType {
-        self.inner.expecting()
+    const EXPECTING: BasicTypes = De::EXPECTING;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        self.inner.type_qualifiers()
     }
 
     fn deserialize_param(
@@ -295,9 +344,7 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
 pub struct Optional<De>(pub De);
 
 impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
-    fn expecting(&self) -> SchemaType {
-        self.0.expecting()
-    }
+    const EXPECTING: BasicTypes = De::EXPECTING;
 
     fn deserialize_param(
         &self,
@@ -333,9 +380,7 @@ impl TagDeserializer {
 }
 
 impl DeserializeParam<&'static str> for TagDeserializer {
-    fn expecting(&self) -> SchemaType {
-        SchemaType::new(BasicType::String)
-    }
+    const EXPECTING: BasicTypes = BasicTypes::STRING;
 
     fn deserialize_param(
         &self,
@@ -395,10 +440,10 @@ impl TimeUnit {
 /// # anyhow::Ok(())
 /// ```
 impl DeserializeParam<Duration> for TimeUnit {
-    fn expecting(&self) -> SchemaType {
-        SchemaType::new(BasicType::Integer)
-            .with_qualifier("time duration")
-            .with_unit((*self).into())
+    const EXPECTING: BasicTypes = BasicTypes::INTEGER;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("time duration").with_unit((*self).into())
     }
 
     fn deserialize_param(
@@ -458,10 +503,10 @@ impl DeserializeParam<Duration> for TimeUnit {
 /// # anyhow::Ok(())
 /// ```
 impl DeserializeParam<ByteSize> for SizeUnit {
-    fn expecting(&self) -> SchemaType {
-        SchemaType::new(BasicType::Integer)
-            .with_qualifier("byte size")
-            .with_unit((*self).into())
+    const EXPECTING: BasicTypes = BasicTypes::INTEGER;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("byte size").with_unit((*self).into())
     }
 
     fn deserialize_param(
@@ -481,13 +526,178 @@ impl DeserializeParam<ByteSize> for SizeUnit {
     }
 }
 
-/// Object-safe part of parameter deserializer. Stored in param metadata.
-#[doc(hidden)]
-pub trait ObjectSafeDeserializer: 'static + fmt::Debug + Send + Sync {
-    /// Describes which parameter this deserializer is expecting.
-    fn expecting(&self) -> SchemaType;
+/// Deserializer that supports either an array of values, or a string in which values are delimited
+/// by the specified separator.
+///
+/// # Examples
+///
+/// ```
+/// use std::{collections::HashSet, path::PathBuf};
+/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default, with = de::Delimited(","))]
+///     strings: Vec<String>,
+///     // More complex types are supported as well
+///     #[config(with = de::Delimited(":"))]
+///     paths: Vec<PathBuf>,
+///     // ...and more complex collections (here together with string -> number coercion)
+///     #[config(with = de::Delimited(";"))]
+///     ints: HashSet<u64>,
+/// }
+///
+/// let sample = smart_config::config!(
+///     "strings": ["test", "string"], // standard array value is still supported
+///     "paths": "/usr/bin:/usr/local/bin",
+///     "ints": "12;34;12",
+/// );
+/// let config: TestConfig = testing::test(sample)?;
+/// assert_eq!(config.strings.len(), 2);
+/// assert_eq!(config.strings[0], "test");
+/// assert_eq!(config.paths.len(), 2);
+/// assert_eq!(config.paths[1].as_os_str(), "/usr/local/bin");
+/// assert_eq!(config.ints, HashSet::from([12, 34]));
+/// # anyhow::Ok(())
+/// ```
+///
+/// The wrapping logic is smart enough to catch in compile time an attempt to apply `Delimited` to a type
+/// that cannot be deserialized from an array:
+///
+/// ```compile_fail
+/// use smart_config::{de, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct Fail {
+///     // will fail with "evaluation of `<Delimited as DeserializeParam<u64>>::EXPECTING` failed"
+///     #[config(default, with = de::Delimited(","))]
+///     test: u64,
+/// }
+/// ```
+#[derive(Debug)]
+pub struct Delimited(pub &'static str);
 
-    /// Performs deserialization given the context and param metadata and wraps the output in a type-erased `Box`.
+impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
+    const EXPECTING: BasicTypes = {
+        let base = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
+        assert!(
+            base.contains(BasicTypes::ARRAY),
+            "can only apply `Delimited` to types that support deserialization from array"
+        );
+        base.or(BasicTypes::STRING)
+    };
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::dynamic(format!("using {:?} delimiter", self.0))
+    }
+
+    fn deserialize_param(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        let Some(WithOrigin {
+            inner: Value::String(s),
+            origin,
+        }) = ctx.current_value()
+        else {
+            return T::DE.deserialize_param(ctx, param);
+        };
+
+        let array_origin = Arc::new(ValueOrigin::Synthetic {
+            source: origin.clone(),
+            transform: format!("{:?}-delimited string", self.0),
+        });
+        let array_items = s.split(self.0).enumerate().map(|(i, part)| {
+            let item_origin = ValueOrigin::Path {
+                source: array_origin.clone(),
+                path: i.to_string(),
+            };
+            WithOrigin::new(Value::String(part.to_owned()), Arc::new(item_origin))
+        });
+        let array = WithOrigin::new(Value::Array(array_items.collect()), array_origin);
+        T::DE.deserialize_param(ctx.patched(&array), param)
+    }
+}
+
+/// Deserializer that supports parsing either from a default format (usually an object or array) via [`Deserialize`](serde::Deserialize),
+/// or from string via [`FromStr`].
+///
+/// # Examples
+///
+/// ```
+/// # use std::{collections::HashSet, str::FromStr};
+/// use anyhow::Context as _;
+/// # use serde::Deserialize;
+/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(Deserialize)]
+/// #[serde(transparent)]
+/// struct MySet(HashSet<u64>);
+///
+/// impl FromStr for MySet {
+///     type Err = anyhow::Error;
+///
+///     fn from_str(s: &str) -> Result<Self, Self::Err> {
+///         s.split(',')
+///             .map(|part| part.trim().parse().context("invalid value"))
+///             .collect::<anyhow::Result<_>>()
+///             .map(Self)
+///     }
+/// }
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(with = de::OrString(de::Serde![array]))]
+///     value: MySet,
+/// }
+///
+/// let sample = smart_config::config!("value": "2, 3, 2");
+/// let config: TestConfig = testing::test(sample)?;
+/// assert_eq!(config.value.0, HashSet::from([2, 3]));
+///
+/// // Parsing from array works, too
+/// let sample = smart_config::config!("value": [2, 3, 2]);
+/// let config: TestConfig = testing::test(sample)?;
+/// assert_eq!(config.value.0, HashSet::from([2, 3]));
+/// # anyhow::Ok(())
+/// ```
+#[derive(Debug)]
+pub struct OrString<De>(pub De);
+
+impl<T, De> DeserializeParam<T> for OrString<De>
+where
+    T: FromStr,
+    T::Err: fmt::Display,
+    De: DeserializeParam<T>,
+{
+    const EXPECTING: BasicTypes = <De as DeserializeParam<T>>::EXPECTING.or(BasicTypes::STRING);
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        let Some(WithOrigin {
+            inner: Value::String(s),
+            origin,
+        }) = ctx.current_value()
+        else {
+            return self.0.deserialize_param(ctx, param);
+        };
+
+        T::from_str(s).map_err(|err| {
+            let err = serde_json::Error::custom(err);
+            ErrorWithOrigin::new(err, origin.clone())
+        })
+    }
+}
+
+/// Erased counterpart of a parameter deserializer. Stored in param metadata.
+#[doc(hidden)]
+pub trait ErasedDeserializer: fmt::Debug + Send + Sync + 'static {
+    fn type_qualifiers(&self) -> TypeQualifiers;
+
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -495,23 +705,20 @@ pub trait ObjectSafeDeserializer: 'static + fmt::Debug + Send + Sync {
     ) -> Result<Box<dyn any::Any>, ErrorWithOrigin>;
 }
 
-/// Wrapper transforming [`DeserializeParam`] to [`ObjectSafeDeserializer`].
+/// Wrapper transforming [`DeserializeParam`] to [`ErasedDeserializer`].
 #[doc(hidden)]
-pub struct DeserializerWrapper<T, De> {
+pub struct Erased<T, De> {
     inner: De,
     _ty: PhantomData<fn(T)>,
 }
 
-impl<T, D: fmt::Debug> fmt::Debug for DeserializerWrapper<T, D> {
+impl<T, D: fmt::Debug> fmt::Debug for Erased<T, D> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_tuple("DeserializerWrapper")
-            .field(&self.inner)
-            .finish()
+        formatter.debug_tuple("Erased").field(&self.inner).finish()
     }
 }
 
-impl<T: 'static, De: DeserializeParam<T>> DeserializerWrapper<T, De> {
+impl<T: 'static, De: DeserializeParam<T>> Erased<T, De> {
     pub const fn new(inner: De) -> Self {
         Self {
             inner,
@@ -520,9 +727,9 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializerWrapper<T, De> {
     }
 }
 
-impl<T: 'static, De: DeserializeParam<T>> ObjectSafeDeserializer for DeserializerWrapper<T, De> {
-    fn expecting(&self) -> SchemaType {
-        self.inner.expecting()
+impl<T: 'static, De: DeserializeParam<T>> ErasedDeserializer for Erased<T, De> {
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        self.inner.type_qualifiers()
     }
 
     fn deserialize_param(

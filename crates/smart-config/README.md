@@ -51,7 +51,9 @@ smart-config = "0.1.0"
 ```rust
 use std::{collections::{HashMap, HashSet}, path::PathBuf, time::Duration};
 use serde::Deserialize;
-use smart_config::{de::Optional, metadata::*, ByteSize, DescribeConfig, DeserializeConfig};
+use smart_config::{
+    de::{Optional, Serde}, metadata::*, ByteSize, DescribeConfig, DeserializeConfig,
+};
 
 #[derive(Debug, Deserialize)]
 enum CustomEnum {
@@ -81,7 +83,7 @@ pub struct TestConfig {
     
     // For custom types, you can specify a custom deserializer. The deserializer below
     // expects a string and works for all types implementing `serde::Deserialize`.
-    #[config(with = BasicType::String)]
+    #[config(with = Serde![str])]
     #[config(default_t = CustomEnum::First)]
     pub custom: CustomEnum,
     
