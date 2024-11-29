@@ -137,6 +137,12 @@ impl ConfigSchema {
         })
     }
 
+    pub(crate) fn contains_param(&self, at: Pointer<'_>) -> bool {
+        self.mounting_points
+            .get(at.0)
+            .map_or(false, |mount| matches!(mount, MountingPoint::Param { .. }))
+    }
+
     /// Lists all prefixes for the specified config. This does not include aliases.
     pub fn locate(&self, metadata: &'static ConfigMetadata) -> impl Iterator<Item = &str> + '_ {
         let config_type_id = metadata.ty.id();

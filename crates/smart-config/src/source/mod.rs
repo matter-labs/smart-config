@@ -136,7 +136,8 @@ impl<'a> ConfigRepository<'a> {
         };
 
         source_value.preprocess_source(self.schema);
-        self.merged.deep_merge(source_value);
+        self.merged
+            .guided_merge(source_value, self.schema, Pointer(""));
         self
     }
 
@@ -395,6 +396,26 @@ impl WithOrigin {
                 }
             }
             _ => { /* Do nothing */ }
+        }
+    }
+
+    /// Deep merge stopped at params (i.e., params are always merged atomically).
+    fn guided_merge(&mut self, overrides: Self, schema: &ConfigSchema, current_path: Pointer<'_>) {
+        match (&mut self.inner, overrides.inner) {
+            (Value::Object(this), Value::Object(other)) if !schema.contains_param(current_path) => {
+                for (key, value) in other {
+                    if let Some(existing_value) = this.get_mut(&key) {
+                        let child_path = current_path.join(&key);
+                        existing_value.guided_merge(value, schema, Pointer(&child_path));
+                    } else {
+                        this.insert(key, value);
+                    }
+                }
+            }
+            (this, value) => {
+                *this = value;
+                self.origin = overrides.origin;
+            }
         }
     }
 }

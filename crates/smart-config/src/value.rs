@@ -176,14 +176,14 @@ impl WithOrigin {
 
     /// Deep-merges self and `other`, with `other` having higher priority. Only objects are meaningfully merged;
     /// all other values are replaced.
-    pub(crate) fn deep_merge(&mut self, other: Self) {
-        match (&mut self.inner, other.inner) {
+    pub(crate) fn deep_merge(&mut self, overrides: Self) {
+        match (&mut self.inner, overrides.inner) {
             (Value::Object(this), Value::Object(other)) => {
                 Self::deep_merge_into_map(this, other);
             }
             (this, value) => {
                 *this = value;
-                self.origin = other.origin;
+                self.origin = overrides.origin;
             }
         }
     }

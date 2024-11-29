@@ -499,3 +499,69 @@ fn parsing_complex_param_errors() {
         "env variable 'APP_SET' -> parsed JSON string -> path '1'"
     );
 }
+
+#[test]
+fn merging_params_is_atomic() {
+    let base = config!(
+        "param": serde_json::json!({
+            "int": 4,
+            "string": "??",
+            "bool": true,
+        }),
+    );
+    let overrides = config!(
+        "param": serde_json::json!({
+            "int": 3,
+            "string": "!!",
+        }),
+    );
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("").unwrap();
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    let param_value = &repo.merged().get(Pointer("param")).unwrap().inner;
+    assert_matches!(
+        param_value,
+        Value::Object(map) if map.len() == 2 && !map.contains_key("bool")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 3);
+    assert_eq!(config.param.string, "!!");
+    assert!(!config.param.bool);
+}
+
+#[test]
+fn merging_params_is_still_atomic_with_prefixes() {
+    let base = config!(
+        "test.config.param": serde_json::json!({
+            "int": 4,
+            "string": "??",
+            "bool": true,
+        }),
+        "test.unused": 123,
+    );
+    let overrides = config!(
+        "test.config.param": serde_json::json!({
+            "int": 3,
+            "string": "!!",
+        }),
+        "test.config.unused": true,
+    );
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test.config").unwrap();
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    let param_value = &repo
+        .merged()
+        .get(Pointer("test.config.param"))
+        .unwrap()
+        .inner;
+    assert_matches!(
+        param_value,
+        Value::Object(map) if map.len() == 2 && !map.contains_key("bool")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 3);
+    assert_eq!(config.param.string, "!!");
+    assert!(!config.param.bool);
+}
