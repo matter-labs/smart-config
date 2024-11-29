@@ -569,7 +569,7 @@ impl DeserializeParam<ByteSize> for SizeUnit {
 ///
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct Fail {
-///     // will fail with "evaluation of `<Delimited as ExpectParam<u64>>::EXPECTING` failed"
+///     // will fail with "evaluation of `<Delimited as DeserializeParam<u64>>::EXPECTING` failed"
 ///     #[config(default, with = de::Delimited(","))]
 ///     test: u64,
 /// }

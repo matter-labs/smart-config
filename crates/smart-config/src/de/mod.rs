@@ -15,8 +15,9 @@
 //!
 //! # Deserializers
 //!
-//! The default deserializer is `()`. If you have a custom type defined locally which you want to use in configs, the easiest solution
-//! would be to implement [`ExpectParam`]`<YourType> for ()`.
+//! The default deserializer is extracted from the param type with the help of [`WellKnown`] trait.
+//! If you have a custom type defined locally which you want to use in configs, the easiest solution
+//! would be to implement `WellKnown` for it.
 //! Alternatively, it's possible to specify a custom deserializer using `#[config(with = _)]` attribute.
 //!
 //! ## Universal deserializers
