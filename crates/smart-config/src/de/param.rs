@@ -48,6 +48,35 @@ pub trait ExpectParam<T>: DeserializeParam<T> {
 }
 
 /// Deserializes a parameter of the specified type.
+///
+/// # Implementations
+///
+/// `DeserializeParam` includes the following implementations:
+///
+/// - `()` is the default deserializer used unless explicitly overwritten with `#[config(with = _)]`.
+///   It supports types known to deserialize well (see [below](#well-known-types)), and can be switched for user-defined types
+///   by implementing [`ExpectParam`]`<()>` for the type.
+/// - [`Serde`] allows deserializing any type implementing [`serde::Deserialize`].
+/// - [`Optional`] decorates a deserializer for `T` turning it into a deserializer for `Option<T>`
+/// - [`TimeUnit`] allows deserializing [`Duration`] from a number
+/// - [`SizeUnit`] similarly allows deserializing [`ByteSize`]
+///
+/// # Well-known types
+///
+/// Basic well-known types include:
+///
+/// - `bool`
+/// - [`String`]
+/// - [`PathBuf`]
+/// - Signed and unsigned integers, including non-zero variants
+/// - `f32`, `f64`
+///
+/// It is also implemented for collections, items are well-known themselves:
+///
+/// - [`Option`]
+/// - [`Vec`], arrays up to 32 elements (which is a `serde` restriction, not a local one)
+/// - [`HashSet`], [`BTreeSet`]
+/// - [`HashMap`], [`BTreeMap`]
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     /// Performs deserialization given the context and param metadata.
     ///
