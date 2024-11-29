@@ -36,29 +36,14 @@ use crate::{
 /// `DeserializeParam` includes the following implementations:
 ///
 /// - `()` is the default deserializer used unless explicitly overwritten with `#[config(with = _)]`.
-///   It supports types known to deserialize well (see [below](#well-known-types)), and can be switched for user-defined types
-///   by implementing [`ExpectParam`]`<()>` for the type.
+///   It supports types known to deserialize well (see [`WellKnown`]), and can be switched for user-defined types
+///   by implementing `WellKnown` for the type.
 /// - [`Serde`] allows deserializing any type implementing [`serde::Deserialize`].
 /// - [`Optional`] decorates a deserializer for `T` turning it into a deserializer for `Option<T>`
 /// - [`TimeUnit`] allows deserializing [`Duration`] from a number
 /// - [`SizeUnit`] similarly allows deserializing [`ByteSize`]
-///
-/// # Well-known types
-///
-/// Basic well-known types include:
-///
-/// - `bool`
-/// - [`String`]
-/// - [`PathBuf`]
-/// - Signed and unsigned integers, including non-zero variants
-/// - `f32`, `f64`
-///
-/// It is also implemented for collections, items are well-known themselves:
-///
-/// - [`Option`]
-/// - [`Vec`], arrays up to 32 elements (which is a `serde` restriction, not a local one)
-/// - [`HashSet`], [`BTreeSet`]
-/// - [`HashMap`], [`BTreeMap`]
+/// - [`Delimited`] allows deserializing arrays from delimited string (e.g., comma-delimited)
+/// - [`OrString`] allows to switch between structured and string deserialization
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     /// Describes which parameter this deserializer is expecting.
     const EXPECTING: BasicTypes;
@@ -103,7 +88,8 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
 /// - [`HashMap`], [`BTreeMap`]
 #[diagnostic::on_unimplemented(
     message = "`{Self}` param cannot be deserialized",
-    note = "Add #[config(with = _)] attribute to specify deserializer to use"
+    note = "Add #[config(with = _)] attribute to specify deserializer to use",
+    note = "If `{Self}` is a config, add #[config(nest)] or #[config(flatten)]"
 )]
 pub trait WellKnown: Sized {
     /// Type of the deserializer used for this type.
@@ -228,8 +214,7 @@ where
     [T; N]: DeserializeOwned, // `serde` implements `Deserialize` for separate lengths rather for generics
 {
     type Deserializer = Qualified<super::Serde![array]>;
-    // FIXME: array size
-    const DE: Self::Deserializer = Qualified::new(super::Serde![array], "fixed-sized array");
+    const DE: Self::Deserializer = Qualified::new(super::Serde![array], "fixed-size array");
 }
 
 // Heterogeneous tuples don't look like a good idea to mark as well-known because they wouldn't look well-structured
