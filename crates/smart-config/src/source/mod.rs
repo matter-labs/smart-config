@@ -1,9 +1,9 @@
-use std::{collections::BTreeSet, marker::PhantomData, sync::Arc};
+use std::{collections::BTreeSet, iter, marker::PhantomData, sync::Arc};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
-    metadata::{BasicTypes, ConfigMetadata},
+    metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseError, ParseErrors,
@@ -135,50 +135,9 @@ impl<'a> ConfigRepository<'a> {
             },
         };
 
-        self.preprocess_source(&mut source_value);
+        source_value.preprocess_source(self.schema);
         self.merged.deep_merge(source_value);
         self
-    }
-
-    fn preprocess_source(&self, source_value: &mut WithOrigin) {
-        // Copy all globally aliased values.
-        for (prefix, config_data) in self.schema.iter() {
-            for &alias in &config_data.aliases {
-                source_value.copy_from_alias(config_data.metadata, prefix, alias);
-            }
-        }
-
-        // Copy all locally aliased values.
-        for (prefix, config_data) in self.schema.iter() {
-            let Some(config_object) = source_value.get_mut(prefix) else {
-                continue;
-            };
-            let Value::Object(config_object) = &mut config_object.inner else {
-                // TODO: log warning
-                continue;
-            };
-
-            for param in config_data.metadata.params {
-                if config_object.contains_key(param.name) {
-                    continue;
-                }
-
-                for &alias in param.aliases {
-                    if let Some(alias_value) = config_object.get(alias).cloned() {
-                        config_object.insert(param.name.to_owned(), alias_value);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Coerce types of all copied values. At this point we only care about canonical names,
-        // since any aliases were copied on the previous step.
-        for (path, expecting) in self.schema.canonical_params() {
-            if let Some(val) = source_value.get_mut(path) {
-                val.coerce_value_type(expecting);
-            }
-        }
     }
 
     // TODO: probably makes sense to make public
@@ -238,6 +197,80 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
 }
 
 impl WithOrigin {
+    fn preprocess_source(&mut self, schema: &ConfigSchema) {
+        self.copy_aliased_values(schema);
+
+        // Coerce types of all copied values. At this point we only care about canonical names,
+        // since any aliases were copied on the previous step.
+        for (path, expecting) in schema.canonical_params() {
+            if let Some(val) = self.get_mut(path) {
+                val.coerce_value_type(expecting);
+            }
+        }
+    }
+
+    fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
+        for (prefix, config_data) in schema.iter() {
+            let canonical_map = match self.get(prefix).map(|val| &val.inner) {
+                Some(Value::Object(map)) => Some(map),
+                Some(_) => continue, // TODO: log warning
+                None => None,
+            };
+
+            let alias_maps: Vec<_> = config_data
+                .aliases
+                .iter()
+                .filter_map(|&alias| {
+                    let val = self.get(alias)?;
+                    Some((val.inner.as_object()?, &val.origin))
+                })
+                .collect();
+
+            let mut new_values = vec![];
+            let mut new_map_origin = None;
+            for param in config_data.metadata.params {
+                if canonical_map.map_or(false, |map| map.contains_key(param.name)) {
+                    continue;
+                }
+
+                // Create a prioritized iterator of all candidates
+                let local_candidates = canonical_map
+                    .into_iter()
+                    .flat_map(|map| param.aliases.iter().map(move |&alias| (map, alias, None)));
+                let all_names = iter::once(param.name).chain(param.aliases.iter().copied());
+                let alias_candidates = alias_maps.iter().flat_map(|&(map, origin)| {
+                    all_names.clone().map(move |name| (map, name, Some(origin)))
+                });
+
+                // Find the value alias among the candidates
+                let maybe_value_and_origin = local_candidates
+                    .chain(alias_candidates)
+                    .find_map(|(map, name, origin)| Some((map.get(name)?, origin)));
+                if let Some((value, origin)) = maybe_value_and_origin {
+                    new_values.push((param.name.to_owned(), value.clone()));
+                    if new_map_origin.is_none() {
+                        new_map_origin = origin.cloned();
+                    }
+                }
+            }
+
+            if new_values.is_empty() {
+                continue;
+            }
+
+            let new_map_origin = new_map_origin.map(|source| {
+                Arc::new(ValueOrigin::Synthetic {
+                    source,
+                    transform: format!("copy to '{prefix}' per aliasing rules"),
+                })
+            });
+            // `unwrap()` below is safe: if there is no `current_map`, `new_values` are obtained from the alias maps,
+            // meaning that `new_map_origin` has been set.
+            self.ensure_object(prefix, |_| new_map_origin.clone().unwrap())
+                .extend(new_values);
+        }
+    }
+
     /// Ensures that there is an object (possibly empty) at the specified location.
     fn ensure_object(
         &mut self,
@@ -321,44 +354,6 @@ impl WithOrigin {
             prefix.push('_');
         }
         prefix
-    }
-
-    fn copy_from_alias(
-        &mut self,
-        config: &ConfigMetadata,
-        target_prefix: Pointer<'_>,
-        alias: Pointer<'_>,
-    ) {
-        let map = self
-            .get(target_prefix)
-            .and_then(|val| val.inner.as_object());
-        let Some((alias_map, alias_origin)) = self
-            .get(alias)
-            .and_then(|val| Some((val.inner.as_object()?, &val.origin)))
-        else {
-            return; // No values at the alias
-        };
-
-        // FIXME: should include local aliases?
-        let new_entries = config.params.iter().filter_map(|param| {
-            if map.map_or(false, |map| map.contains_key(param.name)) {
-                None // Variable is already set
-            } else {
-                let value = alias_map.get(param.name).cloned()?;
-                Some((param.name.to_owned(), value))
-            }
-        });
-        let new_entries: Vec<_> = new_entries.collect();
-        if new_entries.is_empty() {
-            return;
-        }
-
-        let origin = Arc::new(ValueOrigin::Synthetic {
-            source: alias_origin.clone(),
-            transform: format!("copy of '{alias}' to '{target_prefix}' per aliasing rules"),
-        });
-        self.ensure_object(target_prefix, |_| origin.clone())
-            .extend(new_entries);
     }
 
     /// This is necessary to prevent `deserialize_any` errors

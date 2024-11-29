@@ -281,7 +281,6 @@ fn mountpoint_errors() {
     );
 
     let err = schema
-        .clone()
         .insert::<BogusParamConfig>("test")
         .unwrap_err()
         .to_string();
@@ -289,7 +288,6 @@ fn mountpoint_errors() {
     assert!(err.contains("config(s) are already mounted"), "{err}");
 
     let err = schema
-        .clone()
         .insert::<BogusNestedConfig>("test")
         .unwrap_err()
         .to_string();
@@ -298,7 +296,6 @@ fn mountpoint_errors() {
     assert!(err.contains("parameter(s) are already mounted"), "{err}");
 
     let err = schema
-        .clone()
         .insert::<BogusNestedConfig>("test.bool_value")
         .unwrap_err()
         .to_string();
@@ -307,8 +304,44 @@ fn mountpoint_errors() {
     assert!(err.contains("parameter(s) are already mounted"), "{err}");
 
     let err = schema
-        .clone()
         .insert::<BogusParamTypeConfig>("test")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Cannot insert param"), "{err}");
+    assert!(err.contains("at `test.bool_value`"), "{err}");
+    assert!(err.contains("expects integer"), "{err}");
+}
+
+#[test]
+fn aliasing_mountpoint_errors() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<NestingConfig>("test").unwrap();
+
+    let err = schema
+        .insert::<BogusParamConfig>("bogus")
+        .unwrap()
+        .push_alias("test")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("[Rust field: `hierarchical`]"), "{err}");
+    assert!(err.contains("config(s) are already mounted"), "{err}");
+
+    assert_matches!(
+        schema.mounting_points["bogus.hierarchical"],
+        MountingPoint::Param {
+            expecting: BasicTypes::INTEGER,
+            is_canonical: true,
+        }
+    );
+    assert_matches!(
+        schema.mounting_points["test.hierarchical"],
+        MountingPoint::Config
+    );
+
+    let err = schema
+        .insert::<BogusParamTypeConfig>("bogus")
+        .unwrap()
+        .push_alias("test")
         .unwrap_err()
         .to_string();
     assert!(err.contains("Cannot insert param"), "{err}");

@@ -215,6 +215,36 @@ fn merging_config_parts() {
     assert_eq!(config.merged, "!");
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 321);
+
+    let json = config!(
+        "deprecated.value": 4,
+        "nested.renamed": "first",
+        "deprecated.alias": "?",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.merged, "?");
+
+    let json = config!(
+        "deprecated.value": 4,
+        "nested.renamed": "first",
+        "deprecated.merged": "!", // has priority compared to alias
+        "deprecated.alias": "?",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.merged, "!");
+
+    let json = config!(
+        "deprecated.value": 4,
+        "nested.renamed": "first",
+        "alias": "???", // has higher priority than any global alias
+        "deprecated.merged": "!",
+        "deprecated.alias": "?",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.merged, "???");
 }
 
 #[test]
