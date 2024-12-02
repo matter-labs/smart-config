@@ -1,10 +1,11 @@
-use std::{collections::BTreeSet, iter, marker::PhantomData, sync::Arc};
+use std::{iter, marker::PhantomData, sync::Arc};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 #[cfg(doc)]
 use crate::metadata::BasicTypes;
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
+    metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseError, ParseErrors,
@@ -87,22 +88,15 @@ pub trait ConfigSource {
 pub struct ConfigRepository<'a> {
     schema: &'a ConfigSchema,
     de_options: DeserializerOptions,
-    all_prefixes_with_aliases: BTreeSet<Pointer<'a>>,
     merged: WithOrigin,
 }
 
 impl<'a> ConfigRepository<'a> {
     /// Creates an empty config repo based on the provided schema.
     pub fn new(schema: &'a ConfigSchema) -> Self {
-        let all_prefixes_with_aliases: BTreeSet<_> = schema
-            .prefixes_with_aliases()
-            .flat_map(Pointer::with_ancestors)
-            .chain([Pointer("")])
-            .collect();
         Self {
             schema,
             de_options: DeserializerOptions::default(),
-            all_prefixes_with_aliases,
             merged: WithOrigin {
                 inner: Value::Object(Map::default()),
                 origin: Arc::default(),
@@ -120,16 +114,7 @@ impl<'a> ConfigRepository<'a> {
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
         let source_origin = source.origin();
         let mut source_value = match source.into_contents() {
-            ConfigContents::KeyValue(kv) => {
-                let mut value = WithOrigin {
-                    inner: Value::Object(Map::default()),
-                    origin: source_origin.clone(),
-                };
-                for &object_ptr in self.all_prefixes_with_aliases.iter().rev() {
-                    value.copy_key_value_entries(object_ptr, &source_origin, &kv);
-                }
-                value
-            }
+            ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &source_origin),
             ConfigContents::Hierarchical(map) => WithOrigin {
                 inner: Value::Object(map),
                 origin: source_origin,
@@ -311,43 +296,57 @@ impl WithOrigin {
         }
     }
 
-    fn copy_key_value_entries(
-        &mut self,
-        at: Pointer<'_>,
-        source_origin: &Arc<ValueOrigin>,
-        entries: &Map<String>,
-    ) {
-        let env_prefix = Self::kv_prefix(at.0);
-        let matching_entries = entries.iter().filter_map(|(name, value)| {
-            let name_suffix = name.strip_prefix(&env_prefix)?;
-            Some((
-                name_suffix.to_owned(),
-                WithOrigin {
-                    inner: Value::String(value.inner.clone()),
-                    origin: value.origin.clone(),
-                },
-            ))
-        });
-        let matching_entries: Vec<_> = matching_entries.collect();
+    /// Nests a flat key–value map into a structured object using the provided `schema`.
+    ///
+    /// Has complexity `O(kvs.len() * log(n_params))`, which seems about the best possible option if `kvs` is not presorted.
+    // FIXME: handling prefixes is useless w/o nesting for object params
+    fn nest_kvs(kvs: Map<String>, schema: &ConfigSchema, source_origin: &Arc<ValueOrigin>) -> Self {
+        let mut dest = Self {
+            inner: Value::Object(Map::new()),
+            origin: source_origin.clone(),
+        };
 
-        if matching_entries.is_empty() {
-            return;
-        }
-        let origin = Arc::new(ValueOrigin::Synthetic {
-            source: source_origin.clone(),
-            transform: format!("nesting kv entries for '{at}'"),
-        });
-        self.ensure_object(at, |_| origin.clone())
-            .extend(matching_entries);
-    }
+        for (key, value) in kvs {
+            let value = Self::new(Value::String(value.inner.clone()), value.origin);
 
-    /// Converts a logical prefix like `api.limits` to `api_limits_`.
-    fn kv_prefix(prefix: &str) -> String {
-        let mut prefix = prefix.replace('.', "_");
-        if !prefix.is_empty() && !prefix.ends_with('_') {
-            prefix.push('_');
+            // Get all params with full paths matching a prefix of `key` split on one of `_`s. E.g.,
+            // for `key = "very_long_prefix_value"`, we'll try "very_long_prefix_value", "very_long_prefix", ..., "very".
+            // If any of these prefixes corresponds to a param, we'll nest the value to align with the param.
+            // For example, if `very.long_prefix.value` is a param, we'll nest the value to `very.long_prefix.value`,
+            // and if `very_long.prefix.value` is a param as well, we'll copy the value to both places.
+            //
+            // For prefixes, we only copy the value if the param supports objects; e.g. if `very_long.prefix` is a param,
+            // then we'll copy the value to `very_long.prefix_value`.
+            let mut key_prefix = key.as_str();
+            while !key_prefix.is_empty() {
+                for (param_path, expecting) in schema.params_with_kv_path(key_prefix) {
+                    let should_copy = key_prefix == key || expecting.contains(BasicTypes::OBJECT);
+                    if should_copy {
+                        // `unwrap()` is safe: params have non-empty paths
+                        let (parent, _) = param_path.split_last().unwrap();
+                        let field_name_start = if parent.0.is_empty() {
+                            parent.0.len()
+                        } else {
+                            parent.0.len() + 1 // skip `_` after the parent
+                        };
+                        let field_name = key[field_name_start..].to_owned();
+
+                        let origin = Arc::new(ValueOrigin::Synthetic {
+                            source: source_origin.clone(),
+                            transform: format!("nesting kv entries for '{param_path}'"),
+                        });
+                        dest.ensure_object(parent, |_| origin.clone())
+                            .insert(field_name, value.clone());
+                    }
+                }
+
+                key_prefix = match key_prefix.rsplit_once('_') {
+                    Some((prefix, _)) => prefix,
+                    None => break,
+                };
+            }
         }
-        prefix
+        dest
     }
 
     /// Deep merge stopped at params (i.e., params are always merged atomically).

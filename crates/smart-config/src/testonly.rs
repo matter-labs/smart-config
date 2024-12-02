@@ -145,6 +145,15 @@ pub(crate) struct DefaultingConfig {
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct KvTestConfig {
+    #[config(default_t = -3)]
+    pub nested_int: i32,
+    #[config(nest)]
+    pub nested: DefaultingConfig,
+}
+
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate, tag = "kind", derive(Default))]
 pub(crate) enum DefaultingEnumConfig {
     First,

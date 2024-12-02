@@ -7,7 +7,7 @@ use crate::{
     testing,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, CompoundConfig,
-        ConfigWithNesting, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum,
+        ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig, NestedConfig, SimpleEnum,
         ValueCoercingConfig,
     },
 };
@@ -564,4 +564,34 @@ fn merging_params_is_still_atomic_with_prefixes() {
     assert_eq!(config.param.int, 3);
     assert_eq!(config.param.string, "!!");
     assert!(!config.param.bool);
+}
+
+#[test]
+fn nesting_key_value_map_to_multiple_locations() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<KvTestConfig>("").unwrap();
+
+    let mut repo = ConfigRepository::new(&schema);
+    let config: KvTestConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested_int, -3);
+    assert_eq!(config.nested.int, 12);
+
+    let env = Environment::from_iter("", [("NESTED_INT", "123")]);
+    repo = repo.with(env);
+    let config: KvTestConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested_int, 123);
+    assert_eq!(config.nested.int, 123);
+}
+
+#[test]
+fn nesting_for_object_param() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let env = Environment::from_iter("", [("TEST_PARAM_INT", "123")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    assert_eq!(
+        repo.merged().get(Pointer("test.param_int")).unwrap().inner,
+        Value::String("123".into())
+    );
 }
