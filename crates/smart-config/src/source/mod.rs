@@ -186,6 +186,7 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
 impl WithOrigin {
     fn preprocess_source(&mut self, schema: &ConfigSchema) {
         self.copy_aliased_values(schema);
+        self.nest_object_params(schema);
     }
 
     fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
@@ -296,10 +297,68 @@ impl WithOrigin {
         }
     }
 
+    /// Nests values inside matching object params.
+    ///
+    /// For example, we have an object param at `test.param` and a source with a value at `test.param_ms`.
+    /// This transform will copy this value to `test.param.ms` (i.e., inside the param object), provided that
+    /// the source doesn't contain `test.param` or contains an object at this path.
+    fn nest_object_params(&mut self, schema: &ConfigSchema) {
+        for (prefix, config_data) in schema.iter() {
+            let Some(config_object) = self.get_mut(prefix) else {
+                continue;
+            };
+            let config_origin = &config_object.origin;
+            let Value::Object(config_object) = &mut config_object.inner else {
+                continue;
+            };
+
+            for param in config_data.metadata.params {
+                if !param.expecting.contains(BasicTypes::OBJECT) {
+                    continue;
+                }
+
+                let param_object = match config_object.get(param.name) {
+                    None => None,
+                    Some(WithOrigin { inner: Value::Object(obj), .. }) => Some(obj),
+                    // Never overwrite non-objects with an object value.
+                    Some(_) => continue,
+                };
+
+                let matching_fields: Vec<_> = config_object
+                    .iter()
+                    .filter_map(|(name, field)| {
+                        let stripped_name = name.strip_prefix(param.name)?.strip_prefix('_')?;
+                        if let Some(param_object) = param_object {
+                            if param_object.contains_key(stripped_name) {
+                                return None; // Never overwrite existing fields
+                            }
+                        }
+                        Some((stripped_name.to_owned(), field.clone()))
+                    })
+                    .collect();
+
+                if !config_object.contains_key(param.name) {
+                    let origin = Arc::new(ValueOrigin::Synthetic {
+                        source: config_origin.clone(),
+                        transform: format!("nesting for object param '{}'", param.name),
+                    });
+                    let val = Self::new(Value::Object(Map::new()), origin);
+                    config_object.insert(param.name.to_owned(), val);
+                }
+
+                let Value::Object(param_object) =
+                    &mut config_object.get_mut(param.name).unwrap().inner
+                else {
+                    unreachable!(); // Due to the checks above
+                };
+                param_object.extend(matching_fields);
+            }
+        }
+    }
+
     /// Nests a flat key–value map into a structured object using the provided `schema`.
     ///
     /// Has complexity `O(kvs.len() * log(n_params))`, which seems about the best possible option if `kvs` is not presorted.
-    // FIXME: handling prefixes is useless w/o nesting for object params
     fn nest_kvs(kvs: Map<String>, schema: &ConfigSchema, source_origin: &Arc<ValueOrigin>) -> Self {
         let mut dest = Self {
             inner: Value::Object(Map::new()),

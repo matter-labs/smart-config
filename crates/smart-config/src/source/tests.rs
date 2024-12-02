@@ -588,10 +588,92 @@ fn nesting_for_object_param() {
     let mut schema = ConfigSchema::default();
     schema.insert::<ValueCoercingConfig>("test").unwrap();
 
-    let env = Environment::from_iter("", [("TEST_PARAM_INT", "123")]);
+    let env = Environment::from_iter("", [("TEST_PARAM_INT", "123"), ("TEST_PARAM_STRING", "??")]);
     let repo = ConfigRepository::new(&schema).with(env);
+
     assert_eq!(
         repo.merged().get(Pointer("test.param_int")).unwrap().inner,
         Value::String("123".into())
     );
+
+    let object = repo.merged().get(Pointer("test.param")).unwrap();
+    assert_matches!(
+        object.origin.as_ref(),
+        ValueOrigin::Synthetic { transform, .. } if transform.contains("object param")
+    );
+    assert_matches!(
+        &object.inner,
+        Value::Object(obj) if obj.len() == 2 && obj.contains_key("int") && obj.contains_key("string")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 123);
+    assert_eq!(config.param.string, "??");
+}
+
+#[test]
+fn testing_for_object_param_with_structured_source() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let json = config!(
+        "test.param_int": 123,
+        "test.param.string": "??",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+
+    let object = repo.merged().get(Pointer("test.param")).unwrap();
+    assert_matches!(
+        &object.inner,
+        Value::Object(obj) if obj.len() == 2 && obj.contains_key("int") && obj.contains_key("string")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 123);
+    assert_eq!(config.param.string, "??");
+}
+
+#[test]
+fn nesting_not_applied_if_original_param_is_defined() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_PARAM", r#"{ "int": 42 }"#),
+            ("TEST_PARAM_INT", "123"),
+        ],
+    );
+    let repo = ConfigRepository::new(&schema).with(env);
+
+    assert_eq!(
+        repo.merged().get(Pointer("test.param_int")).unwrap().inner,
+        Value::String("123".into())
+    );
+    let val = &repo.merged().get(Pointer("test.param")).unwrap().inner;
+    assert_eq!(*val, Value::String(r#"{ "int": 42 }"#.into()));
+}
+
+#[test]
+fn nesting_does_not_override_existing_values() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let json = config!(
+        "test.param_int": 123,
+        "test.param_string": "!!",
+        "test.param.string": "??",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+
+    let object = repo.merged().get(Pointer("test.param")).unwrap();
+    assert_matches!(
+        &object.inner,
+        Value::Object(obj) if obj.len() == 2 && obj.contains_key("int") && obj.contains_key("string")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 123);
+    assert_eq!(config.param.string, "??");
 }
