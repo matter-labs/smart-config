@@ -116,7 +116,7 @@ fn using_alias() {
     );
     assert_eq!(
         parser.merged().get(Pointer("test.optional")).unwrap().inner,
-        Value::Number(123_u64.into())
+        Value::String("123".into())
     );
 
     let config: TestConfig = parser.single().unwrap().parse().unwrap();
@@ -199,7 +199,7 @@ fn using_nesting() {
     let repo = ConfigRepository::new(&schema).with(env);
     assert_eq!(
         repo.merged().get(Pointer("bool_value")).unwrap().inner,
-        Value::Bool(true)
+        Value::String("true".into())
     );
     assert_eq!(
         repo.merged()
@@ -210,7 +210,7 @@ fn using_nesting() {
     );
     assert_eq!(
         repo.merged().get(Pointer("optional")).unwrap().inner,
-        Value::Number("777".parse().unwrap())
+        Value::String("777".into())
     );
 
     let config: NestingConfig = repo.single().unwrap().parse().unwrap();
@@ -255,28 +255,24 @@ fn mountpoint_errors() {
         schema.mounting_points["test.bool_value"],
         MountingPoint::Param {
             expecting: BasicTypes::BOOL,
-            is_canonical: true,
         }
     );
     assert_matches!(
         schema.mounting_points["test.str"],
         MountingPoint::Param {
             expecting: BasicTypes::STRING,
-            is_canonical: true,
         }
     );
     assert_matches!(
         schema.mounting_points["test.string"],
         MountingPoint::Param {
             expecting: BasicTypes::STRING,
-            is_canonical: false,
         }
     );
     assert_matches!(
         schema.mounting_points["test.hierarchical.str"],
         MountingPoint::Param {
             expecting: BasicTypes::STRING,
-            is_canonical: true,
         }
     );
 
@@ -330,7 +326,6 @@ fn aliasing_mountpoint_errors() {
         schema.mounting_points["bogus.hierarchical"],
         MountingPoint::Param {
             expecting: BasicTypes::INTEGER,
-            is_canonical: true,
         }
     );
     assert_matches!(

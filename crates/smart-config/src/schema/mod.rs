@@ -96,8 +96,6 @@ enum MountingPoint {
     Config,
     Param {
         expecting: BasicTypes,
-        /// Is this the canonical path to at least one of params mounted here?
-        is_canonical: bool,
     },
 }
 
@@ -121,20 +119,6 @@ impl ConfigSchema {
         self.configs
             .iter()
             .map(|((_, prefix), data)| (Pointer(prefix), data))
-    }
-
-    pub(crate) fn canonical_params(&self) -> impl Iterator<Item = (Pointer<'_>, BasicTypes)> + '_ {
-        self.mounting_points.iter().filter_map(|(path, mount)| {
-            let expecting = match mount {
-                MountingPoint::Param {
-                    expecting,
-                    is_canonical,
-                } if *is_canonical => *expecting,
-
-                _ => return None,
-            };
-            Some((Pointer(path), expecting))
-        })
     }
 
     pub(crate) fn contains_param(&self, at: Pointer<'_>) -> bool {
@@ -418,17 +402,11 @@ impl<'a> PatchedSchema<'a> {
         for param in data.metadata.params {
             let all_names = ConfigSchema::all_names(&prefix, param, &data);
 
-            for (i, (prefix, name)) in all_names.enumerate() {
-                // The canonical path is always returned first from `all_names()`
-                let is_canonical = i == 0;
+            for (prefix, name) in all_names {
                 let full_name = Pointer(prefix).join(name);
-
-                let (prev_expecting, was_canonical) = if let Some(mount) = self.mount(&full_name) {
+                let prev_expecting = if let Some(mount) = self.mount(&full_name) {
                     match mount {
-                        MountingPoint::Param {
-                            expecting,
-                            is_canonical,
-                        } => (*expecting, *is_canonical),
+                        MountingPoint::Param { expecting } => *expecting,
 
                         MountingPoint::Config => {
                             anyhow::bail!(
@@ -440,7 +418,7 @@ impl<'a> PatchedSchema<'a> {
                         }
                     }
                 } else {
-                    (BasicTypes::ANY, false)
+                    BasicTypes::ANY
                 };
 
                 let Some(expecting) = prev_expecting.and(param.expecting) else {
@@ -453,14 +431,9 @@ impl<'a> PatchedSchema<'a> {
                     );
                 };
 
-                let is_canonical = was_canonical || is_canonical;
-                self.patch.mounting_points.insert(
-                    full_name,
-                    MountingPoint::Param {
-                        expecting,
-                        is_canonical,
-                    },
-                );
+                self.patch
+                    .mounting_points
+                    .insert(full_name, MountingPoint::Param { expecting });
             }
         }
 

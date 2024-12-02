@@ -3,7 +3,6 @@ use std::{collections::BTreeSet, iter, marker::PhantomData, sync::Arc};
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
-    metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseError, ParseErrors,
@@ -200,14 +199,6 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
 impl WithOrigin {
     fn preprocess_source(&mut self, schema: &ConfigSchema) {
         self.copy_aliased_values(schema);
-
-        // Coerce types of all copied values. At this point we only care about canonical names,
-        // since any aliases were copied on the previous step.
-        for (path, expecting) in schema.canonical_params() {
-            if let Some(val) = self.get_mut(path) {
-                val.coerce_value_type(expecting);
-            }
-        }
     }
 
     fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
@@ -355,48 +346,6 @@ impl WithOrigin {
             prefix.push('_');
         }
         prefix
-    }
-
-    /// This is necessary to prevent `deserialize_any` errors
-    // TODO: log coercion errors
-    fn coerce_value_type(&mut self, expecting: BasicTypes) {
-        const STRUCTURED: BasicTypes = BasicTypes::ARRAY.or(BasicTypes::OBJECT);
-
-        let Value::String(str) = &self.inner else {
-            return;
-        };
-
-        // Attempt to transform the type to the expected type
-        match expecting {
-            // We intentionally use exact comparisons; if a type supports multiple primitive representations,
-            // we do nothing.
-            BasicTypes::BOOL => {
-                if let Ok(bool_value) = str.parse::<bool>() {
-                    self.inner = Value::Bool(bool_value);
-                }
-            }
-            BasicTypes::INTEGER | BasicTypes::FLOAT => {
-                if let Ok(number) = str.parse::<serde_json::Number>() {
-                    self.inner = Value::Number(number);
-                }
-            }
-
-            ty if STRUCTURED.contains(ty) => {
-                let Ok(val) = serde_json::from_str::<serde_json::Value>(str) else {
-                    return;
-                };
-                let is_value_supported = (val.is_array() && ty.contains(BasicTypes::ARRAY))
-                    || (val.is_object() && ty.contains(BasicTypes::OBJECT));
-                if is_value_supported {
-                    let root_origin = Arc::new(ValueOrigin::Synthetic {
-                        source: self.origin.clone(),
-                        transform: "parsed JSON string".into(),
-                    });
-                    *self = Json::map_value(val, &root_origin, String::new());
-                }
-            }
-            _ => { /* Do nothing */ }
-        }
     }
 
     /// Deep merge stopped at params (i.e., params are always merged atomically).

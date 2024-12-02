@@ -87,7 +87,7 @@ fn parsing_enum_config_with_schema() {
     let repo = ConfigRepository::new(&schema).with(env);
     assert_eq!(
         repo.merged().get(Pointer("flag")).unwrap().inner,
-        Value::Bool(false)
+        Value::String("false".into())
     );
 
     let config: EnumConfig = repo.single().unwrap().parse().unwrap();
@@ -159,7 +159,7 @@ fn nesting_json() {
 
     assert_eq!(
         map.get(Pointer("value")).unwrap().inner,
-        Value::Number(123_u64.into())
+        Value::String("123".into())
     );
     assert_eq!(
         map.get(Pointer("nested.renamed")).unwrap().inner,
@@ -167,7 +167,7 @@ fn nesting_json() {
     );
     assert_eq!(
         map.get(Pointer("nested.other_int")).unwrap().inner,
-        Value::Number(321_u64.into())
+        Value::String("321".into())
     );
 
     let config: ConfigWithNesting = test_deserialize(&map).unwrap();
@@ -427,7 +427,7 @@ fn using_env_config_overrides() {
     repo = repo.with(env);
 
     let int_value = repo.merged().get(Pointer("test.value")).unwrap();
-    assert_eq!(int_value.inner, Value::Number(555_u64.into()));
+    assert_eq!(int_value.inner, Value::String("555".into()));
 
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 555);
