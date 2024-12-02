@@ -319,7 +319,10 @@ impl WithOrigin {
 
                 let param_object = match config_object.get(param.name) {
                     None => None,
-                    Some(WithOrigin { inner: Value::Object(obj), .. }) => Some(obj),
+                    Some(WithOrigin {
+                        inner: Value::Object(obj),
+                        ..
+                    }) => Some(obj),
                     // Never overwrite non-objects with an object value.
                     Some(_) => continue,
                 };

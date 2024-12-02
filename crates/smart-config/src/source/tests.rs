@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use assert_matches::assert_matches;
 
@@ -7,8 +10,8 @@ use crate::{
     testing,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, CompoundConfig,
-        ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig, NestedConfig, SimpleEnum,
-        ValueCoercingConfig,
+        ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig,
+        NestedConfig, SimpleEnum, ValueCoercingConfig,
     },
 };
 
@@ -676,4 +679,23 @@ fn nesting_does_not_override_existing_values() {
     let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.param.int, 123);
     assert_eq!(config.param.string, "??");
+}
+
+#[test]
+fn nesting_with_duration_param() {
+    let json = config!("array": [4, 5], "long_dur_sec": 30);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(30));
+
+    let json = config!("array": [4, 5], "long_dur_hours": "4");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(3_600 * 4));
+
+    let json = config!("array": [4, 5], "long_dur": "3min");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(60 * 3));
+
+    let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", 1)]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(86_400));
 }
