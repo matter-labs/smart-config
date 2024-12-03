@@ -47,6 +47,7 @@ pub use self::{
     param::{
         Delimited, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault,
     },
+    repeated::Repeated,
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig, LowLevelError},
@@ -60,6 +61,7 @@ mod macros;
 mod param;
 #[cfg(feature = "primitive-types")]
 mod primitive_types_impl;
+mod repeated;
 #[cfg(test)]
 mod tests;
 
