@@ -23,7 +23,7 @@ use serde::{
 
 use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
-    error::ErrorWithOrigin,
+    error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeQualifiers},
     value::{Value, ValueOrigin, WithOrigin},
     ByteSize,
@@ -230,13 +230,29 @@ impl<De> Repeated<De> {
             }
         }
 
-        let items = items.iter().enumerate().map(|(i, item)| {
+        let mut has_errors = false;
+        let items = items.iter().enumerate().filter_map(|(i, item)| {
             let coerced = item.coerce_value_type(De::EXPECTING);
-            let mut child_ctx = ctx.child(&i.to_string());
-            let child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(item));
-            self.0.deserialize_param(child_ctx, param)
+            let mut child_ctx = ctx.child(&i.to_string(), ctx.location_in_config);
+            let mut child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(item));
+            match self.0.deserialize_param(child_ctx.borrow(), param) {
+                Ok(val) if !has_errors => Some(val),
+                Ok(_) => None, // Drop the value since it won't be needed anyway
+                Err(err) => {
+                    has_errors = true;
+                    child_ctx.push_error(err);
+                    None
+                }
+            }
         });
-        items.collect()
+        let items: C = items.collect();
+
+        if has_errors {
+            let origin = deserializer.origin().clone();
+            Err(ErrorWithOrigin::new(LowLevelError::InvalidArray, origin))
+        } else {
+            Ok(items)
+        }
     }
 
     fn deserialize_map<K, V, C>(
@@ -254,18 +270,40 @@ impl<De> Repeated<De> {
             return Err(deserializer.invalid_type("object"));
         };
 
-        let items = items.iter().map(|(key, value)| {
-            let parsed_key: K = key
-                .parse()
-                .map_err(|err| deserializer.enrich_err(DeError::custom(err)))?;
-
+        let mut has_errors = false;
+        let items = items.iter().filter_map(|(key, value)| {
             let coerced = value.coerce_value_type(De::EXPECTING);
-            let mut child_ctx = ctx.child(key);
-            let child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(value));
-            let parsed_value = self.0.deserialize_param(child_ctx, param)?;
-            Ok((parsed_key, parsed_value))
+            let mut child_ctx = ctx.child(key, ctx.location_in_config);
+            let mut child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(value));
+
+            let key = match key.parse::<K>() {
+                Ok(val) if !has_errors => Some(val),
+                Ok(_) => None,
+                Err(err) => {
+                    has_errors = true;
+                    child_ctx.push_error(DeError::custom(format!("cannot deserialize key: {err}")));
+                    None
+                }
+            };
+            let value = match self.0.deserialize_param(child_ctx.borrow(), param) {
+                Ok(val) if !has_errors => Some(val),
+                Ok(_) => None,
+                Err(err) => {
+                    has_errors = true;
+                    child_ctx.push_error(err);
+                    None
+                }
+            };
+            Some((key?, value?))
         });
-        items.collect()
+        let items: C = items.collect();
+
+        if has_errors {
+            let origin = deserializer.origin().clone();
+            Err(ErrorWithOrigin::new(LowLevelError::InvalidObject, origin))
+        } else {
+            Ok(items)
+        }
     }
 }
 
@@ -583,7 +621,7 @@ impl DeserializeParam<&'static str> for TagDeserializer {
                     .current_value()
                     .map(|val| val.origin.clone())
                     .unwrap_or_default();
-                ErrorWithOrigin::new(err, origin)
+                ErrorWithOrigin::json(err, origin)
             })
     }
 }
@@ -866,7 +904,7 @@ where
 
         T::from_str(s).map_err(|err| {
             let err = serde_json::Error::custom(err);
-            ErrorWithOrigin::new(err, origin.clone())
+            ErrorWithOrigin::json(err, origin.clone())
         })
     }
 }

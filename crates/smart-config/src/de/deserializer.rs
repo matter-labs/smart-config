@@ -61,8 +61,12 @@ impl<'a> ValueDeserializer<'a> {
         &self.value.inner
     }
 
+    pub(super) fn origin(&self) -> &Arc<ValueOrigin> {
+        &self.value.origin
+    }
+
     pub(super) fn enrich_err(&self, err: serde_json::Error) -> ErrorWithOrigin {
-        ErrorWithOrigin::new(err, self.value.origin.clone())
+        ErrorWithOrigin::json(err, self.value.origin.clone())
     }
 
     #[cold]
@@ -365,7 +369,7 @@ impl<'a, 'de> de::EnumAccess<'de> for EnumDeserializer<'a> {
         let variant = self.variant.into_deserializer();
         match seed.deserialize(variant) {
             Ok(val) => Ok((val, self.inner)),
-            Err(err) => Err(ErrorWithOrigin::new(err, self.inner.origin().clone())),
+            Err(err) => Err(ErrorWithOrigin::json(err, self.inner.origin().clone())),
         }
     }
 }
@@ -402,7 +406,7 @@ impl<'de> de::VariantAccess<'de> for VariantDeserializer<'_> {
             seed.deserialize(ValueDeserializer::new(value, self.options))
         } else {
             let err = DeError::invalid_type(de::Unexpected::Unit, &"newtype variant");
-            Err(ErrorWithOrigin::new(err, self.parent_origin))
+            Err(ErrorWithOrigin::json(err, self.parent_origin))
         }
     }
 
@@ -415,7 +419,7 @@ impl<'de> de::VariantAccess<'de> for VariantDeserializer<'_> {
             de::Deserializer::deserialize_seq(ValueDeserializer::new(value, self.options), visitor)
         } else {
             let err = DeError::invalid_type(de::Unexpected::Unit, &"tuple variant");
-            Err(ErrorWithOrigin::new(err, self.parent_origin))
+            Err(ErrorWithOrigin::json(err, self.parent_origin))
         }
     }
 
@@ -428,7 +432,7 @@ impl<'de> de::VariantAccess<'de> for VariantDeserializer<'_> {
             de::Deserializer::deserialize_map(ValueDeserializer::new(value, self.options), visitor)
         } else {
             let err = DeError::invalid_type(de::Unexpected::Unit, &"struct variant");
-            Err(ErrorWithOrigin::new(err, self.parent_origin))
+            Err(ErrorWithOrigin::json(err, self.parent_origin))
         }
     }
 }

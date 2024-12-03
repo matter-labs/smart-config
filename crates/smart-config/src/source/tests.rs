@@ -491,7 +491,7 @@ fn parsing_complex_param_errors() {
     let err = testing::test::<ValueCoercingConfig>(env).unwrap_err();
     assert_eq!(err.len(), 1);
     let err = err.first();
-    assert_eq!(err.path(), "set");
+    assert_eq!(err.path(), "set.1");
     let inner = err.inner().to_string();
     assert!(inner.contains("invalid type"), "{inner}");
     assert_eq!(

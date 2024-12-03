@@ -49,7 +49,7 @@ pub use self::{
     },
 };
 use crate::{
-    error::{ErrorWithOrigin, LocationInConfig},
+    error::{ErrorWithOrigin, LocationInConfig, LowLevelError},
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
     value::{Pointer, Value, ValueOrigin, WithOrigin},
     DescribeConfig, Json, ParseError, ParseErrors,
@@ -76,6 +76,7 @@ pub struct DeserializeContext<'a> {
     path: String,
     patched_current_value: Option<&'a WithOrigin>,
     current_config: &'static ConfigMetadata,
+    location_in_config: Option<LocationInConfig>,
     errors: &'a mut ParseErrors,
 }
 
@@ -93,17 +94,35 @@ impl<'a> DeserializeContext<'a> {
             path,
             patched_current_value: None,
             current_config,
+            location_in_config: None,
             errors,
         }
     }
 
-    fn child(&mut self, path: &str) -> DeserializeContext<'_> {
+    fn child(
+        &mut self,
+        path: &str,
+        location_in_config: Option<LocationInConfig>,
+    ) -> DeserializeContext<'_> {
         DeserializeContext {
             de_options: self.de_options,
             root_value: self.root_value,
             path: Pointer(&self.path).join(path),
             patched_current_value: None,
             current_config: self.current_config,
+            location_in_config,
+            errors: self.errors,
+        }
+    }
+
+    fn borrow(&mut self) -> DeserializeContext<'_> {
+        DeserializeContext {
+            de_options: self.de_options,
+            root_value: self.root_value,
+            path: self.path.clone(),
+            patched_current_value: self.patched_current_value,
+            current_config: self.current_config,
+            location_in_config: self.location_in_config,
             errors: self.errors,
         }
     }
@@ -116,6 +135,7 @@ impl<'a> DeserializeContext<'a> {
             path: self.path.clone(),
             patched_current_value: Some(current_value),
             current_config: self.current_config,
+            location_in_config: self.location_in_config,
             errors: self.errors,
         }
     }
@@ -144,7 +164,7 @@ impl<'a> DeserializeContext<'a> {
         let path = nested_meta.name;
         DeserializeContext {
             current_config: nested_meta.meta,
-            ..self.child(path)
+            ..self.child(path, None)
         }
     }
 
@@ -152,11 +172,19 @@ impl<'a> DeserializeContext<'a> {
         let param = self.current_config.params.get(index).unwrap_or_else(|| {
             panic!("Internal error: called `for_param()` with missing param index {index}")
         });
-        (self.child(param.name), param)
+        (
+            self.child(param.name, Some(LocationInConfig::Param(index))),
+            param,
+        )
     }
 
     #[cold]
-    fn push_error(&mut self, err: ErrorWithOrigin, location: Option<LocationInConfig>) {
+    fn push_error(&mut self, err: ErrorWithOrigin) {
+        let inner = match err.inner {
+            LowLevelError::Json(err) => err,
+            LowLevelError::InvalidArray | LowLevelError::InvalidObject => return,
+        };
+
         let mut origin = err.origin;
         if matches!(origin.as_ref(), ValueOrigin::Unknown) {
             if let Some(val) = self.current_value() {
@@ -164,20 +192,12 @@ impl<'a> DeserializeContext<'a> {
             }
         }
 
-        let path = if let Some(location) = location {
-            Pointer(&self.path).join(match location {
-                LocationInConfig::Param(idx) => self.current_config.params[idx].name,
-            })
-        } else {
-            self.path.clone()
-        };
-
         self.errors.push(ParseError {
-            inner: err.inner,
-            path,
+            inner,
+            path: self.path.clone(),
             origin,
             config: self.current_config,
-            location_in_config: location,
+            location_in_config: self.location_in_config,
         });
     }
 }
@@ -206,20 +226,23 @@ impl DeserializeContext<'_> {
         let maybe_coerced = child_ctx
             .current_value()
             .and_then(|val| val.coerce_value_type(param.expecting));
-        let child_ctx = if let Some(coerced) = &maybe_coerced {
+        let mut child_ctx = if let Some(coerced) = &maybe_coerced {
             child_ctx.patched(coerced)
         } else {
             child_ctx
         };
 
-        match param.deserializer.deserialize_param(child_ctx, param) {
+        match param
+            .deserializer
+            .deserialize_param(child_ctx.borrow(), param)
+        {
             Ok(param) => Some(
                 *param
                     .downcast()
                     .expect("Internal error: deserializer output has wrong type"),
             ),
             Err(err) => {
-                self.push_error(err, Some(LocationInConfig::Param(index)));
+                child_ctx.push_error(err);
                 None
             }
         }
