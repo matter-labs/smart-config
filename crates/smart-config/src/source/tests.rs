@@ -699,3 +699,107 @@ fn nesting_with_duration_param() {
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(86_400));
 }
+
+#[test]
+fn nesting_with_duration_param_errors() {
+    fn assert_error(err: &ParseErrors) -> &ParseError {
+        assert_eq!(err.len(), 1);
+        let err = err.first();
+        assert_eq!(err.path(), "long_dur");
+        assert_eq!(err.param().unwrap().name, "long_dur");
+        err
+    }
+
+    let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR_SEC", "what")]);
+    let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
+    let err = assert_error(&err);
+    assert_matches!(err.origin(), ValueOrigin::Path { path, ..} if path == "LONG_DUR_SEC");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("what"), "{inner}");
+
+    let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR_WHAT", "123")]);
+    let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
+    let err = assert_error(&err);
+    assert_matches!(err.origin(), ValueOrigin::Path { path, ..} if path == "LONG_DUR_WHAT");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("unknown variant"), "{inner}");
+
+    let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR", "123 years")]);
+    let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
+    let err = assert_error(&err);
+    assert_matches!(err.origin(), ValueOrigin::Path { path, ..} if path == "LONG_DUR");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("expected duration unit"), "{inner}");
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("ARRAY", "4,5"),
+            ("LONG_DUR_SECS", "12"), // ambiguous qualifier
+            ("LONG_DUR_MIN", "1"),
+        ],
+    );
+    let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
+    let err = assert_error(&err);
+    assert_matches!(err.origin(), ValueOrigin::Synthetic { .. });
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid type"), "{inner}");
+}
+
+#[test]
+fn merging_duration_params_is_atomic() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ConfigWithComplexTypes>("test").unwrap();
+
+    // Base case: the duration is defined only in overrides
+    let base = config!("test.array": [4, 5]);
+    let overrides = config!("test.long_dur": "3 secs");
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    assert_matches!(
+        &repo.merged().get(Pointer("test.long_dur")).unwrap().inner,
+        Value::String(_)
+    );
+
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(3));
+
+    // Structured override
+    let base = config!("test.array": [4, 5], "test.long_dur": "3 secs");
+    let overrides = config!("test.long_dur": HashMap::from([("ms", 500)]));
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    assert_matches!(
+        &repo.merged().get(Pointer("test.long_dur")).unwrap().inner,
+        Value::Object(_)
+    );
+
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_millis(500));
+
+    // Prefixed override
+    let base = config!("test.array": [4, 5], "test.long_dur": "3 secs");
+    let overrides = Environment::from_iter("", [("TEST_LONG_DUR_MIN", "1")]);
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    assert_matches!(
+        &repo.merged().get(Pointer("test.long_dur")).unwrap().inner,
+        Value::Object(_)
+    );
+
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(60));
+
+    // Prefixed base and override
+    let base = config!("test.array": [4, 5], "test.long_dur_secs": "3");
+    let mut repo = ConfigRepository::new(&schema).with(base);
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(3));
+
+    let overrides = Environment::from_iter("", [("TEST_LONG_DUR_MIN", "2")]);
+    repo = repo.with(overrides);
+    assert_matches!(
+        &repo.merged().get(Pointer("test.long_dur")).unwrap().inner,
+        Value::Object(_)
+    );
+
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(120));
+}

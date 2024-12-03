@@ -47,6 +47,7 @@ pub use self::{
     param::{
         Delimited, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault,
     },
+    param_impl::WithUnit,
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},

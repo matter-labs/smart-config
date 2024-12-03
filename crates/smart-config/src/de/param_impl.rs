@@ -137,6 +137,45 @@ impl DeserializeParam<ByteSize> for SizeUnit {
 }
 
 /// Default deserializer for [`Duration`]s.
+///
+/// Values can be deserialized from 2 formats:
+///
+/// - String consisting of an integer, optional whitespace and a unit, such as "30 secs" or "500ms".
+///   The unit must correspond to a [`TimeUnit`]; i.e., units larger than days are not supported because of ambiguity.
+/// - Object with a single key and an integer value, such as `{ "hours": 3 }`.
+///
+/// Thanks to nesting of object params, the second approach automatically means that a duration can be parsed
+/// from a param name suffixed with a unit. For example, a value `latency_ms: 500` for parameter `latency`
+/// will be recognized as 500 ms.
+///
+/// # Examples
+///
+/// ```
+/// # use std::time::Duration;
+/// # use smart_config::{testing, Environment, DescribeConfig, DeserializeConfig};
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     latency: Duration,
+/// }
+///
+/// // Parsing from a string
+/// let source = smart_config::config!("latency": "30 secs");
+/// let config: TestConfig = testing::test(source)?;
+/// assert_eq!(config.latency, Duration::from_secs(30));
+///
+/// // Parsing from an object
+/// let source = smart_config::config!(
+///     "latency": serde_json::json!({ "hours": 3 }),
+/// );
+/// let config: TestConfig = testing::test(source)?;
+/// assert_eq!(config.latency, Duration::from_secs(3 * 3_600));
+///
+/// // Parsing from a suffixed parameter name
+/// let source = Environment::from_iter("", [("LATENCY_SEC", "15")]);
+/// let config: TestConfig = testing::test(source)?;
+/// assert_eq!(config.latency, Duration::from_secs(15));
+/// # anyhow::Ok(())
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct WithUnit;
 
