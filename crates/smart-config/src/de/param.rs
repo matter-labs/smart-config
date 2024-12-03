@@ -204,17 +204,156 @@ impl<T: WellKnown> WellKnown for Option<T> {
     const DE: Self::Deserializer = Optional(T::DE);
 }
 
-impl<T: WellKnown + DeserializeOwned> WellKnown for Vec<T> {
-    type Deserializer = super::Serde![array];
-    const DE: Self::Deserializer = super::Serde![array];
+#[derive(Debug)]
+pub struct Repeated<De>(pub De);
+
+impl<De> Repeated<De> {
+    fn deserialize_array<T, C>(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+        expected_len: Option<usize>,
+    ) -> Result<C, ErrorWithOrigin>
+    where
+        De: DeserializeParam<T>,
+        C: FromIterator<T>,
+    {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let Value::Array(items) = deserializer.value() else {
+            return Err(deserializer.invalid_type("array"));
+        };
+
+        if let Some(expected_len) = expected_len {
+            if items.len() != expected_len {
+                let err = DeError::invalid_length(items.len(), &expected_len.to_string().as_str());
+                return Err(deserializer.enrich_err(err));
+            }
+        }
+
+        let items = items.iter().enumerate().map(|(i, item)| {
+            let coerced = item.coerce_value_type(De::EXPECTING);
+            let mut child_ctx = ctx.child(&i.to_string());
+            let child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(item));
+            self.0.deserialize_param(child_ctx, param)
+        });
+        items.collect()
+    }
+
+    fn deserialize_map<K, V, C>(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<C, ErrorWithOrigin>
+    where
+        K: FromStr<Err: fmt::Display>,
+        De: DeserializeParam<V>,
+        C: FromIterator<(K, V)>,
+    {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let Value::Object(items) = deserializer.value() else {
+            return Err(deserializer.invalid_type("object"));
+        };
+
+        let items = items.iter().map(|(key, value)| {
+            let parsed_key: K = key
+                .parse()
+                .map_err(|err| deserializer.enrich_err(DeError::custom(err)))?;
+
+            let coerced = value.coerce_value_type(De::EXPECTING);
+            let mut child_ctx = ctx.child(key);
+            let child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(value));
+            let parsed_value = self.0.deserialize_param(child_ctx, param)?;
+            Ok((parsed_key, parsed_value))
+        });
+        items.collect()
+    }
 }
 
-impl<T, const N: usize> WellKnown for [T; N]
+impl<T, De> DeserializeParam<Vec<T>> for Repeated<De>
 where
-    [T; N]: DeserializeOwned, // `serde` implements `Deserialize` for separate lengths rather for generics
+    De: DeserializeParam<T>,
 {
-    type Deserializer = Qualified<super::Serde![array]>;
-    const DE: Self::Deserializer = Qualified::new(super::Serde![array], "fixed-size array");
+    const EXPECTING: BasicTypes = BasicTypes::ARRAY;
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Vec<T>, ErrorWithOrigin> {
+        self.deserialize_array(ctx, param, None)
+    }
+}
+
+impl<T, S, De> DeserializeParam<HashSet<T, S>> for Repeated<De>
+where
+    T: Eq + Hash,
+    S: 'static + Default + BuildHasher,
+    De: DeserializeParam<T>,
+{
+    const EXPECTING: BasicTypes = BasicTypes::ARRAY;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("set")
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<HashSet<T, S>, ErrorWithOrigin> {
+        self.deserialize_array(ctx, param, None)
+    }
+}
+
+impl<T, De> DeserializeParam<BTreeSet<T>> for Repeated<De>
+where
+    T: Eq + Ord,
+    De: DeserializeParam<T>,
+{
+    const EXPECTING: BasicTypes = BasicTypes::ARRAY;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("set")
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<BTreeSet<T>, ErrorWithOrigin> {
+        self.deserialize_array(ctx, param, None)
+    }
+}
+
+impl<T, De, const N: usize> DeserializeParam<[T; N]> for Repeated<De>
+where
+    De: DeserializeParam<T>,
+{
+    const EXPECTING: BasicTypes = BasicTypes::ARRAY;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("fixed-sized array")
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<[T; N], ErrorWithOrigin> {
+        let items: Vec<_> = self.deserialize_array(ctx, param, Some(N))?;
+        // `unwrap()` is safe due to the length check in `deserialize_inner()`
+        Ok(items.try_into().ok().unwrap())
+    }
+}
+
+impl<T: WellKnown> WellKnown for Vec<T> {
+    type Deserializer = Repeated<T::Deserializer>;
+    const DE: Self::Deserializer = Repeated(T::DE);
+}
+
+impl<T: WellKnown, const N: usize> WellKnown for [T; N] {
+    type Deserializer = Repeated<T::Deserializer>;
+    const DE: Self::Deserializer = Repeated(T::DE);
 }
 
 // Heterogeneous tuples don't look like a good idea to mark as well-known because they wouldn't look well-structured
@@ -222,40 +361,81 @@ where
 
 impl<T, S> WellKnown for HashSet<T, S>
 where
-    T: Eq + Hash + DeserializeOwned + WellKnown,
+    T: Eq + Hash + WellKnown,
     S: 'static + Default + BuildHasher,
 {
-    type Deserializer = Qualified<super::Serde![array]>;
-    const DE: Self::Deserializer = Qualified::new(super::Serde![array], "set");
+    type Deserializer = Repeated<T::Deserializer>;
+    const DE: Self::Deserializer = Repeated(T::DE);
 }
 
 impl<T> WellKnown for BTreeSet<T>
 where
-    T: Eq + Ord + DeserializeOwned + WellKnown,
+    T: Eq + Ord + WellKnown,
 {
-    type Deserializer = Qualified<super::Serde![array]>;
-    const DE: Self::Deserializer = Qualified::new(super::Serde![array], "set");
+    type Deserializer = Repeated<T::Deserializer>;
+    const DE: Self::Deserializer = Repeated(T::DE);
+}
+
+impl<K, V, S, De> DeserializeParam<HashMap<K, V, S>> for Repeated<De>
+where
+    K: 'static + Eq + Hash + FromStr<Err: fmt::Display>,
+    S: 'static + Default + BuildHasher,
+    De: DeserializeParam<V>,
+{
+    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("map")
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<HashMap<K, V, S>, ErrorWithOrigin> {
+        self.deserialize_map(ctx, param)
+    }
+}
+
+impl<K, V, De> DeserializeParam<BTreeMap<K, V>> for Repeated<De>
+where
+    K: 'static + Eq + Ord + FromStr<Err: fmt::Display>,
+    De: DeserializeParam<V>,
+{
+    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("map")
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<BTreeMap<K, V>, ErrorWithOrigin> {
+        self.deserialize_map(ctx, param)
+    }
 }
 
 /// Keys are intentionally restricted by [`FromStr`] in order to prevent runtime errors when dealing with keys
 /// that do not serialize to strings.
 impl<K, V, S> WellKnown for HashMap<K, V, S>
 where
-    K: 'static + DeserializeOwned + Eq + Hash + FromStr,
-    V: DeserializeOwned + WellKnown,
+    K: 'static + Eq + Hash + FromStr<Err: fmt::Display>,
+    V: WellKnown,
     S: 'static + Default + BuildHasher,
 {
-    type Deserializer = Qualified<super::Serde![object]>;
-    const DE: Self::Deserializer = Qualified::new(super::Serde![object], "map");
+    type Deserializer = Repeated<V::Deserializer>;
+    const DE: Self::Deserializer = Repeated(V::DE);
 }
 
 impl<K, V> WellKnown for BTreeMap<K, V>
 where
-    K: 'static + DeserializeOwned + Eq + Ord + FromStr,
-    V: DeserializeOwned + WellKnown,
+    K: 'static + Eq + Ord + FromStr<Err: fmt::Display>,
+    V: WellKnown,
 {
-    type Deserializer = Qualified<super::Serde![object]>;
-    const DE: Self::Deserializer = Qualified::new(super::Serde![object], "map");
+    type Deserializer = Repeated<V::Deserializer>;
+    const DE: Self::Deserializer = Repeated(V::DE);
 }
 
 /// [Deserializer](DeserializeParam) decorator that provides additional [qualifiers](TypeQualifiers)
