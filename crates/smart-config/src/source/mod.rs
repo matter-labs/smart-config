@@ -1,6 +1,8 @@
 use std::{collections::BTreeSet, iter, marker::PhantomData, sync::Arc};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
+#[cfg(doc)]
+use crate::metadata::BasicTypes;
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
     schema::{ConfigRef, ConfigSchema},

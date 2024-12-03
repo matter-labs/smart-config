@@ -10,7 +10,7 @@
 //! - `serde` sometimes collects params in intermediate containers (e.g., in structs with `#[serde(flatten)]`
 //!   or in tagged enums), which leads to param deserialization potentially getting broken in unpredictable ways.
 //!
-//! So, each config param is deserialized in isolation from an optional [`Value`](crate::value::Value) [`WithOrigin`]
+//! So, each config param is deserialized in isolation from an optional [`Value`] [`WithOrigin`]
 //! encapsulated in [`DeserializeContext`].
 //!
 //! # Deserializers
