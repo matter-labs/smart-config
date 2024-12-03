@@ -377,6 +377,7 @@ fn parsing_complex_types() {
             long_dur: Duration::from_secs(5),
             path: "./test".into(),
             memory_size_mb: Some(ByteSize::new(128, SizeUnit::MiB)),
+            disk_size: None,
             paths: vec![],
             map_or_string: MapOrString::default(),
         }
@@ -391,6 +392,7 @@ fn parsing_complex_types() {
         "path": "/mnt",
         "paths": "/usr/bin:/usr/local/bin",
         "memory_size_mb": 64,
+        "disk_size": "4 GB",
         "map_or_string": "test=1,other=2",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
@@ -405,6 +407,7 @@ fn parsing_complex_types() {
             long_dur: Duration::from_secs(5 * 60),
             path: "/mnt".into(),
             memory_size_mb: Some(ByteSize::new(64, SizeUnit::MiB)),
+            disk_size: Some(ByteSize::new(4, SizeUnit::GiB)),
             paths: vec!["/usr/bin".into(), "/usr/local/bin".into()],
             map_or_string: MapOrString(HashMap::from([("test".into(), 1), ("other".into(), 2),])),
         }
@@ -418,6 +421,7 @@ fn parsing_complex_types() {
         "short_dur": 1000,
         "long_dur": serde_json::json!({ "millis": 500 }),
         "memory_size_mb": (),
+        "disk_size": serde_json::json!({ "mb": 256 }),
         "paths": ["/usr/bin", "/mnt"],
         "map_or_string": serde_json::json!({
             "test": 42,
@@ -436,6 +440,7 @@ fn parsing_complex_types() {
             long_dur: Duration::from_millis(500),
             path: "./test".into(),
             memory_size_mb: None,
+            disk_size: Some(ByteSize::new(256, SizeUnit::MiB)),
             paths: vec!["/usr/bin".into(), "/mnt".into()],
             map_or_string: MapOrString(HashMap::from([("test".into(), 42), ("other".into(), 23),])),
         }

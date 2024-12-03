@@ -272,6 +272,98 @@ impl WellKnown for Duration {
     const DE: Self::Deserializer = WithUnit;
 }
 
+#[derive(Debug, Deserialize)]
+#[cfg_attr(test, derive(PartialEq))]
+#[serde(rename_all = "lowercase")]
+enum RawByteSize {
+    Bytes(u64),
+    #[serde(alias = "kb", alias = "kib")]
+    Kilobytes(u64),
+    #[serde(alias = "mb", alias = "mib")]
+    Megabytes(u64),
+    #[serde(alias = "gb", alias = "gib")]
+    Gigabytes(u64),
+}
+
+impl RawByteSize {
+    const EXPECTING: &'static str = "value with unit, like '32 MB'";
+}
+
+impl FromStr for RawByteSize {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let unit_start = s
+            .find(|ch: char| !ch.is_ascii_digit())
+            .ok_or_else(|| DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING))?;
+        if unit_start == 0 {
+            return Err(DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING));
+        }
+
+        let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
+        let unit = s[unit_start..].trim();
+        Ok(match unit.to_lowercase().as_str() {
+            "bytes" | "b" => Self::Bytes(value),
+            "kb" | "kib" => Self::Kilobytes(value),
+            "mb" | "mib" => Self::Megabytes(value),
+            "gb" | "gib" => Self::Gigabytes(value),
+            _ => {
+                return Err(DeError::invalid_value(
+                    Unexpected::Str(unit),
+                    &"duration unit, like 'KB', up to 'GB'",
+                ))
+            }
+        })
+    }
+}
+
+impl TryFrom<RawByteSize> for ByteSize {
+    type Error = serde_json::Error;
+
+    fn try_from(value: RawByteSize) -> Result<Self, Self::Error> {
+        let (unit, raw_value) = match value {
+            RawByteSize::Bytes(val) => (SizeUnit::Bytes, val),
+            RawByteSize::Kilobytes(val) => (SizeUnit::KiB, val),
+            RawByteSize::Megabytes(val) => (SizeUnit::MiB, val),
+            RawByteSize::Gigabytes(val) => (SizeUnit::GiB, val),
+        };
+        ByteSize::checked(raw_value, unit).ok_or_else(|| {
+            DeError::custom(format!(
+                "{raw_value} {unit} does not fit into `u64`",
+                unit = unit.plural()
+            ))
+        })
+    }
+}
+
+impl DeserializeParam<ByteSize> for WithUnit {
+    const EXPECTING: BasicTypes = BasicTypes::STRING.or(BasicTypes::OBJECT);
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::new("size with unit, or object with single unit key")
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<ByteSize, ErrorWithOrigin> {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let raw = if let Value::String(s) = deserializer.value() {
+            s.parse::<RawByteSize>()
+                .map_err(|err| deserializer.enrich_err(err))?
+        } else {
+            RawByteSize::deserialize(deserializer)?
+        };
+        raw.try_into().map_err(|err| deserializer.enrich_err(err))
+    }
+}
+
+impl WellKnown for ByteSize {
+    type Deserializer = WithUnit;
+    const DE: Self::Deserializer = WithUnit;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,5 +402,19 @@ mod tests {
         let err = "10 months".parse::<RawDuration>().unwrap_err().to_string();
         assert!(err.starts_with("invalid value"), "{err}");
         assert!(err.contains("duration unit"), "{err}");
+    }
+
+    #[test]
+    fn parsing_byte_size_string() {
+        let size: RawByteSize = "16bytes".parse().unwrap();
+        assert_eq!(size, RawByteSize::Bytes(16));
+        let size: RawByteSize = "128    KiB".parse().unwrap();
+        assert_eq!(size, RawByteSize::Kilobytes(128));
+        let size: RawByteSize = "16 kb".parse().unwrap();
+        assert_eq!(size, RawByteSize::Kilobytes(16));
+        let size: RawByteSize = "4MB".parse().unwrap();
+        assert_eq!(size, RawByteSize::Megabytes(4));
+        let size: RawByteSize = "1 GB".parse().unwrap();
+        assert_eq!(size, RawByteSize::Gigabytes(1));
     }
 }

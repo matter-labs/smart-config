@@ -7,12 +7,14 @@ use assert_matches::assert_matches;
 
 use super::*;
 use crate::{
+    metadata::SizeUnit,
     testing,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, CompoundConfig,
         ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig,
         NestedConfig, SimpleEnum, ValueCoercingConfig,
     },
+    ByteSize,
 };
 
 #[test]
@@ -698,6 +700,21 @@ fn nesting_with_duration_param() {
     let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", 1)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(86_400));
+}
+
+#[test]
+fn nesting_with_byte_size_param() {
+    let json = config!("array": [4, 5], "disk_size_mb": 64);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size.unwrap(), ByteSize::new(64, SizeUnit::MiB));
+
+    let json = config!("array": [4, 5], "disk_size": "2 GiB");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size.unwrap(), ByteSize::new(2, SizeUnit::GiB));
+
+    let json = config!("array": [4, 5], "disk_size": HashMap::from([("kib", 512)]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size.unwrap(), ByteSize::new(512, SizeUnit::KiB));
 }
 
 #[test]

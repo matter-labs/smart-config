@@ -339,6 +339,9 @@ impl WithOrigin {
                         Some((stripped_name.to_owned(), field.clone()))
                     })
                     .collect();
+                if matching_fields.is_empty() {
+                    continue;
+                }
 
                 if !config_object.contains_key(param.name) {
                     let origin = Arc::new(ValueOrigin::Synthetic {

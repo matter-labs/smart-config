@@ -205,6 +205,7 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(with = de::Optional(SizeUnit::MiB))]
     #[config(default_t = Some(ByteSize::new(128, SizeUnit::MiB)))]
     pub memory_size_mb: Option<ByteSize>,
+    pub disk_size: Option<ByteSize>,
     #[config(default, with = de::Delimited(":"))]
     pub paths: Vec<PathBuf>,
     #[config(default, with = de::OrString(Serde![object]))]

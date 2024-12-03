@@ -202,6 +202,7 @@ impl<T: WellKnown> WellKnown for Option<T> {
     const DE: Self::Deserializer = Optional(T::DE);
 }
 
+// FIXME: reconsider; might be bogus
 impl<T: WellKnown + DeserializeOwned> WellKnown for Vec<T> {
     type Deserializer = super::Serde![array];
     const DE: Self::Deserializer = super::Serde![array];
