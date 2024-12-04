@@ -263,16 +263,14 @@ where
 #[derive(Debug)]
 pub struct Qualified<De> {
     inner: De,
-    qualifiers: TypeQualifiers,
+    // Cannot use `TypeQualifiers` directly because it wouldn't allow to drop the type in const contexts.
+    description: &'static str,
 }
 
 impl<De> Qualified<De> {
     /// Creates a new instance with the extended type description.
     pub const fn new(inner: De, description: &'static str) -> Self {
-        Self {
-            inner,
-            qualifiers: TypeQualifiers::new(description),
-        }
+        Self { inner, description }
     }
 }
 
@@ -291,7 +289,7 @@ where
     }
 
     fn type_qualifiers(&self) -> TypeQualifiers {
-        self.qualifiers.clone()
+        TypeQualifiers::new(self.description)
     }
 }
 
