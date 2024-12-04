@@ -1,0 +1,5 @@
+error: cannot specify `with` for a `nest`ed / `flatten`ed configuration
+  --> tests/ui/derives/deserializer_for_nested_config.rs:10:14
+   |
+10 |     #[config(nest, with = ())]
+   |              ^^^^

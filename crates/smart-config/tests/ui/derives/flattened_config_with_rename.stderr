@@ -1,0 +1,6 @@
+error: `rename` attribute is useless for flattened configs; did you mean to make a config nested?
+  --> tests/ui/derives/flattened_config_with_rename.rs:10:5
+   |
+10 | /     #[config(rename = "flat", flatten)]
+11 | |     bogus: NestedConfig,
+   | |_______________________^

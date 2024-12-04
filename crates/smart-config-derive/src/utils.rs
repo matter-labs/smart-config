@@ -176,14 +176,27 @@ impl ConfigFieldAttrs {
             })?;
         }
 
+        if nest && flatten {
+            let msg = "cannot specify both `nest` and `flatten` for config";
+            return Err(syn::Error::new(name_span, msg));
+        }
+
         if flatten {
-            // All flattened configs are nested, but not necessarily vice versa.
+            // All flattened configs are nested internally, but not necessarily vice versa.
             nest = true;
         }
         if with.is_some() && nest {
             let msg = "cannot specify `with` for a `nest`ed / `flatten`ed configuration";
             let err_span = nested_span.unwrap_or(name_span);
             return Err(syn::Error::new(err_span, msg));
+        }
+        if flatten && rename.is_some() {
+            let msg = "`rename` attribute is useless for flattened configs; did you mean to make a config nested?";
+            return Err(syn::Error::new(name_span, msg));
+        }
+        if nest && !aliases.is_empty() {
+            let msg = "aliases for nested / flattened configs are not supported yet";
+            return Err(syn::Error::new(name_span, msg));
         }
 
         Ok(Self {
