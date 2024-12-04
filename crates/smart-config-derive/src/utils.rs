@@ -464,11 +464,14 @@ impl ConfigContainer {
 
         for variant in &data.variants {
             let attrs = ConfigVariantAttrs::new(&variant.attrs)?;
-            if let Some(rename) = &attrs.rename {
-                if !variants_with_aliases.insert(rename.value()) {
-                    let msg = "Tag value is redefined";
-                    return Err(syn::Error::new(rename.span(), msg));
-                }
+
+            let (name, name_span) = attrs.rename.as_ref().map_or_else(
+                || (variant.ident.to_string(), variant.ident.span()),
+                |lit| (lit.value(), lit.span()),
+            );
+            if !variants_with_aliases.insert(name) {
+                let msg = "Tag value is redefined";
+                return Err(syn::Error::new(name_span, msg));
             }
             for alias in &attrs.aliases {
                 if !variants_with_aliases.insert(alias.value()) {

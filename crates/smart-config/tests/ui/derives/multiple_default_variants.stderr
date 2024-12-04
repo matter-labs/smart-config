@@ -1,0 +1,5 @@
+error: Only one variant can be marked as default
+ --> tests/ui/derives/multiple_default_variants.rs:9:5
+  |
+9 |     V1 { value: u64 },
+  |     ^^

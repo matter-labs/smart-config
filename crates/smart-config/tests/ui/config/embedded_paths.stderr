@@ -1,0 +1,7 @@
+error[E0080]: evaluation of constant value failed
+ --> tests/ui/config/embedded_paths.rs:2:5
+  |
+2 |     smart_config::config!("test": 1, "test.path": 2);
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the evaluated program panicked at 'Path #0 `test` is a prefix of path #1 `test.path`', $DIR/tests/ui/config/embedded_paths.rs:2:5
+  |
+  = note: this error originates in the macro `smart_config::config` (in Nightly builds, run with -Z macro-backtrace for more info)

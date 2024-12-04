@@ -1,0 +1,6 @@
+error: Cannot use an enum without fields as a config; this is useless
+ --> tests/ui/derives/useless_enum.rs:6:5
+  |
+6 | /     V0,
+7 | |     V1,
+  | |_______^

@@ -1,0 +1,5 @@
+error: Cannot derive(Default): enum does not have a variant marked with #[config(default)]
+ --> tests/ui/derives/cannot_derive_default_variant.rs:5:6
+  |
+5 | enum TestConfig {
+  |      ^^^^^^^^^^

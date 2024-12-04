@@ -1,0 +1,19 @@
+error[E0277]: the trait bound `u64: DescribeConfig` is not satisfied
+ --> tests/ui/derives/bogus_nested_config.rs:6:12
+  |
+6 |     field: u64,
+  |            ^^^ the trait `DescribeConfig` is not implemented for `u64`
+  |
+  = help: the following other types implement trait `DescribeConfig`:
+            OtherConfig
+            TestConfig
+
+error[E0277]: the trait bound `u64: DescribeConfig` is not satisfied
+  --> tests/ui/derives/bogus_nested_config.rs:12:12
+   |
+12 |     field: u64,
+   |            ^^^ the trait `DescribeConfig` is not implemented for `u64`
+   |
+   = help: the following other types implement trait `DescribeConfig`:
+             OtherConfig
+             TestConfig

@@ -1,0 +1,5 @@
+error: Variants with >=2 unnamed fields are not supported
+ --> tests/ui/derives/unsupported_enum_variant.rs:7:5
+  |
+7 |     V1(u64, String),
+  |     ^^
