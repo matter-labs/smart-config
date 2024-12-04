@@ -127,8 +127,6 @@
 // Linter settings
 #![warn(missing_docs)]
 
-#[doc(hidden)] // used in the derive macro
-pub use once_cell::sync::Lazy;
 /// Derives the [`DescribeConfig`](trait@DescribeConfig) trait for a type.
 ///
 /// This macro supports both structs and enums. It is conceptually similar to `Deserialize` macro from `serde`.
