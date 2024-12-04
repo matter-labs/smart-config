@@ -129,7 +129,147 @@
 
 #[doc(hidden)] // used in the derive macro
 pub use once_cell::sync::Lazy;
-pub use smart_config_derive::{DescribeConfig, DeserializeConfig};
+/// Derives the [`DescribeConfig`](trait@DescribeConfig) trait for a type.
+///
+/// This macro supports both structs and enums. It is conceptually similar to `Deserialize` macro from `serde`.
+/// Macro behavior can be configured with `#[config(_)]` attributes. Multiple `#[config(_)]` attributes
+/// on a single item are supported.
+///
+/// Each field in the struct / each enum variant is considered a configuration param (by default),
+/// or a sub-config (if `#[config(nest)]` or `#[config(flatten)]` is present for the field).
+///
+/// # Container attributes
+///
+/// ## `tag`
+///
+/// **Type:** string
+///
+/// Specifies the param name holding the enum tag, similar to the corresponding attribute in `serde`.
+/// Unlike `serde`, this attribute is *required* for enums; this is to ensure that source merging is well-defined.
+///
+/// ## `derive(Default)`
+///
+/// Derives `Default` according to the default values of params (+ the default variant for enum configs).
+/// To work, all params must have a default value specified.
+///
+/// # Variant attributes
+///
+/// ## `rename`, `alias`
+///
+/// **Type:** string
+///
+/// Have the same meaning as in `serde`; i.e. allow to rename / specify additional names for the tag(s)
+/// corresponding to the variant. `alias` can be specified multiple times.
+///
+/// ## `default`
+///
+/// If specified, marks the variant as default – one which will be used if the tag param is not set in the input.
+/// At most one variant can be marked as default.
+///
+/// # Field attributes
+///
+/// ## `rename`, `alias`
+///
+/// **Type:** string
+///
+/// Have the same meaning as in `serde`; i.e. allow to rename / specify additional names for the param.
+/// Param names are [validated](#validations) in compile time.
+///
+/// ## `default`
+///
+/// **Type:** path to function (optional)
+///
+/// Has the same meaning as in `serde`, i.e. allows to specify a constructor of the default value for the param.
+/// Without a value, [`Default`] is used for this purpose. Unlike `serde`, the path shouldn't be quoted.
+///
+/// ## `default_t`
+///
+/// **Type:** expression with param type
+///
+/// Allows to specify the default typed value for the param. The provided expression doesn't need to be constant.
+///
+/// ## `with`
+///
+/// **Type:** const expression implementing [`DeserializeParam`]
+///
+/// Allows changing the param deserializer. See [`de`] module docs for the overview of available deserializers.
+/// Note that there is an alternative: implementing [`WellKnown`](de::WellKnown) for the param type.
+///
+/// ## `nest`
+///
+/// If specified, the field is treated as a nested sub-config rather than a param. Correspondingly, its type must
+/// implement `DescribeConfig`.
+///
+/// ## `flatten`
+///
+/// If specified, the field is treated as a *flattened* sub-config rather than a param. Unlike `nest`, its params
+/// will be added to the containing config instead of a separate object. The sub-config type must implement `DescribeConfig`.
+///
+/// # Validations
+///
+/// The following validations are performed by the macro in compile time:
+///
+/// - Param / sub-config names and aliases must be non-empty, consist of lowercase ASCII alphanumeric chars or underscore
+///   and not start with a digit (i.e., follow the `[a-z_][a-z0-9_]*` regex).
+/// - Param names / aliases cannot coincide with nested config names.
+///
+/// [`DeserializeParam`]: de::DeserializeParam
+///
+/// # Examples
+///
+/// ```
+/// # use std::{collections::HashSet, num::NonZeroUsize, time::Duration};
+/// # use smart_config::{DescribeConfig, DeserializeConfig};
+/// use smart_config::metadata::TimeUnit;
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     /// Doc comments are parsed as a description.
+///     #[config(default_t = 3)]
+///     int: u32,
+///     #[config(default)] // multiple `config` attrs are supported
+///     #[config(rename = "str", alias = "string")]
+///     renamed: String,
+///     /// Nested sub-config. E.g., the tag will be read from path `nested.version`.
+///     #[config(nest)]
+///     nested: NestedConfig,
+///     /// Flattened sub-config. E.g., `array` param will be read from `array`, not `flat.array`.
+///     #[config(flatten)]
+///     flat: FlattenedConfig,
+/// }
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// #[config(tag = "version", derive(Default))]
+/// enum NestedConfig {
+///     #[config(default, rename = "v0")]
+///     V0,
+///     #[config(rename = "v1", alias = "latest")]
+///     V1 {
+///         /// Param with a custom deserializer. In this case, it will deserialize
+///         /// a duration from a number with milliseconds unit of measurement.
+///         #[config(default_t = Duration::from_millis(50), with = TimeUnit::Millis)]
+///         latency_ms: Duration,
+///         /// `Vec`s, sets and other containers are supported out of the box.
+///         set: HashSet<NonZeroUsize>,
+///     },
+/// }
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct FlattenedConfig {
+///     #[config(default = FlattenedConfig::default_array)]
+///     array: [f32; 2],
+/// }
+///
+/// impl FlattenedConfig {
+///     const fn default_array() -> [f32; 2] { [1.0, 2.0] }
+/// }
+/// ```
+pub use smart_config_derive::DescribeConfig;
+/// Derives the [`DeserializeConfig`](trait@DeserializeConfig) trait for a type.
+///
+/// This macro is intended to be used together with [`DescribeConfig`](macro@DescribeConfig). It reuses
+/// the same attributes, so see `DescribeConfig` docs for details and examples of usage.
+pub use smart_config_derive::DeserializeConfig;
 
 use self::metadata::ConfigMetadata;
 pub use self::{
