@@ -9,12 +9,53 @@ use crate::{
     ConfigRepository, ConfigSource, DeserializeConfig, ParseErrors,
 };
 
-/// Tests config deserialization from the provided `sample`.
+/// Tests config deserialization from the provided `sample`. Takes into account param aliases,
+/// performs `sample` preprocessing etc.
 ///
 /// # Errors
 ///
 /// Propagates parsing errors, which allows testing negative cases.
-#[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible (?)
+///
+/// # Examples
+///
+/// ## Basic usage
+///
+/// ```
+/// # use smart_config::{DescribeConfig, DeserializeConfig};
+/// use smart_config::{metadata::SizeUnit, testing, ByteSize};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default_t = true)]
+///     flag: bool,
+///     #[config(with = SizeUnit::MiB)]
+///     size_mb: ByteSize,
+/// }
+///
+/// let sample = smart_config::config!("size_mb": 2);
+/// let config: TestConfig = testing::test(sample)?;
+/// assert!(config.flag);
+/// assert_eq!(config.size_mb, ByteSize(2 << 20));
+/// # anyhow::Ok(())
+/// ```
+///
+/// ## Testing errors
+///
+/// ```
+/// # use smart_config::{testing, DescribeConfig, DeserializeConfig};
+/// #[derive(Debug, DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default_t = true, alias = "flag")]
+///     boolean: bool,
+/// }
+///
+/// let sample = smart_config::config!("flag": "no");
+/// let err = testing::test::<TestConfig>(sample).unwrap_err();
+/// let err = err.first();
+/// assert_eq!(err.path(), "boolean");
+/// assert!(err.inner().to_string().contains("invalid type"));
+/// ```
+#[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible
 pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {
     let schema = ConfigSchema::default().insert::<C>("");
     let repo = ConfigRepository::new(&schema).with(sample);
@@ -31,6 +72,48 @@ pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseE
 /// # Errors
 ///
 /// Propagates parsing errors, which allows testing negative cases.
+///
+/// # Examples
+///
+/// ## Basic usage
+///
+/// ```
+/// # use smart_config::{DescribeConfig, DeserializeConfig};
+/// use smart_config::{metadata::SizeUnit, testing, ByteSize};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default_t = true, alias = "flag")]
+///     boolean: bool,
+///     #[config(with = SizeUnit::MiB)]
+///     size_mb: ByteSize,
+/// }
+///
+/// let sample = smart_config::config!("flag": "false", "size_mb": 64);
+/// let config: TestConfig = testing::test_complete(sample)?;
+/// assert!(!config.boolean);
+/// assert_eq!(config.size_mb, ByteSize(64 << 20));
+/// # anyhow::Ok(())
+/// ```
+///
+/// ## Panics on incomplete sample
+///
+/// ```should_panic
+/// # use smart_config::{DescribeConfig, DeserializeConfig};
+/// # use smart_config::{metadata::SizeUnit, testing, ByteSize};
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default_t = true, alias = "flag")]
+///     boolean: bool,
+///     #[config(with = SizeUnit::MiB)]
+///     size_mb: ByteSize,
+/// }
+///
+/// let incomplete_sample = smart_config::config!("flag": "false");
+/// // Will panic with a message detailing missing params (`size_mb` in this case)
+/// testing::test_complete::<TestConfig>(incomplete_sample)?;
+/// # anyhow::Ok(())
+/// ```
 pub fn test_complete<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {
     let schema = ConfigSchema::default().insert::<C>("");
     let repo = ConfigRepository::new(&schema).with(sample);
