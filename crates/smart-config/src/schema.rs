@@ -31,7 +31,7 @@ impl<C: DescribeConfig> Alias<C> {
     pub fn prefix(prefix: &'static str) -> Self {
         Self {
             prefix: Pointer(prefix),
-            param_names: C::describe_config()
+            param_names: C::DESCRIPTION
                 .params
                 .iter()
                 .flat_map(|param| param.aliases.iter().copied().chain([param.name]))
@@ -98,7 +98,7 @@ pub struct ConfigMut<'a, C> {
     _config: PhantomData<C>,
 }
 
-impl<'a, C: DescribeConfig> ConfigMut<'a, C> {
+impl<C: DescribeConfig> ConfigMut<'_, C> {
     /// Gets the config prefix.
     pub fn prefix(&self) -> &str {
         &self.prefix
@@ -179,7 +179,7 @@ impl ConfigSchema {
     /// Returns an error if the configuration is not registered or has more than one mount point.
     #[allow(clippy::missing_panics_doc)] // false positive
     pub fn single_mut<C: DescribeConfig>(&mut self) -> anyhow::Result<ConfigMut<'_, C>> {
-        let metadata = C::describe_config();
+        let metadata = &C::DESCRIPTION;
         let mut it = self.locate(metadata);
         let first_prefix = it.next().with_context(|| {
             format!(
@@ -225,7 +225,7 @@ impl ConfigSchema {
     where
         C: DescribeConfig,
     {
-        let metadata = C::describe_config();
+        let metadata = &C::DESCRIPTION;
         self.insert_inner(
             prefix.into(),
             any::TypeId::of::<C>(),
@@ -237,9 +237,9 @@ impl ConfigSchema {
 
         // Insert all nested configs recursively.
         let mut pending_configs: Vec<_> =
-            Self::list_nested_configs(prefix, &metadata.nested_configs).collect();
+            Self::list_nested_configs(prefix, metadata.nested_configs).collect();
         while let Some((prefix, metadata)) = pending_configs.pop() {
-            let new_configs = Self::list_nested_configs(&prefix, &metadata.nested_configs);
+            let new_configs = Self::list_nested_configs(&prefix, metadata.nested_configs);
             pending_configs.extend(new_configs);
 
             self.insert_inner(prefix.into(), metadata.ty.id(), ConfigData::new(metadata));
@@ -325,7 +325,7 @@ impl ConfigSchema {
             writeln!(writer, "{prefix}{prefix_sep}{alias}")?;
         }
 
-        let kind = param.deserializer.expecting();
+        let kind = param.expecting;
         let ty = format!("{kind} [Rust: {}]", param.ty.name_in_code());
         let default = if let Some(default) = param.default_value() {
             format!(", default: {default:?}")
@@ -347,7 +347,7 @@ impl ConfigSchema {
 mod tests {
     use super::*;
     use crate::{
-        metadata::BasicType, value::Value, ConfigRepository, DescribeConfig, DeserializeConfig,
+        metadata::BasicTypes, value::Value, ConfigRepository, DescribeConfig, DeserializeConfig,
         Environment,
     };
 
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn getting_config_metadata() {
-        let metadata = TestConfig::describe_config();
+        let metadata = &TestConfig::DESCRIPTION;
         assert_eq!(metadata.ty.name_in_code(), "TestConfig");
         assert_eq!(metadata.help, "# Test configuration\nExtended description.");
         assert_eq!(metadata.help_header(), Some("Test configuration"));
@@ -406,10 +406,7 @@ mod tests {
         assert_eq!(optional_metadata.aliases, [] as [&str; 0]);
         assert_eq!(optional_metadata.help, "Optional value.");
         assert_eq!(optional_metadata.ty.name_in_code(), "Option"); // FIXME: does `Option<u32>` get printed only for nightly Rust?
-        assert_eq!(
-            optional_metadata.deserializer.expecting().base,
-            Some(BasicType::Integer)
-        );
+        assert_eq!(optional_metadata.expecting, BasicTypes::INTEGER);
     }
 
     const EXPECTED_HELP: &str = r#"
@@ -442,9 +439,9 @@ optional
 
         let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
         assert_eq!(all_prefixes, HashSet::from([Pointer("test"), Pointer("")]));
-        let config_prefixes: Vec<_> = schema.locate(TestConfig::describe_config()).collect();
+        let config_prefixes: Vec<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
         assert_eq!(config_prefixes, ["test"]);
-        let config_ref = schema.single(TestConfig::describe_config()).unwrap();
+        let config_ref = schema.single(&TestConfig::DESCRIPTION).unwrap();
         assert_eq!(config_ref.prefix(), "test");
         assert_eq!(config_ref.aliases().count(), 1);
 
@@ -481,9 +478,9 @@ optional
             all_prefixes,
             HashSet::from([Pointer("test"), Pointer(""), Pointer("deprecated")])
         );
-        let config_prefixes: Vec<_> = schema.locate(TestConfig::describe_config()).collect();
+        let config_prefixes: Vec<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
         assert_eq!(config_prefixes, ["test"]);
-        let config_ref = schema.single(TestConfig::describe_config()).unwrap();
+        let config_ref = schema.single(&TestConfig::DESCRIPTION).unwrap();
         assert_eq!(config_ref.prefix(), "test");
         assert_eq!(config_ref.aliases().count(), 2);
 
@@ -516,13 +513,13 @@ optional
             HashSet::from([Pointer(""), Pointer("hierarchical")])
         );
 
-        let config_prefixes: Vec<_> = schema.locate(NestingConfig::describe_config()).collect();
+        let config_prefixes: Vec<_> = schema.locate(&NestingConfig::DESCRIPTION).collect();
         assert_eq!(config_prefixes, [""]);
-        let config_prefixes: HashSet<_> = schema.locate(TestConfig::describe_config()).collect();
+        let config_prefixes: HashSet<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
         assert_eq!(config_prefixes, HashSet::from(["", "hierarchical"]));
 
         let err = schema
-            .single(TestConfig::describe_config())
+            .single(&TestConfig::DESCRIPTION)
             .unwrap_err()
             .to_string();
         assert!(err.contains("at least 2 locations"), "{err}");

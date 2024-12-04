@@ -3,11 +3,12 @@ use std::sync::Arc;
 use anyhow::Context;
 
 use super::{ConfigContents, ConfigSource};
-use crate::value::{Map, Pointer, Value, ValueOrigin, WithOrigin};
+use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// YAML-based configuration source.
 #[derive(Debug)]
 pub struct Yaml {
+    origin: Arc<ValueOrigin>,
     inner: Map,
 }
 
@@ -19,13 +20,16 @@ impl Yaml {
     /// Returns an error if the input doesn't conform to the JSON object model; e.g., if it has objects / maps
     /// with array or object keys.
     pub fn new(filename: &str, object: serde_yaml::Mapping) -> anyhow::Result<Self> {
-        let filename: Arc<str> = filename.into();
+        let origin = Arc::new(ValueOrigin::File {
+            name: filename.to_owned(),
+            format: FileFormat::Yaml,
+        });
         let inner =
-            Self::map_value(serde_yaml::Value::Mapping(object), &filename, String::new())?.inner;
+            Self::map_value(serde_yaml::Value::Mapping(object), &origin, String::new())?.inner;
         let Value::Object(inner) = inner else {
             unreachable!();
         };
-        Ok(Self { inner })
+        Ok(Self { origin, inner })
     }
 
     fn map_key(key: serde_yaml::Value, parent_path: &str) -> anyhow::Result<String> {
@@ -53,7 +57,7 @@ impl Yaml {
 
     fn map_value(
         value: serde_yaml::Value,
-        filename: &Arc<str>,
+        file_origin: &Arc<ValueOrigin>,
         path: String,
     ) -> anyhow::Result<WithOrigin> {
         let inner = match value {
@@ -67,7 +71,7 @@ impl Yaml {
                     .enumerate()
                     .map(|(i, value)| {
                         let child_path = Pointer(&path).join(&i.to_string());
-                        Self::map_value(value, filename, child_path)
+                        Self::map_value(value, file_origin, child_path)
                     })
                     .collect::<anyhow::Result<_>>()?,
             ),
@@ -77,19 +81,19 @@ impl Yaml {
                     .map(|(key, value)| {
                         let key = Self::map_key(key, &path)?;
                         let child_path = Pointer(&path).join(&key);
-                        anyhow::Ok((key, Self::map_value(value, filename, child_path)?))
+                        anyhow::Ok((key, Self::map_value(value, file_origin, child_path)?))
                     })
                     .collect::<anyhow::Result<_>>()?,
             ),
             serde_yaml::Value::Tagged(tagged) => {
-                return Self::map_value(tagged.value, filename, path);
+                return Self::map_value(tagged.value, file_origin, path);
             }
         };
 
         Ok(WithOrigin {
             inner,
-            origin: Arc::new(ValueOrigin::Yaml {
-                filename: filename.clone(),
+            origin: Arc::new(ValueOrigin::Path {
+                source: file_origin.clone(),
                 path,
             }),
         })
@@ -97,6 +101,10 @@ impl Yaml {
 }
 
 impl ConfigSource for Yaml {
+    fn origin(&self) -> Arc<ValueOrigin> {
+        self.origin.clone()
+    }
+
     fn into_contents(self) -> ConfigContents {
         ConfigContents::Hierarchical(self.inner)
     }
@@ -117,6 +125,18 @@ array:
     - test: 23
     "#;
 
+    fn filename(source: &ValueOrigin) -> &str {
+        if let ValueOrigin::File {
+            name,
+            format: FileFormat::Yaml,
+        } = source
+        {
+            name
+        } else {
+            panic!("unexpected source: {source:?}");
+        }
+    }
+
     #[test]
     fn creating_yaml_config() {
         let yaml: serde_yaml::Value = serde_yaml::from_str(YAML_CONFIG).unwrap();
@@ -128,14 +148,14 @@ array:
         assert_eq!(yaml.inner["bool"].inner, Value::Bool(true));
         assert_matches!(
             yaml.inner["bool"].origin.as_ref(),
-            ValueOrigin::Yaml { filename, path } if filename.as_ref() == "test.yml" && path == "bool"
+            ValueOrigin::Path { path, source } if filename(source) == "test.yml" && path == "bool"
         );
 
         let str = yaml.inner["nested"].get(Pointer("string")).unwrap();
         assert_eq!(str.inner, Value::String("what?".into()));
         assert_matches!(
             str.origin.as_ref(),
-            ValueOrigin::Yaml { filename, path } if filename.as_ref() == "test.yml" && path == "nested.string"
+            ValueOrigin::Path { path, source } if filename(source) == "test.yml" && path == "nested.string"
         );
 
         let inner_int = yaml.inner["array"].get(Pointer("0.test")).unwrap();

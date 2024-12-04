@@ -13,9 +13,10 @@ use crate::{
     de::DeserializerOptions,
     metadata::SizeUnit,
     testonly::{
-        test_deserialize, test_deserialize_missing, wrap_into_value, CompoundConfig,
-        ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, DefaultingEnumConfig,
-        EnumConfig, NestedConfig, SimpleEnum, TestParam,
+        extract_env_var_name, extract_json_name, test_deserialize, test_deserialize_missing,
+        wrap_into_value, CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting,
+        DefaultingConfig, DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig, SimpleEnum,
+        TestParam,
     },
     value::{Pointer, Value, ValueOrigin},
     ByteSize, DescribeConfig, Environment, ParseError,
@@ -23,20 +24,18 @@ use crate::{
 
 #[test]
 fn parsing_param() {
-    let env = Environment::from_iter(
-        "",
-        [
-            ("int", "1"),
-            ("bool", "true"),
-            ("string", "??"),
-            ("array", "1,2,3"),
-            ("repeated", "second,first"),
-        ],
+    let json = config!(
+        // Strings should be coerced to numbers / bools inside the deserializer
+        "int": "1",
+        "bool": "true",
+        "string": "??",
+        "array": [1, 2, 3],
+        "repeated": ["second", "first"],
     );
-    let env = wrap_into_value(env);
 
     let mut options = DeserializerOptions::default();
-    let config = TestParam::deserialize(ValueDeserializer::new(&env, &options)).unwrap();
+    let deserializer = ValueDeserializer::new(json.inner(), &options);
+    let config = TestParam::deserialize(deserializer).unwrap();
     assert_eq!(config.int, 1);
     assert_eq!(config.optional, None);
     assert!(config.bool);
@@ -47,23 +46,24 @@ fn parsing_param() {
         HashSet::from([SimpleEnum::First, SimpleEnum::Second])
     );
 
-    let env = Environment::from_iter(
-        "",
-        [
-            ("int", "42"),
-            ("string", "!!"),
-            ("repeated", "FIRST,SECOND"),
-        ],
+    let json = config!(
+        "int": 42,
+        "string": "!!",
+        "repeated": ["FIRST", "SECOND"],
     );
-    let env = wrap_into_value(env);
-
-    let err = TestParam::deserialize(ValueDeserializer::new(&env, &options)).unwrap_err();
+    let deserializer = ValueDeserializer::new(json.inner(), &options);
+    let err = TestParam::deserialize(deserializer).unwrap_err();
     let inner = err.inner.to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
-    assert_matches!(err.origin.as_ref(), ValueOrigin::EnvVar(name) if name == "repeated");
+    let ValueOrigin::Path { path, source } = err.origin.as_ref() else {
+        panic!("unexpected origin: {:?}", err.origin);
+    };
+    assert_eq!(path, "repeated.0");
+    extract_json_name(source);
 
     options.coerce_shouting_variant_names = true;
-    let config = TestParam::deserialize(ValueDeserializer::new(&env, &options)).unwrap();
+    let deserializer = ValueDeserializer::new(json.inner(), &options);
+    let config = TestParam::deserialize(deserializer).unwrap();
     assert_eq!(config.int, 42);
     assert_eq!(config.optional, None);
     assert!(!config.bool);
@@ -149,7 +149,7 @@ fn parsing_enum_config_missing_tag() {
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
     assert_eq!(err.path(), "type");
-    assert_eq!(err.config().ty, EnumConfig::describe_config().ty);
+    assert_eq!(err.config().ty, EnumConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "type");
 }
 
@@ -163,7 +163,7 @@ fn parsing_enum_config_unknown_tag() {
     let inner = err.inner().to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
     assert_eq!(err.path(), "type");
-    assert_eq!(err.config().ty, EnumConfig::describe_config().ty);
+    assert_eq!(err.config().ty, EnumConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "type");
 }
 
@@ -231,7 +231,7 @@ fn parsing_compound_config_missing_nested_value() {
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
     assert_eq!(err.path(), "nested.renamed");
-    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
 
@@ -308,11 +308,8 @@ fn type_mismatch_parsing_error() {
     let err = errors.first();
 
     assert!(err.inner().to_string().contains("invalid type"), "{err}");
-    assert_matches!(
-        err.origin(),
-        ValueOrigin::EnvVar(name) if name == "other_int"
-    );
-    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
+    assert_eq!(extract_env_var_name(err.origin()), "other_int");
+    assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "other_int");
 }
 
@@ -325,7 +322,7 @@ fn missing_parameter_parsing_error() {
     let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
-    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
 
@@ -338,7 +335,7 @@ fn missing_nested_config_parsing_error() {
     let inner = err.inner().to_string();
     assert!(inner.contains("missing field"), "{inner}");
     assert_eq!(err.path(), "nested.renamed");
-    assert_eq!(err.config().ty, NestedConfig::describe_config().ty);
+    assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "renamed");
 }
 
@@ -356,28 +353,34 @@ fn parsing_complex_types() {
             short_dur: Duration::from_millis(100),
             path: "./test".into(),
             memory_size_mb: Some(ByteSize::new(128, SizeUnit::MiB)),
+            paths: vec![],
+            map_or_string: MapOrString::default(),
         }
     );
 
     let json = config!(
-        "array": [4, 5],
+        "array": "5,4",
         "choices": ["first", "second"],
         "assumed": 24,
         "short_dur": 200,
         "path": "/mnt",
+        "paths": "/usr/bin:/usr/local/bin",
         "memory_size_mb": 64,
+        "map_or_string": "test=1,other=2",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config,
         ConfigWithComplexTypes {
             float: 4.2,
-            array: [NonZeroUsize::new(4).unwrap(), NonZeroUsize::new(5).unwrap()],
+            array: [NonZeroUsize::new(5).unwrap(), NonZeroUsize::new(4).unwrap()],
             choices: Some(vec![SimpleEnum::First, SimpleEnum::Second]),
             assumed: Some(serde_json::json!(24)),
             short_dur: Duration::from_millis(200),
             path: "/mnt".into(),
             memory_size_mb: Some(ByteSize::new(64, SizeUnit::MiB)),
+            paths: vec!["/usr/bin".into(), "/usr/local/bin".into()],
+            map_or_string: MapOrString(HashMap::from([("test".into(), 1), ("other".into(), 2),])),
         }
     );
 
@@ -388,6 +391,11 @@ fn parsing_complex_types() {
         "assumed": (),
         "short_dur": 1000,
         "memory_size_mb": (),
+        "paths": ["/usr/bin", "/mnt"],
+        "map_or_string": serde_json::json!({
+            "test": 42,
+            "other": 23,
+        }),
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -400,8 +408,54 @@ fn parsing_complex_types() {
             short_dur: Duration::from_secs(1),
             path: "./test".into(),
             memory_size_mb: None,
+            paths: vec!["/usr/bin".into(), "/mnt".into()],
+            map_or_string: MapOrString(HashMap::from([("test".into(), 42), ("other".into(), 23),])),
         }
     );
+}
+
+#[test]
+fn error_parsing_array_from_string() {
+    let json = config!("array": "4,what");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "array");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("what"), "{inner}");
+
+    let ValueOrigin::Path { source, path } = err.origin() else {
+        panic!("unexpected origin: {:?}", err.origin());
+    };
+    assert_eq!(path, "1");
+    let ValueOrigin::Synthetic { source, transform } = source.as_ref() else {
+        panic!("unexpected source origin: {source:?}");
+    };
+    assert_eq!(transform, "\",\"-delimited string");
+    assert_matches!(
+        source.as_ref(),
+        ValueOrigin::Path { source, path }
+            if path == "array" && matches!(source.as_ref(), ValueOrigin::File { .. })
+    );
+}
+
+#[test]
+fn error_parsing_string_or_complex_value() {
+    let json = config!("array": [4, 5], "map_or_string": "??");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "map_or_string");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("incorrect entry"), "{inner}");
+
+    let json = config!("array": [4, 5], "map_or_string": "test=what");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "map_or_string");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid value"), "{inner}");
 }
 
 #[test]
@@ -412,7 +466,7 @@ fn parsing_complex_types_errors() {
     let inner = err.inner().to_string();
     assert!(inner.contains("invalid length"), "{inner}");
     assert_eq!(err.path(), "array");
-    assert_matches!(err.origin(), ValueOrigin::Json { path, ..} if path == "array");
+    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "array");
 
     let json = config!("array": [0, 1]);
     let errors = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
@@ -420,7 +474,7 @@ fn parsing_complex_types_errors() {
     let inner = err.inner().to_string();
     assert!(inner.contains("nonzero"), "{inner}");
     assert_eq!(err.path(), "array");
-    assert_matches!(err.origin(), ValueOrigin::Json { path, ..} if path == "array.0");
+    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "array.0");
 
     let json = config!("array": [2, 3], "float": "what");
     let errors = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
@@ -428,16 +482,16 @@ fn parsing_complex_types_errors() {
     let inner = err.inner().to_string();
     assert!(inner.contains("what"), "{inner}");
     assert_eq!(err.path(), "float");
-    assert_matches!(err.origin(), ValueOrigin::Json { path, ..} if path == "float");
+    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "float");
 
     let json = config!("array": [2, 3], "assumed": true);
     let errors = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
     let err = errors.first();
     let inner = err.inner().to_string();
     assert!(
-        inner.contains("invalid type") && inner.contains("expected float"),
+        inner.contains("invalid type") && inner.contains("expected integer | float"),
         "{inner}"
     );
     assert_eq!(err.path(), "assumed");
-    assert_matches!(err.origin(), ValueOrigin::Json { path, ..} if path == "assumed");
+    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "assumed");
 }

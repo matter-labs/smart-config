@@ -4,17 +4,20 @@ use std::{
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
     time::Duration,
 };
 
+use anyhow::Context as _;
+use assert_matches::assert_matches;
 use serde::Deserialize;
 
 use crate::{
-    de::{self, DeserializeContext, DeserializeParam, DeserializerOptions},
-    metadata::{BasicType, SchemaType, SizeUnit, TimeUnit},
+    de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
+    metadata::{SizeUnit, TimeUnit},
     source::ConfigContents,
-    value::{Value, WithOrigin},
+    value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
 
@@ -25,11 +28,11 @@ pub(crate) enum SimpleEnum {
     Second,
 }
 
-impl de::WellKnown for SimpleEnum {
-    const DE: &'static dyn DeserializeParam<Self> = &SchemaType::new(BasicType::String);
+impl WellKnown for SimpleEnum {
+    type Deserializer = Serde![str];
+    const DE: Self::Deserializer = Serde![str];
 }
 
-// FIXME: test embedding into config
 #[derive(Debug, Deserialize)]
 pub(crate) struct TestParam {
     pub int: u64,
@@ -41,6 +44,19 @@ pub(crate) struct TestParam {
     pub array: Vec<u32>,
     #[serde(default)]
     pub repeated: HashSet<SimpleEnum>,
+}
+
+impl WellKnown for TestParam {
+    type Deserializer = Serde![object];
+    const DE: Self::Deserializer = Serde![object];
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ValueCoercingConfig {
+    pub param: TestParam,
+    #[config(default)]
+    pub set: HashSet<u64>,
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
@@ -110,7 +126,7 @@ pub(crate) struct DefaultingConfig {
     pub float: Option<f64>,
     #[config(default_t = Some("https://example.com/".into()))]
     pub url: Option<String>,
-    #[config(default)]
+    #[config(default, with = de::Delimited(","))]
     pub set: HashSet<SimpleEnum>,
 }
 
@@ -125,14 +141,37 @@ pub(crate) enum DefaultingEnumConfig {
     },
 }
 
+#[derive(Debug, Default, PartialEq, Deserialize)]
+#[serde(transparent)]
+pub(crate) struct MapOrString(pub HashMap<String, u64>);
+
+impl WellKnown for MapOrString {
+    type Deserializer = Serde![str];
+    const DE: Self::Deserializer = Serde![str];
+}
+
+impl FromStr for MapOrString {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let entries = s.split(',').map(|entry| {
+            let (key, value) = entry.split_once('=').context("incorrect entry")?;
+            let value: u64 = value.parse().context("invalid value")?;
+            anyhow::Ok((key.to_owned(), value))
+        });
+        entries.collect::<anyhow::Result<_>>().map(Self)
+    }
+}
+
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ConfigWithComplexTypes {
     #[config(default_t = 4.2)]
     pub float: f32,
+    #[config(with = de::Delimited(","))]
     pub array: [NonZeroUsize; 2],
     pub choices: Option<Vec<SimpleEnum>>,
-    #[config(with = de::Optional(BasicType::Float))]
+    #[config(with = de::Optional(Serde![float]))]
     pub assumed: Option<serde_json::Value>,
     #[config(default_t = Duration::from_millis(100), with = TimeUnit::Millis)]
     pub short_dur: Duration,
@@ -141,6 +180,10 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(with = de::Optional(SizeUnit::MiB))]
     #[config(default_t = Some(ByteSize::new(128, SizeUnit::MiB)))]
     pub memory_size_mb: Option<ByteSize>,
+    #[config(default, with = de::Delimited(":"))]
+    pub paths: Vec<PathBuf>,
+    #[config(default, with = de::OrString(Serde![object]))]
+    pub map_or_string: MapOrString,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
@@ -170,7 +213,7 @@ pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result
         &de_options,
         val,
         String::new(),
-        C::describe_config(),
+        &C::DESCRIPTION,
         &mut errors,
     );
     match C::deserialize_config(ctx) {
@@ -187,13 +230,33 @@ pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, Pars
         &de_options,
         &val,
         "test".into(),
-        C::describe_config(),
+        &C::DESCRIPTION,
         &mut errors,
     );
     match C::deserialize_config(ctx) {
         Some(config) => Ok(config),
         None => Err(errors),
     }
+}
+
+pub(crate) fn extract_json_name(source: &ValueOrigin) -> &str {
+    if let ValueOrigin::File {
+        name,
+        format: FileFormat::Json,
+    } = source
+    {
+        name
+    } else {
+        panic!("unexpected source, expected JSON file: {source:?}");
+    }
+}
+
+pub(crate) fn extract_env_var_name(source: &ValueOrigin) -> &str {
+    let ValueOrigin::Path { path, source } = source else {
+        panic!("unexpected source: {source:?}");
+    };
+    assert_matches!(source.as_ref(), ValueOrigin::EnvVars);
+    path
 }
 
 #[cfg(test)]
