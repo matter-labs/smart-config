@@ -1,5 +1,8 @@
 # Smart Schema-driven Layered Configuration System
 
+[![Build status](https://github.com/matter-labs/smart-config/actions/workflows/ci.yml/badge.svg)](https://github.com/matter-labs/smart-config/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue)](https://github.com/matter-labs/smart-config#license)
+
 This repository provides [`smart-config`](crates/smart-config), a smarter schema-driven layered configuration system,
 and accompanying tools.
 

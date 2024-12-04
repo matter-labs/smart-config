@@ -76,8 +76,8 @@ jobs:
       - name: Build docs
         run: |
           cargo clean --doc && \
-          cargo rustdoc -p smart-config-derive --all-features && \
-          cargo rustdoc -p smart-config --all-features -- --cfg docsrs
+          cargo rustdoc -p smart-config-derive --all-features -- -Z unstable-options --enable-index-page && \
+          cargo rustdoc -p smart-config --all-features -- -Z unstable-options --enable-index-page --cfg docsrs
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
