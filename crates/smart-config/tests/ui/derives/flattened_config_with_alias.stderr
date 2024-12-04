@@ -1,6 +1,5 @@
 error: aliases for nested / flattened configs are not supported yet
-  --> tests/ui/derives/flattened_config_with_alias.rs:10:5
+  --> tests/ui/derives/flattened_config_with_alias.rs:10:30
    |
-10 | /     #[config(alias = "flat", flatten)]
-11 | |     bogus: NestedConfig,
-   | |_______________________^
+10 |     #[config(alias = "flat", flatten)]
+   |                              ^^^^^^^

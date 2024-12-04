@@ -130,15 +130,14 @@ pub(crate) struct ConfigFieldAttrs {
 }
 
 impl ConfigFieldAttrs {
-    fn new(attrs: &[Attribute], name_span: proc_macro2::Span) -> syn::Result<Self> {
+    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut rename = None;
         let mut aliases = vec![];
         let mut default = None;
-        let mut flatten = false;
-        let mut nest = false;
         let mut nested_span = None;
+        let mut flatten_span = None;
         let mut with = None;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
@@ -161,14 +160,13 @@ impl ConfigFieldAttrs {
                     default = Some(DefaultValue::Expr(meta.value()?.parse()?));
                     Ok(())
                 } else if meta.path.is_ident("flatten") {
-                    flatten = true;
+                    flatten_span = Some(meta.path.span());
                     Ok(())
                 } else if meta.path.is_ident("nest") {
-                    nest = true;
                     nested_span = Some(meta.path.span());
                     Ok(())
                 } else if meta.path.is_ident("with") {
-                    with = Some(meta.value()?.parse()?);
+                    with = Some(meta.value()?.parse::<Expr>()?);
                     Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))
@@ -176,27 +174,26 @@ impl ConfigFieldAttrs {
             })?;
         }
 
-        if nest && flatten {
+        if let (Some(nested_span), Some(_)) = (nested_span, flatten_span) {
             let msg = "cannot specify both `nest` and `flatten` for config";
-            return Err(syn::Error::new(name_span, msg));
+            return Err(syn::Error::new(nested_span, msg));
         }
+        let flatten = flatten_span.is_some();
+        // All flattened configs are nested internally, but not necessarily vice versa.
+        let nest = flatten_span.is_some() || nested_span.is_some();
 
-        if flatten {
-            // All flattened configs are nested internally, but not necessarily vice versa.
-            nest = true;
-        }
-        if with.is_some() && nest {
+        if let (Some(with), true) = (&with, nest) {
             let msg = "cannot specify `with` for a `nest`ed / `flatten`ed configuration";
-            let err_span = nested_span.unwrap_or(name_span);
-            return Err(syn::Error::new(err_span, msg));
+            return Err(syn::Error::new(with.span(), msg));
         }
-        if flatten && rename.is_some() {
+        if let (Some(flatten_span), Some(_)) = (flatten_span, &rename) {
             let msg = "`rename` attribute is useless for flattened configs; did you mean to make a config nested?";
-            return Err(syn::Error::new(name_span, msg));
+            return Err(syn::Error::new(flatten_span, msg));
         }
         if nest && !aliases.is_empty() {
             let msg = "aliases for nested / flattened configs are not supported yet";
-            return Err(syn::Error::new(name_span, msg));
+            let span = flatten_span.or(nested_span).unwrap();
+            return Err(syn::Error::new(span, msg));
         }
 
         Ok(Self {
@@ -245,7 +242,7 @@ impl ConfigField {
         };
         let ty = raw.ty.clone();
 
-        let attrs = ConfigFieldAttrs::new(&raw.attrs, raw.span())?;
+        let attrs = ConfigFieldAttrs::new(&raw.attrs)?;
         Ok(Self {
             attrs,
             docs: parse_docs(&raw.attrs),
