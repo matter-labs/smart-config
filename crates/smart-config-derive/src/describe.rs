@@ -4,9 +4,7 @@ use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, Type};
 
-use crate::utils::{
-    ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField, DefaultValue,
-};
+use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigField, DefaultValue};
 
 impl DefaultValue {
     fn boxed(
@@ -128,12 +126,15 @@ impl ConfigContainer {
 
         if let ConfigContainerFields::Enum { tag, variants } = &self.fields {
             // Add the tag field description
-            let default = variants
-                .iter()
-                .find_map(|variant| variant.attrs.default.then(|| variant.name()));
+            let default = variants.iter().find_map(|variant| {
+                variant
+                    .attrs
+                    .default
+                    .then(|| variant.name(self.attrs.rename_all))
+            });
             let expected_variants = variants
                 .iter()
-                .flat_map(ConfigEnumVariant::expected_variants);
+                .flat_map(|variant| variant.expected_variants(self.attrs.rename_all));
             let tag = ConfigField::from_tag(&cr, tag, expected_variants, default.as_deref());
             params.push(tag.describe_param(&cr, &meta_mod));
         }

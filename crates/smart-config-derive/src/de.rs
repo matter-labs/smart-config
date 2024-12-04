@@ -5,6 +5,7 @@ use syn::{spanned::Spanned, DeriveInput};
 
 use crate::utils::{
     wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
+    RenameRule,
 };
 
 impl ConfigField {
@@ -24,10 +25,9 @@ impl ConfigField {
     }
 }
 
-// FIXME: support rename_all = "snake_case"
 impl ConfigEnumVariant {
-    fn matches(&self) -> proc_macro2::TokenStream {
-        let mut all_names = self.expected_variants();
+    fn matches(&self, rename_rule: Option<RenameRule>) -> proc_macro2::TokenStream {
+        let mut all_names = self.expected_variants(rename_rule);
         let name = all_names.next().unwrap();
         let name_span = self.name.span();
         quote_spanned!(name_span=> #name #(| #all_names)*)
@@ -81,7 +81,7 @@ impl ConfigContainer {
             ConfigContainerFields::Enum { variants, .. } => {
                 let match_hands = variants.iter().map(|variant| {
                     let name = &variant.name;
-                    let matches = variant.matches();
+                    let matches = variant.matches(self.attrs.rename_all);
                     let (init, variant_fields) =
                         Self::process_fields(&variant.fields, &mut param_index, &mut nested_index);
                     quote!(#matches => {

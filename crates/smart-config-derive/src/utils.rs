@@ -316,16 +316,75 @@ impl ConfigField {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+#[allow(clippy::enum_variant_names)]
+pub(crate) enum RenameRule {
+    LowerCase,
+    UpperCase,
+    CamelCase,
+    SnakeCase,
+    ScreamingSnakeCase,
+    KebabCase,
+    ScreamingKebabCase,
+}
+
+impl RenameRule {
+    fn parse(s: &str) -> Result<Self, &'static str> {
+        Ok(match s {
+            "lowercase" => Self::LowerCase,
+            "UPPERCASE" => Self::UpperCase,
+            "camelCase" => Self::CamelCase,
+            "snake_case" => Self::SnakeCase,
+            "SCREAMING_SNAKE_CASE" => Self::ScreamingSnakeCase,
+            "kebab-case" => Self::KebabCase,
+            "SCREAMING-KEBAB-CASE" => Self::ScreamingKebabCase,
+            _ => {
+                return Err(
+                    "Invalid case specified; should be one of: lowercase, UPPERCASE, camelCase, \
+                     snake_case, SCREAMING_SNAKE_CASE, kebab-case, SCREAMING-KEBAB-CASE",
+                )
+            }
+        })
+    }
+
+    fn transform(self, ident: &str) -> String {
+        debug_assert!(ident.is_ascii()); // Should be checked previously
+        let (spacing_char, scream) = match self {
+            Self::LowerCase => return ident.to_ascii_lowercase(),
+            Self::UpperCase => return ident.to_ascii_uppercase(),
+            Self::CamelCase => return ident[..1].to_ascii_lowercase() + &ident[1..],
+            // ^ Since `ident` is an ASCII string, indexing is safe
+            Self::SnakeCase => ('_', false),
+            Self::ScreamingSnakeCase => ('_', true),
+            Self::KebabCase => ('-', false),
+            Self::ScreamingKebabCase => ('-', true),
+        };
+
+        let mut output = String::with_capacity(ident.len());
+        for (i, ch) in ident.char_indices() {
+            if i > 0 && ch.is_ascii_uppercase() {
+                output.push(spacing_char);
+            }
+            output.push(if scream {
+                ch.to_ascii_uppercase()
+            } else {
+                ch.to_ascii_lowercase()
+            });
+        }
+        output
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ConfigContainerAttrs {
     pub(crate) cr: Option<Path>,
-    pub(crate) rename_all: Option<LitStr>,
+    pub(crate) rename_all: Option<RenameRule>,
     pub(crate) tag: Option<LitStr>,
     pub(crate) derive_default: bool,
 }
 
 impl ConfigContainerAttrs {
-    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
+    fn new(attrs: &[Attribute], is_struct: bool) -> syn::Result<Self> {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut cr = None;
@@ -338,10 +397,13 @@ impl ConfigContainerAttrs {
                     cr = Some(meta.value()?.parse()?);
                     Ok(())
                 } else if meta.path.is_ident("rename_all") {
-                    rename_all = Some(meta.value()?.parse()?);
+                    let rule: LitStr = meta.value()?.parse()?;
+                    let parsed = RenameRule::parse(&rule.value())
+                        .map_err(|msg| syn::Error::new(rule.span(), msg))?;
+                    rename_all = Some((rule, parsed));
                     Ok(())
                 } else if meta.path.is_ident("tag") {
-                    tag = Some(meta.value()?.parse()?);
+                    tag = Some(meta.value()?.parse::<LitStr>()?);
                     Ok(())
                 } else if meta.path.is_ident("derive") {
                     let content;
@@ -359,24 +421,24 @@ impl ConfigContainerAttrs {
                 }
             })?;
         }
+
+        if is_struct {
+            if let Some((rename_all, _)) = &rename_all {
+                let msg = "`rename_all` attribute must not be used on struct configs";
+                return Err(syn::Error::new(rename_all.span(), msg));
+            }
+            if let Some(tag) = &tag {
+                let msg = "`tag` attribute must not be used on struct configs";
+                return Err(syn::Error::new(tag.span(), msg));
+            }
+        }
+
         Ok(Self {
             cr,
-            rename_all,
+            rename_all: rename_all.map(|(_, parsed)| parsed),
             tag,
             derive_default,
         })
-    }
-
-    fn validate_for_struct(&self) -> syn::Result<()> {
-        if let Some(rename_all) = &self.rename_all {
-            let msg = "`rename_all` attribute must not be used on struct configs";
-            return Err(syn::Error::new(rename_all.span(), msg));
-        }
-        if let Some(tag) = &self.tag {
-            let msg = "`tag` attribute must not be used on struct configs";
-            return Err(syn::Error::new(tag.span(), msg));
-        }
-        Ok(())
     }
 }
 
@@ -388,15 +450,25 @@ pub(crate) struct ConfigEnumVariant {
 }
 
 impl ConfigEnumVariant {
-    pub(crate) fn name(&self) -> String {
-        self.attrs
-            .rename
-            .as_ref()
-            .map_or_else(|| self.name.to_string(), LitStr::value)
+    pub(crate) fn name(&self, rename_rule: Option<RenameRule>) -> String {
+        self.attrs.rename.as_ref().map_or_else(
+            || {
+                let name = self.name.to_string();
+                if let Some(rule) = rename_rule {
+                    rule.transform(&name)
+                } else {
+                    name
+                }
+            },
+            LitStr::value,
+        )
     }
 
-    pub(crate) fn expected_variants(&self) -> impl Iterator<Item = String> + '_ {
-        iter::once(self.name()).chain(self.attrs.aliases.iter().map(LitStr::value))
+    pub(crate) fn expected_variants(
+        &self,
+        rename_rule: Option<RenameRule>,
+    ) -> impl Iterator<Item = String> + '_ {
+        iter::once(self.name(rename_rule)).chain(self.attrs.aliases.iter().map(LitStr::value))
     }
 }
 
@@ -439,12 +511,9 @@ impl ConfigContainer {
             return Err(syn::Error::new_spanned(&raw.generics, message));
         }
 
-        let attrs = ConfigContainerAttrs::new(&raw.attrs)?;
+        let attrs = ConfigContainerAttrs::new(&raw.attrs, matches!(&raw.data, Data::Struct(_)))?;
         let fields = match &raw.data {
-            Data::Struct(data) => {
-                attrs.validate_for_struct()?;
-                ConfigContainerFields::Struct(Self::extract_struct_fields(data)?)
-            }
+            Data::Struct(data) => ConfigContainerFields::Struct(Self::extract_struct_fields(data)?),
             Data::Enum(data) => Self::extract_enum_fields(data, &attrs)?,
             Data::Union(_) => {
                 let message = "#[derive(DescribeConfig)] can only be placed on structs or enums";
