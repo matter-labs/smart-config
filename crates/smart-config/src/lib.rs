@@ -147,6 +147,26 @@ pub use once_cell::sync::Lazy;
 /// Specifies the param name holding the enum tag, similar to the corresponding attribute in `serde`.
 /// Unlike `serde`, this attribute is *required* for enums; this is to ensure that source merging is well-defined.
 ///
+/// ## `rename_all`
+///
+/// **Type:** string; one of `lowercase`, `UPPERCASE`, `camelCase`, `snake_case`, `SCREAMING_SNAKE_CASE`,
+/// `kebab-case`, `SCREAMING-KEBAB-CASE`
+///
+/// Renames all variants in an enum config according to the provided transform. Unlike in `serde`, this attribute
+/// *only* works on enum variants. Params / sub-configs are always expected to have `snake_case` naming.
+///
+/// Caveats:
+///
+/// - `rename_all` assumes that original variant names are in `PascalCase` (i.e., follow Rust naming conventions).
+/// - `rename_all` requires original variant names to consist of ASCII chars.
+/// - Each letter of capitalized acronyms (e.g., "HTTP" in `HTTPServer`) is treated as a separate word.
+///   E.g., `rename_all = "snake_case"` will rename `HTTPServer` to `h_t_t_p_server`.
+///   Note that [it is recommended][clippy-acronyms] to not capitalize acronyms (i.e., use `HttpServer`).
+/// - No spacing is inserted before numbers or other non-letter chars. E.g., `rename_all = "snake_case"`
+///   will rename `Status500` to `status500`, not to `status_500`.
+///
+/// [clippy-acronyms]: https://rust-lang.github.io/rust-clippy/master/index.html#/upper_case_acronyms
+///
 /// ## `derive(Default)`
 ///
 /// Derives `Default` according to the default values of params (+ the default variant for enum configs).
@@ -239,11 +259,11 @@ pub use once_cell::sync::Lazy;
 /// }
 ///
 /// #[derive(DescribeConfig, DeserializeConfig)]
-/// #[config(tag = "version", derive(Default))]
+/// #[config(tag = "version", rename_all = "snake_case", derive(Default))]
 /// enum NestedConfig {
-///     #[config(default, rename = "v0")]
+///     #[config(default)]
 ///     V0,
-///     #[config(rename = "v1", alias = "latest")]
+///     #[config(alias = "latest")]
 ///     V1 {
 ///         /// Param with a custom deserializer. In this case, it will deserialize
 ///         /// a duration from a number with milliseconds unit of measurement.

@@ -1,0 +1,5 @@
+error: `rename_all` attribute must not be used on struct configs
+ --> tests/ui/derives/rename_all_on_struct.rs:4:23
+  |
+4 | #[config(rename_all = "camelCase")]
+  |                       ^^^^^^^^^^^

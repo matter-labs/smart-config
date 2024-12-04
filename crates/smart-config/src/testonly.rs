@@ -108,6 +108,20 @@ pub(crate) enum EnumConfig {
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate, tag = "version", rename_all = "snake_case")]
+pub(crate) enum RenamedEnumConfig {
+    V0,
+    #[config(alias = "previous")]
+    V1 {
+        int: u64,
+    },
+    #[config(default)]
+    V2 {
+        str: String,
+    },
+}
+
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct CompoundConfig {
     #[config(nest)]
