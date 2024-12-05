@@ -1,4 +1,4 @@
-use std::{iter, marker::PhantomData, sync::Arc};
+use std::{collections::HashSet, iter, marker::PhantomData, sync::Arc};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
@@ -33,6 +33,16 @@ pub trait ConfigSource {
     fn origin(&self) -> Arc<ValueOrigin>;
     /// Converts this source into config contents.
     fn into_contents(self) -> ConfigContents;
+}
+
+/// Information about a source returned from [].
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct SourceInfo {
+    /// Origin of the source.
+    pub origin: Arc<ValueOrigin>,
+    /// Number of params in the source after it has undergone preprocessing (i.e., merging aliases etc.).
+    pub param_count: usize,
 }
 
 /// Configuration repository containing zero or more [configuration sources](ConfigSource).
@@ -85,16 +95,26 @@ pub trait ConfigSource {
 #[derive(Debug, Clone)]
 pub struct ConfigRepository<'a> {
     schema: &'a ConfigSchema,
+    prefixes_for_canonical_configs: HashSet<Pointer<'a>>,
     de_options: DeserializerOptions,
+    sources: Vec<SourceInfo>,
     merged: WithOrigin,
 }
 
 impl<'a> ConfigRepository<'a> {
     /// Creates an empty config repo based on the provided schema.
     pub fn new(schema: &'a ConfigSchema) -> Self {
+        let prefixes_for_canonical_configs: HashSet<_> = schema
+            .iter()
+            .flat_map(|(path, _)| path.with_ancestors())
+            .chain([Pointer("")])
+            .collect();
+
         Self {
             schema,
+            prefixes_for_canonical_configs,
             de_options: DeserializerOptions::default(),
+            sources: vec![],
             merged: WithOrigin {
                 inner: Value::Object(Map::default()),
                 origin: Arc::default(),
@@ -115,14 +135,24 @@ impl<'a> ConfigRepository<'a> {
             ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &source_origin),
             ConfigContents::Hierarchical(map) => WithOrigin {
                 inner: Value::Object(map),
-                origin: source_origin,
+                origin: source_origin.clone(),
             },
         };
 
-        source_value.preprocess_source(self.schema);
+        let param_count =
+            source_value.preprocess_source(self.schema, &self.prefixes_for_canonical_configs);
         self.merged
             .guided_merge(source_value, self.schema, Pointer(""));
+        self.sources.push(SourceInfo {
+            origin: source_origin,
+            param_count,
+        });
         self
+    }
+
+    /// Provides information about sources merged in this repository.
+    pub fn sources(&self) -> &[SourceInfo] {
+        &self.sources
     }
 
     // TODO: probably makes sense to make public
@@ -182,9 +212,14 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
 }
 
 impl WithOrigin {
-    fn preprocess_source(&mut self, schema: &ConfigSchema) {
+    fn preprocess_source(
+        &mut self,
+        schema: &ConfigSchema,
+        prefixes_for_canonical_configs: &HashSet<Pointer<'_>>,
+    ) -> usize {
         self.copy_aliased_values(schema);
         self.nest_object_params(schema);
+        self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
     }
 
     fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
@@ -292,6 +327,38 @@ impl WithOrigin {
                     origin: create_origin(at),
                 },
             );
+        }
+    }
+
+    /// Removes all values that do not correspond to canonical params or their ancestors.
+    fn collect_garbage(
+        &mut self,
+        schema: &ConfigSchema,
+        prefixes_for_canonical_configs: &HashSet<Pointer<'_>>,
+        at: Pointer<'_>,
+    ) -> usize {
+        if schema.contains_canonical_param(at) {
+            1
+        } else if let Value::Object(map) = &mut self.inner {
+            if !prefixes_for_canonical_configs.contains(&at) {
+                // The object is neither a param nor a config or a config ancestor; remove it.
+                return 0;
+            }
+
+            let mut count = 0;
+            map.retain(|key, value| {
+                let child_path = at.join(key);
+                let descendant_count = value.collect_garbage(
+                    schema,
+                    prefixes_for_canonical_configs,
+                    Pointer(&child_path),
+                );
+                count += descendant_count;
+                descendant_count > 0
+            });
+            count
+        } else {
+            0
         }
     }
 
@@ -415,7 +482,9 @@ impl WithOrigin {
     /// Deep merge stopped at params (i.e., params are always merged atomically).
     fn guided_merge(&mut self, overrides: Self, schema: &ConfigSchema, current_path: Pointer<'_>) {
         match (&mut self.inner, overrides.inner) {
-            (Value::Object(this), Value::Object(other)) if !schema.contains_param(current_path) => {
+            (Value::Object(this), Value::Object(other))
+                if !schema.contains_canonical_param(current_path) =>
+            {
                 for (key, value) in other {
                     if let Some(existing_value) = this.get_mut(&key) {
                         let child_path = current_path.join(&key);

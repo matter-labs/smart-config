@@ -1,7 +1,6 @@
 use std::{
     cmp::Ordering,
     collections::{BTreeSet, HashMap},
-    ops,
 };
 
 use crate::{metadata::BasicTypes, value::Pointer};
@@ -13,6 +12,7 @@ pub(super) enum MountingPoint {
     /// Contains type IDs of mounted config(s).
     Config,
     Param {
+        is_canonical: bool,
         expecting: BasicTypes,
     },
 }
@@ -112,20 +112,20 @@ impl MountingPoints {
     }
 }
 
-impl ops::Index<&str> for MountingPoints {
-    type Output = MountingPoint;
-
-    fn index(&self, index: &str) -> &Self::Output {
-        self.get(index)
-            .unwrap_or_else(|| panic!("no mounting point at {index:?}"))
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, ops};
 
     use super::*;
+
+    impl ops::Index<&str> for MountingPoints {
+        type Output = MountingPoint;
+
+        fn index(&self, index: &str) -> &Self::Output {
+            self.get(index)
+                .unwrap_or_else(|| panic!("no mounting point at {index:?}"))
+        }
+    }
 
     #[test]
     fn kv_path_ordering() {
@@ -155,6 +155,7 @@ mod tests {
         let mut points = MountingPoints::default();
         let mount = MountingPoint::Param {
             expecting: BasicTypes::BOOL,
+            is_canonical: true,
         };
         points.insert("test_path".into(), mount.clone());
         points.insert("test.path".into(), mount.clone());

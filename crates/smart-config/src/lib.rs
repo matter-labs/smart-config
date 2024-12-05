@@ -295,7 +295,7 @@ pub use self::{
     de::DeserializeConfig,
     error::{ParseError, ParseErrors},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
-    source::{ConfigParser, ConfigRepository, ConfigSource, Environment, Json, Yaml},
+    source::{ConfigParser, ConfigRepository, ConfigSource, Environment, Json, SourceInfo, Yaml},
     types::ByteSize,
 };
 
