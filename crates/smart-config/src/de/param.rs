@@ -31,16 +31,21 @@ use crate::{
 ///
 /// # Implementations
 ///
-/// `DeserializeParam` includes the following implementations:
+/// ## Basic implementations
 ///
-/// - `()` is the default deserializer used unless explicitly overwritten with `#[config(with = _)]`.
-///   It supports types known to deserialize well (see [`WellKnown`]), and can be switched for user-defined types
-///   by implementing `WellKnown` for the type.
 /// - [`Serde`] allows deserializing any type implementing [`serde::Deserialize`].
+/// - [`TimeUnit`](crate::metadata::TimeUnit) deserializes [`Duration`](std::time::Duration)
+///   from a numeric value that has the specified unit of measurement
+/// - [`SizeUnit`](crate::metadata::SizeUnit) similarly deserializes [`ByteSize`](crate::ByteSize)
+/// - [`WithUnit`](super::WithUnit) deserializes `Duration`s / `ByteSize`s as an integer + unit of measurement
+///   (either in a string or object form).
+///
+/// ## Decorators
+///
 /// - [`Optional`] decorates a deserializer for `T` turning it into a deserializer for `Option<T>`
-/// - [`TimeUnit`] allows deserializing [`Duration`] from a number
-/// - [`SizeUnit`] similarly allows deserializing [`ByteSize`]
-/// - [`Delimited`] allows deserializing arrays from delimited string (e.g., comma-delimited)
+/// - [`WithDefault`] adds a default value used if the input is missing
+/// - [`Repeated`](super::Repeated) produces deserializers for array and object collections, such as `Vec`s or `HashMap`s.
+/// - [`Delimited`](super::Delimited) allows deserializing arrays from a delimited string (e.g., comma-delimited)
 /// - [`OrString`] allows to switch between structured and string deserialization
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     /// Describes which parameter this deserializer is expecting.
@@ -78,12 +83,17 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
 /// - Signed and unsigned integers, including non-zero variants
 /// - `f32`, `f64`
 ///
-/// It is also implemented for collections, items of which implement `WellKnown`:
+/// These types use [`Serde`] deserializer.
 ///
-/// - [`Option`]
-/// - [`Vec`], arrays up to 32 elements (which is a `serde` restriction, not a local one)
-/// - [`HashSet`], [`BTreeSet`]
-/// - [`HashMap`], [`BTreeMap`]
+/// `WellKnown` is also implemented for more complex types:
+///
+/// | Rust type | Deserializer | Expected JSON |
+/// |:-----------|:-------------|:----------------|
+/// | [`Duration`](std::time::Duration) | [`WithUnit`](super::WithUnit) | string or object |
+/// | [`ByteSize`](crate::ByteSize) | [`WithUnit`](super::WithUnit) | string or object |
+/// | [`Option`] | [`Optional`] | value, or `null`, or nothing |
+/// | [`Vec`], `[_; N]`, [`HashSet`](std::collections::HashSet), [`BTreeSet`](std::collections::BTreeSet) | _ | array |
+/// | [`HashMap`](std::collections::HashMap), [`BTreeMap`](std::collections::BTreeSet) | _ | object |
 #[diagnostic::on_unimplemented(
     message = "`{Self}` param cannot be deserialized",
     note = "Add #[config(with = _)] attribute to specify deserializer to use",

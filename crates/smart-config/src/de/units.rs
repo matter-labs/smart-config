@@ -1,4 +1,4 @@
-//! Implementations of parameter deserializers.
+//! Param deserializers based on units of measurement.
 
 use std::{str::FromStr, time::Duration};
 
@@ -136,13 +136,13 @@ impl DeserializeParam<ByteSize> for SizeUnit {
     }
 }
 
-/// Default deserializer for [`Duration`]s.
+/// Default deserializer for [`Duration`]s and [`ByteSize`]s.
 ///
 /// Values can be deserialized from 2 formats:
 ///
-/// - String consisting of an integer, optional whitespace and a unit, such as "30 secs" or "500ms".
-///   The unit must correspond to a [`TimeUnit`]; i.e., units larger than days are not supported because of ambiguity.
-/// - Object with a single key and an integer value, such as `{ "hours": 3 }`.
+/// - String consisting of an integer, optional whitespace and a unit, such as "30 secs" or "500ms" (for `Duration`) /
+///   "4 MiB" (for `ByteSize`). The unit must correspond to a [`TimeUnit`] / [`SizeUnit`].
+/// - Object with a single key and an integer value, such as `{ "hours": 3 }` (for `Duration`) / `{ "kb": 512 }` (for `SizeUnit`).
 ///
 /// Thanks to nesting of object params, the second approach automatically means that a duration can be parsed
 /// from a param name suffixed with a unit. For example, a value `latency_ms: 500` for parameter `latency`
@@ -152,28 +152,33 @@ impl DeserializeParam<ByteSize> for SizeUnit {
 ///
 /// ```
 /// # use std::time::Duration;
-/// # use smart_config::{testing, Environment, DescribeConfig, DeserializeConfig};
+/// # use smart_config::{testing, ByteSize, Environment, DescribeConfig, DeserializeConfig};
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct TestConfig {
 ///     latency: Duration,
+///     disk: ByteSize,
 /// }
 ///
 /// // Parsing from a string
-/// let source = smart_config::config!("latency": "30 secs");
+/// let source = smart_config::config!("latency": "30 secs", "disk": "256 MiB");
 /// let config: TestConfig = testing::test(source)?;
 /// assert_eq!(config.latency, Duration::from_secs(30));
+/// assert_eq!(config.disk, ByteSize(256 << 20));
 ///
 /// // Parsing from an object
 /// let source = smart_config::config!(
 ///     "latency": serde_json::json!({ "hours": 3 }),
+///     "disk": serde_json::json!({ "gigabytes": 2 }),
 /// );
 /// let config: TestConfig = testing::test(source)?;
 /// assert_eq!(config.latency, Duration::from_secs(3 * 3_600));
+/// assert_eq!(config.disk, ByteSize(2 << 30));
 ///
 /// // Parsing from a suffixed parameter name
-/// let source = Environment::from_iter("", [("LATENCY_SEC", "15")]);
+/// let source = Environment::from_iter("", [("LATENCY_SEC", "15"), ("DISK_GB", "10")]);
 /// let config: TestConfig = testing::test(source)?;
 /// assert_eq!(config.latency, Duration::from_secs(15));
+/// assert_eq!(config.disk, ByteSize(10 << 30));
 /// # anyhow::Ok(())
 /// ```
 #[derive(Debug, Clone, Copy)]

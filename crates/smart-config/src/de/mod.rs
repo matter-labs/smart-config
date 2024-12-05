@@ -47,7 +47,7 @@ pub use self::{
     param::{
         Delimited, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault,
     },
-    param_impl::WithUnit,
+    units::WithUnit,
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
@@ -59,11 +59,11 @@ use crate::{
 mod deserializer;
 mod macros;
 mod param;
-mod param_impl;
 #[cfg(feature = "primitive-types")]
 mod primitive_types_impl;
 #[cfg(test)]
 mod tests;
+mod units;
 
 #[doc(hidden)] // used by proc macros
 pub const fn extract_expected_types<T, De: DeserializeParam<T>>(_: &De) -> BasicTypes {
