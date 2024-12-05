@@ -5,15 +5,16 @@ use std::{
     fmt,
     hash::{BuildHasher, Hash},
     str::FromStr,
+    sync::Arc,
 };
 
-use serde::de::Error as DeError;
+use serde::de::{DeserializeOwned, Error as DeError};
 
 use crate::{
     de::{DeserializeContext, DeserializeParam, WellKnown},
     error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
-    value::Value,
+    value::{Value, ValueOrigin, WithOrigin},
 };
 
 /// Deserializer from JSON arrays and objects.
@@ -188,7 +189,7 @@ where
     const EXPECTING: BasicTypes = BasicTypes::ARRAY;
 
     fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("fixed-sized array")
+        TypeQualifiers::dynamic(format!("{N}-element array"))
     }
 
     fn deserialize_param(
@@ -290,4 +291,98 @@ where
 {
     type Deserializer = Repeated<V::Deserializer>;
     const DE: Self::Deserializer = Repeated(V::DE);
+}
+
+/// Deserializer that supports either an array of values, or a string in which values are delimited
+/// by the specified separator.
+///
+/// # Examples
+///
+/// ```
+/// use std::{collections::HashSet, path::PathBuf};
+/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default, with = de::Delimited(","))]
+///     strings: Vec<String>,
+///     // More complex types are supported as well
+///     #[config(with = de::Delimited(":"))]
+///     paths: Vec<PathBuf>,
+///     // ...and more complex collections (here together with string -> number coercion)
+///     #[config(with = de::Delimited(";"))]
+///     ints: HashSet<u64>,
+/// }
+///
+/// let sample = smart_config::config!(
+///     "strings": ["test", "string"], // standard array value is still supported
+///     "paths": "/usr/bin:/usr/local/bin",
+///     "ints": "12;34;12",
+/// );
+/// let config: TestConfig = testing::test(sample)?;
+/// assert_eq!(config.strings.len(), 2);
+/// assert_eq!(config.strings[0], "test");
+/// assert_eq!(config.paths.len(), 2);
+/// assert_eq!(config.paths[1].as_os_str(), "/usr/local/bin");
+/// assert_eq!(config.ints, HashSet::from([12, 34]));
+/// # anyhow::Ok(())
+/// ```
+///
+/// The wrapping logic is smart enough to catch in compile time an attempt to apply `Delimited` to a type
+/// that cannot be deserialized from an array:
+///
+/// ```compile_fail
+/// use smart_config::{de, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct Fail {
+///     // will fail with "evaluation of `<Delimited as DeserializeParam<u64>>::EXPECTING` failed"
+///     #[config(default, with = de::Delimited(","))]
+///     test: u64,
+/// }
+/// ```
+#[derive(Debug)]
+pub struct Delimited(pub &'static str);
+
+impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
+    const EXPECTING: BasicTypes = {
+        let base = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
+        assert!(
+            base.contains(BasicTypes::ARRAY),
+            "can only apply `Delimited` to types that support deserialization from array"
+        );
+        base.or(BasicTypes::STRING)
+    };
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        TypeQualifiers::dynamic(format!("using {:?} delimiter", self.0))
+    }
+
+    fn deserialize_param(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        let Some(WithOrigin {
+            inner: Value::String(s),
+            origin,
+        }) = ctx.current_value()
+        else {
+            return T::DE.deserialize_param(ctx, param);
+        };
+
+        let array_origin = Arc::new(ValueOrigin::Synthetic {
+            source: origin.clone(),
+            transform: format!("{:?}-delimited string", self.0),
+        });
+        let array_items = s.split(self.0).enumerate().map(|(i, part)| {
+            let item_origin = ValueOrigin::Path {
+                source: array_origin.clone(),
+                path: i.to_string(),
+            };
+            WithOrigin::new(Value::String(part.to_owned()), Arc::new(item_origin))
+        });
+        let array = WithOrigin::new(Value::Array(array_items.collect()), array_origin);
+        T::DE.deserialize_param(ctx.patched(&array), param)
+    }
 }

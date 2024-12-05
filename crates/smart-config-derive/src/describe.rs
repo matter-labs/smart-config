@@ -98,8 +98,8 @@ impl ConfigField {
                 help: #help,
                 rust_field_name: ::core::stringify!(#name),
                 rust_type: #cr::metadata::RustType::of::<#ty>(#ty_in_code),
-                expecting: #cr::de::extract_expected_types::<#ty, _>(&deserializer),
-                deserializer: &#cr::de::Erased::<#ty, _>::new(deserializer),
+                expecting: #cr::de::_private::extract_expected_types::<#ty, _>(&deserializer),
+                deserializer: &#cr::de::_private::Erased::<#ty, _>::new(deserializer),
                 default_value: #default_value,
             }
         }}

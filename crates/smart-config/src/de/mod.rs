@@ -39,15 +39,11 @@ use std::sync::Arc;
 use serde::de::Error as DeError;
 
 use self::deserializer::ValueDeserializer;
-#[doc(hidden)]
-pub use self::param::{Erased, ErasedDeserializer, TagDeserializer};
 pub use self::{
     deserializer::DeserializerOptions,
     macros::Serde,
-    param::{
-        Delimited, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault,
-    },
-    repeated::Repeated,
+    param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
+    repeated::{Delimited, Repeated},
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig, LowLevelError},
@@ -56,6 +52,8 @@ use crate::{
     DescribeConfig, Json, ParseError, ParseErrors,
 };
 
+#[doc(hidden)]
+pub mod _private;
 mod deserializer;
 mod macros;
 mod param;
@@ -64,11 +62,6 @@ mod primitive_types_impl;
 mod repeated;
 #[cfg(test)]
 mod tests;
-
-#[doc(hidden)] // used by proc macros
-pub const fn extract_expected_types<T, De: DeserializeParam<T>>(_: &De) -> BasicTypes {
-    <De as DeserializeParam<T>>::EXPECTING
-}
 
 /// Context for deserializing a configuration.
 #[derive(Debug)]

@@ -2,14 +2,12 @@
 
 use std::{
     any, fmt,
-    marker::PhantomData,
     num::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
         NonZeroU64, NonZeroU8, NonZeroUsize,
     },
     path::PathBuf,
     str::FromStr,
-    sync::Arc,
     time::Duration,
 };
 
@@ -22,7 +20,7 @@ use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeQualifiers},
-    value::{Value, ValueOrigin, WithOrigin},
+    value::{Value, WithOrigin},
     ByteSize,
 };
 
@@ -300,57 +298,6 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
     }
 }
 
-/// Deserializer for enum tags.
-#[doc(hidden)] // Implementation detail
-#[derive(Debug)]
-pub struct TagDeserializer {
-    expected: &'static [&'static str],
-    default_value: Option<&'static str>,
-}
-
-impl TagDeserializer {
-    pub const fn new(
-        expected: &'static [&'static str],
-        default_value: Option<&'static str>,
-    ) -> Self {
-        Self {
-            expected,
-            default_value,
-        }
-    }
-}
-
-impl DeserializeParam<&'static str> for TagDeserializer {
-    const EXPECTING: BasicTypes = BasicTypes::STRING;
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<&'static str, ErrorWithOrigin> {
-        let s = if let Some(current_value) = ctx.current_value() {
-            String::deserialize(ValueDeserializer::new(current_value, ctx.de_options))?
-        } else if let Some(default) = self.default_value {
-            return Ok(default);
-        } else {
-            return Err(DeError::missing_field(param.name));
-        };
-
-        self.expected
-            .iter()
-            .copied()
-            .find(|&variant| variant == s)
-            .ok_or_else(|| {
-                let err = DeError::unknown_variant(&s, self.expected);
-                let origin = ctx
-                    .current_value()
-                    .map(|val| val.origin.clone())
-                    .unwrap_or_default();
-                ErrorWithOrigin::json(err, origin)
-            })
-    }
-}
-
 impl TimeUnit {
     fn overflow_err(self, raw_val: u64) -> serde_json::Error {
         let plural = self.plural();
@@ -467,100 +414,6 @@ impl DeserializeParam<ByteSize> for SizeUnit {
     }
 }
 
-/// Deserializer that supports either an array of values, or a string in which values are delimited
-/// by the specified separator.
-///
-/// # Examples
-///
-/// ```
-/// use std::{collections::HashSet, path::PathBuf};
-/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
-///
-/// #[derive(DescribeConfig, DeserializeConfig)]
-/// struct TestConfig {
-///     #[config(default, with = de::Delimited(","))]
-///     strings: Vec<String>,
-///     // More complex types are supported as well
-///     #[config(with = de::Delimited(":"))]
-///     paths: Vec<PathBuf>,
-///     // ...and more complex collections (here together with string -> number coercion)
-///     #[config(with = de::Delimited(";"))]
-///     ints: HashSet<u64>,
-/// }
-///
-/// let sample = smart_config::config!(
-///     "strings": ["test", "string"], // standard array value is still supported
-///     "paths": "/usr/bin:/usr/local/bin",
-///     "ints": "12;34;12",
-/// );
-/// let config: TestConfig = testing::test(sample)?;
-/// assert_eq!(config.strings.len(), 2);
-/// assert_eq!(config.strings[0], "test");
-/// assert_eq!(config.paths.len(), 2);
-/// assert_eq!(config.paths[1].as_os_str(), "/usr/local/bin");
-/// assert_eq!(config.ints, HashSet::from([12, 34]));
-/// # anyhow::Ok(())
-/// ```
-///
-/// The wrapping logic is smart enough to catch in compile time an attempt to apply `Delimited` to a type
-/// that cannot be deserialized from an array:
-///
-/// ```compile_fail
-/// use smart_config::{de, DescribeConfig, DeserializeConfig};
-///
-/// #[derive(DescribeConfig, DeserializeConfig)]
-/// struct Fail {
-///     // will fail with "evaluation of `<Delimited as DeserializeParam<u64>>::EXPECTING` failed"
-///     #[config(default, with = de::Delimited(","))]
-///     test: u64,
-/// }
-/// ```
-#[derive(Debug)]
-pub struct Delimited(pub &'static str);
-
-impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
-    const EXPECTING: BasicTypes = {
-        let base = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
-        assert!(
-            base.contains(BasicTypes::ARRAY),
-            "can only apply `Delimited` to types that support deserialization from array"
-        );
-        base.or(BasicTypes::STRING)
-    };
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::dynamic(format!("using {:?} delimiter", self.0))
-    }
-
-    fn deserialize_param(
-        &self,
-        mut ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<T, ErrorWithOrigin> {
-        let Some(WithOrigin {
-            inner: Value::String(s),
-            origin,
-        }) = ctx.current_value()
-        else {
-            return T::DE.deserialize_param(ctx, param);
-        };
-
-        let array_origin = Arc::new(ValueOrigin::Synthetic {
-            source: origin.clone(),
-            transform: format!("{:?}-delimited string", self.0),
-        });
-        let array_items = s.split(self.0).enumerate().map(|(i, part)| {
-            let item_origin = ValueOrigin::Path {
-                source: array_origin.clone(),
-                path: i.to_string(),
-            };
-            WithOrigin::new(Value::String(part.to_owned()), Arc::new(item_origin))
-        });
-        let array = WithOrigin::new(Value::Array(array_items.collect()), array_origin);
-        T::DE.deserialize_param(ctx.patched(&array), param)
-    }
-}
-
 /// Deserializer that supports parsing either from a default format (usually an object or array) via [`Deserialize`](serde::Deserialize),
 /// or from string via [`FromStr`].
 ///
@@ -631,55 +484,5 @@ where
             let err = serde_json::Error::custom(err);
             ErrorWithOrigin::json(err, origin.clone())
         })
-    }
-}
-
-/// Erased counterpart of a parameter deserializer. Stored in param metadata.
-#[doc(hidden)]
-pub trait ErasedDeserializer: fmt::Debug + Send + Sync + 'static {
-    fn type_qualifiers(&self) -> TypeQualifiers;
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<Box<dyn any::Any>, ErrorWithOrigin>;
-}
-
-/// Wrapper transforming [`DeserializeParam`] to [`ErasedDeserializer`].
-#[doc(hidden)]
-pub struct Erased<T, De> {
-    inner: De,
-    _ty: PhantomData<fn(T)>,
-}
-
-impl<T, D: fmt::Debug> fmt::Debug for Erased<T, D> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_tuple("Erased").field(&self.inner).finish()
-    }
-}
-
-impl<T: 'static, De: DeserializeParam<T>> Erased<T, De> {
-    pub const fn new(inner: De) -> Self {
-        Self {
-            inner,
-            _ty: PhantomData,
-        }
-    }
-}
-
-impl<T: 'static, De: DeserializeParam<T>> ErasedDeserializer for Erased<T, De> {
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        self.inner.type_qualifiers()
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<Box<dyn any::Any>, ErrorWithOrigin> {
-        self.inner
-            .deserialize_param(ctx, param)
-            .map(|val| Box::new(val) as _)
     }
 }
