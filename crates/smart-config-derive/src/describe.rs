@@ -2,7 +2,7 @@
 
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::{spanned::Spanned, DeriveInput, Type};
+use syn::{spanned::Spanned, DeriveInput, LitStr, Type};
 
 use crate::utils::{ConfigContainer, ConfigContainerFields, ConfigField, DefaultValue};
 
@@ -43,13 +43,32 @@ impl ConfigField {
         deserializer
     }
 
-    fn describe_param(
-        &self,
-        cr: &proc_macro2::TokenStream,
-        meta_mod: &proc_macro2::TokenStream,
-    ) -> proc_macro2::TokenStream {
+    fn validate_param(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
+        let name_span = self.name_span();
+        let param_name = self.param_name();
+        let name_validation_span = self.attrs.rename.as_ref().map_or(name_span, LitStr::span);
+        let cr = parent.cr(name_validation_span);
+        let name_validation = quote_spanned! {name_validation_span=>
+            const _: () = #cr::metadata::validation::assert_param_name(#param_name);
+        };
+
+        let aliases = self.attrs.aliases.iter();
+        let aliases_validation = aliases.map(|alias| {
+            let cr = parent.cr(alias.span());
+            quote_spanned! {alias.span()=>
+                const _: () = #cr::metadata::validation::assert_param_name(#alias);
+            }
+        });
+
+        quote! {
+            #name_validation
+            #(#aliases_validation)*
+        }
+    }
+
+    fn describe_param(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
         let name = &self.name;
-        let name_span = self.name.span();
+        let name_span = self.name_span();
         let aliases = self.attrs.aliases.iter();
         let help = &self.docs;
         let param_name = self.param_name();
@@ -68,23 +87,17 @@ impl ConfigField {
             quote_spanned!(name_span=> ::core::option::Option::None)
         };
 
-        let aliases_validation = aliases.clone().map(
-            |alias| quote_spanned!(alias.span()=> #meta_mod::validation::assert_param_name(#alias);),
-        );
-        let deserializer = self.deserializer(cr);
-
+        let cr = parent.cr(name_span);
+        let deserializer = self.deserializer(&cr);
         quote_spanned! {name_span=> {
-            #meta_mod::validation::assert_param_name(#param_name);
-            #(#aliases_validation)*
-
             let deserializer = #deserializer;
 
-            #meta_mod::ParamMetadata {
+            #cr::metadata::ParamMetadata {
                 name: #param_name,
                 aliases: &[#(#aliases,)*],
                 help: #help,
                 rust_field_name: ::core::stringify!(#name),
-                rust_type: #meta_mod::RustType::of::<#ty>(#ty_in_code),
+                rust_type: #cr::metadata::RustType::of::<#ty>(#ty_in_code),
                 expecting: #cr::de::extract_expected_types::<#ty, _>(&deserializer),
                 deserializer: &#cr::de::Erased::<#ty, _>::new(deserializer),
                 default_value: #default_value,
@@ -92,7 +105,8 @@ impl ConfigField {
         }}
     }
 
-    fn describe_nested_config(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    fn describe_nested_config(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
+        let cr = parent.cr(self.name_span());
         let name = &self.name;
         let ty = &self.ty;
         let config_name = if self.attrs.flatten {
@@ -101,7 +115,7 @@ impl ConfigField {
             self.param_name()
         };
 
-        quote_spanned! {self.name.span()=>
+        quote_spanned! {self.name_span()=>
             #cr::metadata::NestedConfigMetadata {
                 name: #config_name,
                 rust_field_name: ::core::stringify!(#name),
@@ -113,20 +127,19 @@ impl ConfigField {
 
 impl ConfigContainer {
     fn derive_describe_config(&self) -> proc_macro2::TokenStream {
-        let cr = self.cr();
-        let meta_mod = quote!(#cr::metadata);
         let name = &self.name;
+        let cr = self.cr(name.span());
         let name_str = name.to_string();
         let help = &self.help;
 
         let all_fields = self.fields.all_fields();
         let params = all_fields.iter().filter_map(|field| {
             if !field.attrs.nest {
-                return Some(field.describe_param(&cr, &meta_mod));
+                return Some((field.validate_param(self), field.describe_param(self)));
             }
             None
         });
-        let mut params: Vec<_> = params.collect();
+        let (param_validation, mut params): (Vec<_>, Vec<_>) = params.unzip();
 
         if let ConfigContainerFields::Enum { tag, variants } = &self.fields {
             // Add the tag field description
@@ -140,29 +153,28 @@ impl ConfigContainer {
                 .iter()
                 .flat_map(|variant| variant.expected_variants(self.attrs.rename_all));
             let tag = ConfigField::from_tag(&cr, tag, expected_variants, default.as_deref());
-            params.push(tag.describe_param(&cr, &meta_mod));
+            params.push(tag.describe_param(self));
         }
 
         let nested_configs = all_fields.iter().filter_map(|field| {
             if field.attrs.nest {
-                return Some(field.describe_nested_config(&cr));
+                return Some(field.describe_nested_config(self));
             }
             None
         });
 
         quote! {
             impl #cr::DescribeConfig for #name {
-                const DESCRIPTION: #meta_mod::ConfigMetadata = #meta_mod::ConfigMetadata {
-                    ty: #meta_mod::RustType::of::<#name>(#name_str),
+                const DESCRIPTION: #cr::metadata::ConfigMetadata = #cr::metadata::ConfigMetadata {
+                    ty: #cr::metadata::RustType::of::<#name>(#name_str),
                     help: #help,
                     params: &[#(#params,)*],
                     nested_configs: &[#(#nested_configs,)*],
                 };
             }
 
-            const _: () = {
-                <#name as #cr::DescribeConfig>::DESCRIPTION.assert_valid();
-            };
+            #(#param_validation)*
+            const _: () = <#name as #cr::DescribeConfig>::DESCRIPTION.assert_valid();
         }
     }
 

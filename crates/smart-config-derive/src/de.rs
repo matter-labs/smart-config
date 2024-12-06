@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro2::Ident;
+use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput};
 
@@ -64,7 +64,6 @@ impl ConfigContainer {
     }
 
     fn derive_deserialize_config(&self) -> proc_macro2::TokenStream {
-        let cr = self.cr();
         let name = &self.name;
 
         let mut param_index = 0;
@@ -103,6 +102,7 @@ impl ConfigContainer {
             }
         };
 
+        let cr = self.cr(Span::call_site());
         quote! {
             impl #cr::DeserializeConfig for #name {
                 #[allow(unused_mut)]

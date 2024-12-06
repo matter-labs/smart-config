@@ -8,8 +8,8 @@ use std::{
 use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{
-    spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Field, Fields,
-    Index, Lit, LitStr, Member, Path, PathArguments, Type, TypePath,
+    ext::IdentExt, spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr,
+    Field, Fields, Index, Lit, LitStr, Member, Path, PathArguments, Type, TypePath,
 };
 
 pub(crate) fn wrap_in_option(val: Option<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
@@ -121,7 +121,7 @@ impl DefaultValue {
 
 #[derive(Debug, Default)]
 pub(crate) struct ConfigFieldAttrs {
-    pub(crate) rename: Option<String>,
+    pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
     pub(crate) default: Option<DefaultValue>,
     pub(crate) flatten: bool,
@@ -142,8 +142,7 @@ impl ConfigFieldAttrs {
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("rename") {
-                    let s: LitStr = meta.value()?.parse()?;
-                    rename = Some(s.value());
+                    rename = Some(meta.value()?.parse::<LitStr>()?);
                     Ok(())
                 } else if meta.path.is_ident("alias") {
                     aliases.push(meta.value()?.parse()?);
@@ -294,17 +293,24 @@ impl ConfigField {
     }
 
     pub(crate) fn param_name(&self) -> String {
-        self.attrs
-            .rename
-            .clone()
-            .unwrap_or_else(|| match &self.name {
-                Member::Named(ident) => ident.to_string(),
+        self.attrs.rename.as_ref().map_or_else(
+            || match &self.name {
+                Member::Named(ident) => ident.unraw().to_string(),
                 Member::Unnamed(idx) => idx.index.to_string(),
-            })
+            },
+            LitStr::value,
+        )
+    }
+
+    pub(crate) fn name_span(&self) -> proc_macro2::Span {
+        match &self.name {
+            Member::Named(ident) => ident.span(),
+            Member::Unnamed(_) => self.ty.span(),
+        }
     }
 
     pub(crate) fn default_fn(&self) -> Option<proc_macro2::TokenStream> {
-        let name_span = self.name.span();
+        let name_span = self.name_span();
         self.attrs
             .default
             .as_ref()
@@ -617,12 +623,13 @@ impl ConfigContainer {
         Ok(ConfigContainerFields::Enum { tag, variants })
     }
 
-    pub(crate) fn cr(&self) -> proc_macro2::TokenStream {
+    // Need to specify span as an input, since setting span to e.g. `self.name.span()` will lead to "stretched" error spans
+    // for validations.
+    pub(crate) fn cr(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
         if let Some(cr) = &self.attrs.cr {
-            quote!(#cr)
+            quote_spanned!(span=> #cr)
         } else {
-            let name = &self.name;
-            quote_spanned!(name.span()=> ::smart_config)
+            quote_spanned!(span=> ::smart_config)
         }
     }
 }
