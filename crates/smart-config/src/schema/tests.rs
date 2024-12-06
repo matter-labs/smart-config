@@ -66,30 +66,6 @@ fn getting_config_metadata() {
     assert_eq!(optional_metadata.expecting, BasicTypes::INTEGER);
 }
 
-const EXPECTED_HELP: &str = r#"
-# Test configuration
-Extended description.
-
-str
-string
-    Type: string [Rust: String], default: "default"
-    String value.
-
-optional
-    Type: integer [Rust: Option], default: None
-    Optional value.
-"#;
-
-#[test]
-fn printing_schema_help() {
-    let mut schema = ConfigSchema::default();
-    schema.insert::<TestConfig>("").unwrap();
-    let mut buffer = vec![];
-    schema.write_help(&mut buffer, |_| true).unwrap();
-    let buffer = String::from_utf8(buffer).unwrap();
-    assert_eq!(buffer.trim(), EXPECTED_HELP.trim(), "{buffer}");
-}
-
 #[test]
 fn using_alias() {
     let mut schema = ConfigSchema::default();

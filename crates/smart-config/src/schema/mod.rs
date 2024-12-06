@@ -1,6 +1,6 @@
 //! Configuration schema.
 
-use std::{any, borrow::Cow, collections::HashMap, io, iter};
+use std::{any, borrow::Cow, collections::HashMap, iter};
 
 use anyhow::Context;
 
@@ -14,8 +14,6 @@ use crate::{
 mod mount;
 #[cfg(test)]
 mod tests;
-
-const INDENT: &str = "    ";
 
 #[derive(Debug, Clone)]
 pub(crate) struct ConfigData {
@@ -221,36 +219,6 @@ impl ConfigSchema {
         })
     }
 
-    /// Writes help about this schema to the provided writer. `param_filter` can be used to filter displayed parameters.
-    ///
-    /// # Errors
-    ///
-    /// Propagates I/O errors should they occur when writing to the writer.
-    pub fn write_help(
-        &self,
-        writer: &mut impl io::Write,
-        mut param_filter: impl FnMut(&ParamMetadata) -> bool,
-    ) -> io::Result<()> {
-        for ((_, prefix), config_data) in &self.configs {
-            let filtered_params: Vec<_> = config_data
-                .metadata
-                .params
-                .iter()
-                .filter(|&param| param_filter(param))
-                .collect();
-            if filtered_params.is_empty() {
-                continue;
-            }
-
-            writeln!(writer, "{}\n", config_data.metadata.help)?;
-            for param in filtered_params {
-                Self::write_parameter(writer, prefix, param, config_data)?;
-                writeln!(writer)?;
-            }
-        }
-        Ok(())
-    }
-
     fn all_names<'a>(
         canonical_prefix: &'a str,
         param: &'a ParamMetadata,
@@ -266,39 +234,6 @@ impl ConfigSchema {
             .clone()
             .map(move |name| (canonical_prefix, name));
         local_aliases.chain(global_aliases)
-    }
-
-    fn write_parameter(
-        writer: &mut impl io::Write,
-        prefix: &str,
-        param: &ParamMetadata,
-        config_data: &ConfigData,
-    ) -> io::Result<()> {
-        let all_names = Self::all_names(prefix, param, config_data);
-        for (prefix, name) in all_names {
-            let prefix_sep = if prefix.is_empty() || prefix.ends_with('.') {
-                ""
-            } else {
-                "."
-            };
-            writeln!(writer, "{prefix}{prefix_sep}{name}")?;
-        }
-
-        let kind = param.expecting;
-        let ty = format!("{kind} [Rust: {}]", param.rust_type.name_in_code());
-        let default = if let Some(default) = param.default_value() {
-            format!(", default: {default:?}")
-        } else {
-            String::new()
-        };
-        writeln!(writer, "{INDENT}Type: {ty}{default}")?;
-
-        if !param.help.is_empty() {
-            for line in param.help.lines() {
-                writeln!(writer, "{INDENT}{line}")?;
-            }
-        }
-        Ok(())
     }
 }
 
