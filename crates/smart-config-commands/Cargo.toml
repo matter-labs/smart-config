@@ -1,0 +1,20 @@
+[package]
+name = "smart-config-commands"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+
+[dependencies]
+anstream.workspace = true
+anstyle.workspace = true
+smart-config.workspace = true
+
+[dev-dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
