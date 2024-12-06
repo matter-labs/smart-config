@@ -145,7 +145,8 @@ pub struct TestConfig {
     pub tracing: bool,
 }
 
-let schema = ConfigSchema::default().insert::<TestConfig>("test");
+let mut schema = ConfigSchema::default();
+schema.insert::<TestConfig>("test");
 // Assume we use two config sources: a YAML file and env vars,
 // the latter having higher priority.
 let yaml = r"

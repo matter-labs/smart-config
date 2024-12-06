@@ -4,7 +4,6 @@ use assert_matches::assert_matches;
 
 use super::*;
 use crate::{
-    schema::Alias,
     testing,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, CompoundConfig,
@@ -15,7 +14,8 @@ use crate::{
 
 #[test]
 fn parsing_enum_config_with_schema() {
-    let schema = ConfigSchema::default().insert::<EnumConfig>("");
+    let mut schema = ConfigSchema::default();
+    schema.insert::<EnumConfig>("").unwrap();
 
     let json = config!(
         "type": "Nested",
@@ -87,7 +87,7 @@ fn parsing_enum_config_with_schema() {
     let repo = ConfigRepository::new(&schema).with(env);
     assert_eq!(
         repo.merged().get(Pointer("flag")).unwrap().inner,
-        Value::Bool(false)
+        Value::String("false".into())
     );
 
     let config: EnumConfig = repo.single().unwrap().parse().unwrap();
@@ -103,7 +103,8 @@ fn parsing_enum_config_with_schema() {
 
 #[test]
 fn parsing_defaulting_config_from_missing_value_with_schema() {
-    let schema = ConfigSchema::default().insert::<DefaultingConfig>("test");
+    let mut schema = ConfigSchema::default();
+    schema.insert::<DefaultingConfig>("test").unwrap();
     let json = config!("unrelated": 123);
     let repo = ConfigRepository::new(&schema).with(json);
     let config: DefaultingConfig = repo.single().unwrap().parse().unwrap();
@@ -118,7 +119,8 @@ fn parsing_compound_config_with_schema() {
         "other_int": 123,
     );
 
-    let schema = ConfigSchema::default().insert::<CompoundConfig>("");
+    let mut schema = ConfigSchema::default();
+    schema.insert::<CompoundConfig>("").unwrap();
     let repo = ConfigRepository::new(&schema).with(json);
     let config: CompoundConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(
@@ -151,12 +153,13 @@ fn nesting_json() {
         ],
     );
 
-    let schema = ConfigSchema::default().insert::<ConfigWithNesting>("");
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ConfigWithNesting>("").unwrap();
     let map = ConfigRepository::new(&schema).with(env).merged;
 
     assert_eq!(
         map.get(Pointer("value")).unwrap().inner,
-        Value::Number(123_u64.into())
+        Value::String("123".into())
     );
     assert_eq!(
         map.get(Pointer("nested.renamed")).unwrap().inner,
@@ -164,7 +167,7 @@ fn nesting_json() {
     );
     assert_eq!(
         map.get(Pointer("nested.other_int")).unwrap().inner,
-        Value::Number(321_u64.into())
+        Value::String("321".into())
     );
 
     let config: ConfigWithNesting = test_deserialize(&map).unwrap();
@@ -180,12 +183,17 @@ fn merging_config_parts() {
         "nested.renamed": "first",
     );
 
-    let alias = Alias::prefix("deprecated").exclude(|name| name == "not_merged");
-    let mut schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("", [alias]);
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert::<ConfigWithNesting>("")
+        .unwrap()
+        .push_alias("deprecated")
+        .unwrap();
     schema
         .single_mut::<NestedConfig>()
         .unwrap()
-        .push_alias(Alias::prefix("deprecated"));
+        .push_alias("deprecated")
+        .unwrap();
 
     let repo = ConfigRepository::new(&schema).with(json);
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
@@ -198,27 +206,62 @@ fn merging_config_parts() {
         "deprecated.value": 4,
         "nested.renamed": "first",
         "deprecated.other_int": 321,
-        "deprecated.not_merged": "!",
+        "deprecated.merged": "!",
     );
 
     let repo = ConfigRepository::new(&schema).with(json);
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 123);
-    assert_eq!(config.not_merged, "");
+    assert_eq!(config.merged, "!");
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 321);
+
+    let json = config!(
+        "deprecated.value": 4,
+        "nested.renamed": "first",
+        "deprecated.alias": "?",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.merged, "?");
+
+    let json = config!(
+        "deprecated.value": 4,
+        "nested.renamed": "first",
+        "deprecated.merged": "!", // has priority compared to alias
+        "deprecated.alias": "?",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.merged, "!");
+
+    let json = config!(
+        "deprecated.value": 4,
+        "nested.renamed": "first",
+        "alias": "???", // has higher priority than any global alias
+        "deprecated.merged": "!",
+        "deprecated.alias": "?",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.merged, "???");
 }
 
 #[test]
 fn merging_config_parts_with_env() {
     let env = Environment::from_iter("", [("deprecated_value", "4"), ("nested_renamed", "first")]);
 
-    let alias = Alias::prefix("deprecated").exclude(|name| name == "not_merged");
-    let mut schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("", [alias]);
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert::<ConfigWithNesting>("")
+        .unwrap()
+        .push_alias("deprecated")
+        .unwrap();
     schema
         .single_mut::<NestedConfig>()
         .unwrap()
-        .push_alias(Alias::prefix("deprecated"));
+        .push_alias("deprecated")
+        .unwrap();
 
     let repo = ConfigRepository::new(&schema).with(env);
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
@@ -233,14 +276,14 @@ fn merging_config_parts_with_env() {
             ("deprecated_value", "4"),
             ("nested_renamed", "first"),
             ("deprecated_other_int", "321"),
-            ("deprecated_not_merged", "!"),
+            ("deprecated_merged", "!"),
         ],
     );
 
     let repo = ConfigRepository::new(&schema).with(env);
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 123);
-    assert_eq!(config.not_merged, "");
+    assert_eq!(config.merged, "!");
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 321);
 }
@@ -322,8 +365,12 @@ fn merging_configs() {
 
 #[test]
 fn using_aliases_with_object_config() {
-    let alias = Alias::prefix("deprecated");
-    let schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("test", [alias]);
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert::<ConfigWithNesting>("test")
+        .unwrap()
+        .push_alias("deprecated")
+        .unwrap();
 
     let json = config!(
         "value": 123, // Should not be used.
@@ -340,8 +387,12 @@ fn using_aliases_with_object_config() {
 
 #[test]
 fn using_env_config_overrides() {
-    let alias = Alias::prefix("deprecated");
-    let schema = ConfigSchema::default().insert_aliased::<ConfigWithNesting>("test", [alias]);
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert::<ConfigWithNesting>("test")
+        .unwrap()
+        .push_alias("deprecated")
+        .unwrap();
 
     let base = config!(
         "value": 123, // Should not be used.
@@ -358,7 +409,7 @@ fn using_env_config_overrides() {
     let env = Environment::from_iter(
         "",
         [
-            ("DEPRECATED_VALUE", "777"), // should not be used (aliases have lower priorities)
+            ("DEPRECATED_VALUE", "777"),
             ("TEST_NESTED_RENAMED", "second"),
         ],
     );
@@ -369,14 +420,14 @@ fn using_env_config_overrides() {
     extract_env_var_name(&enum_value.origin);
 
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
-    assert_eq!(config.value, 321);
+    assert_eq!(config.value, 777);
     assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
 
     let env = Environment::from_iter("", [("TEST_VALUE", "555")]);
     repo = repo.with(env);
 
     let int_value = repo.merged().get(Pointer("test.value")).unwrap();
-    assert_eq!(int_value.inner, Value::Number(555_u64.into()));
+    assert_eq!(int_value.inner, Value::String("555".into()));
 
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 555);
@@ -447,4 +498,70 @@ fn parsing_complex_param_errors() {
         err.origin().to_string(),
         "env variable 'APP_SET' -> parsed JSON string -> path '1'"
     );
+}
+
+#[test]
+fn merging_params_is_atomic() {
+    let base = config!(
+        "param": serde_json::json!({
+            "int": 4,
+            "string": "??",
+            "bool": true,
+        }),
+    );
+    let overrides = config!(
+        "param": serde_json::json!({
+            "int": 3,
+            "string": "!!",
+        }),
+    );
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("").unwrap();
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    let param_value = &repo.merged().get(Pointer("param")).unwrap().inner;
+    assert_matches!(
+        param_value,
+        Value::Object(map) if map.len() == 2 && !map.contains_key("bool")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 3);
+    assert_eq!(config.param.string, "!!");
+    assert!(!config.param.bool);
+}
+
+#[test]
+fn merging_params_is_still_atomic_with_prefixes() {
+    let base = config!(
+        "test.config.param": serde_json::json!({
+            "int": 4,
+            "string": "??",
+            "bool": true,
+        }),
+        "test.unused": 123,
+    );
+    let overrides = config!(
+        "test.config.param": serde_json::json!({
+            "int": 3,
+            "string": "!!",
+        }),
+        "test.config.unused": true,
+    );
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test.config").unwrap();
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    let param_value = &repo
+        .merged()
+        .get(Pointer("test.config.param"))
+        .unwrap()
+        .inner;
+    assert_matches!(
+        param_value,
+        Value::Object(map) if map.len() == 2 && !map.contains_key("bool")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 3);
+    assert_eq!(config.param.string, "!!");
+    assert!(!config.param.bool);
 }

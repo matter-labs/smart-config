@@ -10,7 +10,7 @@
 //! - `serde` sometimes collects params in intermediate containers (e.g., in structs with `#[serde(flatten)]`
 //!   or in tagged enums), which leads to param deserialization potentially getting broken in unpredictable ways.
 //!
-//! So, each config param is deserialized in isolation from an optional [`Value`](crate::value::Value) [`WithOrigin`]
+//! So, each config param is deserialized in isolation from an optional [`Value`] [`WithOrigin`]
 //! encapsulated in [`DeserializeContext`].
 //!
 //! # Deserializers
@@ -34,6 +34,8 @@
 //!
 //! [`Duration`]: std::time::Duration
 
+use std::sync::Arc;
+
 use serde::de::Error as DeError;
 
 use self::deserializer::ValueDeserializer;
@@ -49,8 +51,8 @@ pub use self::{
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
-    value::{Pointer, ValueOrigin, WithOrigin},
-    DescribeConfig, ParseError, ParseErrors,
+    value::{Pointer, Value, ValueOrigin, WithOrigin},
+    DescribeConfig, Json, ParseError, ParseErrors,
 };
 
 mod deserializer;
@@ -198,7 +200,18 @@ impl DeserializeContext<'_> {
     }
 
     pub fn deserialize_param<T: 'static>(&mut self, index: usize) -> Option<T> {
-        let (child_ctx, param) = self.for_param(index);
+        let (mut child_ctx, param) = self.for_param(index);
+
+        // Coerce value to the expected type.
+        let maybe_coerced = child_ctx
+            .current_value()
+            .and_then(|val| val.coerce_value_type(param.expecting));
+        let child_ctx = if let Some(coerced) = &maybe_coerced {
+            child_ctx.patched(coerced)
+        } else {
+            child_ctx
+        };
+
         match param.deserializer.deserialize_param(child_ctx, param) {
             Ok(param) => Some(
                 *param
@@ -210,6 +223,50 @@ impl DeserializeContext<'_> {
                 None
             }
         }
+    }
+}
+
+impl WithOrigin {
+    // TODO: log coercion errors
+    fn coerce_value_type(&self, expecting: BasicTypes) -> Option<Self> {
+        const STRUCTURED: BasicTypes = BasicTypes::ARRAY.or(BasicTypes::OBJECT);
+
+        let Value::String(str) = &self.inner else {
+            return None; // we only know how to coerce strings so far
+        };
+
+        // Attempt to transform the type to the expected type
+        match expecting {
+            // We intentionally use exact comparisons; if a type supports multiple primitive representations,
+            // we do nothing.
+            BasicTypes::BOOL => {
+                if let Ok(bool_value) = str.parse::<bool>() {
+                    return Some(Self::new(Value::Bool(bool_value), self.origin.clone()));
+                }
+            }
+            BasicTypes::INTEGER | BasicTypes::FLOAT => {
+                if let Ok(number) = str.parse::<serde_json::Number>() {
+                    return Some(Self::new(Value::Number(number), self.origin.clone()));
+                }
+            }
+
+            ty if STRUCTURED.contains(ty) => {
+                let Ok(val) = serde_json::from_str::<serde_json::Value>(str) else {
+                    return None;
+                };
+                let is_value_supported = (val.is_array() && ty.contains(BasicTypes::ARRAY))
+                    || (val.is_object() && ty.contains(BasicTypes::OBJECT));
+                if is_value_supported {
+                    let root_origin = Arc::new(ValueOrigin::Synthetic {
+                        source: self.origin.clone(),
+                        transform: "parsed JSON string".into(),
+                    });
+                    return Some(Json::map_value(val, &root_origin, String::new()));
+                }
+            }
+            _ => { /* do nothing */ }
+        }
+        None
     }
 }
 

@@ -122,7 +122,7 @@ impl DefaultValue {
 #[derive(Debug, Default)]
 pub(crate) struct ConfigFieldAttrs {
     pub(crate) rename: Option<String>,
-    pub(crate) aliases: Vec<String>,
+    pub(crate) aliases: Vec<LitStr>,
     pub(crate) default: Option<DefaultValue>,
     pub(crate) flatten: bool,
     pub(crate) nest: bool,
@@ -147,8 +147,7 @@ impl ConfigFieldAttrs {
                     rename = Some(s.value());
                     Ok(())
                 } else if meta.path.is_ident("alias") {
-                    let s: LitStr = meta.value()?.parse()?;
-                    aliases.push(s.value());
+                    aliases.push(meta.value()?.parse()?);
                     Ok(())
                 } else if meta.path.is_ident("default") {
                     default = Some(if meta.input.peek(syn::Token![=]) {

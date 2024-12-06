@@ -39,8 +39,10 @@ pub struct ParamMetadata {
     pub aliases: &'static [&'static str],
     /// Human-readable param help parsed from the doc comment.
     pub help: &'static str,
+    /// Name of the param field in Rust code.
+    pub rust_field_name: &'static str,
     /// Rust type of the parameter.
-    pub ty: RustType,
+    pub rust_type: RustType,
     /// Basic type(s) expected by the param deserializer.
     pub expecting: BasicTypes,
     #[doc(hidden)] // implementation detail
@@ -89,7 +91,7 @@ impl RustType {
     }
 
     /// Returns the name of this type as specified in code.
-    pub fn name_in_code(&self) -> &'static str {
+    pub const fn name_in_code(&self) -> &'static str {
         self.name_in_code
     }
 }
@@ -141,6 +143,11 @@ impl BasicTypes {
     #[must_use]
     pub const fn or(self, rhs: Self) -> Self {
         Self(self.0 | rhs.0)
+    }
+
+    pub(crate) fn and(self, rhs: Self) -> Option<Self> {
+        let raw = self.0 & rhs.0;
+        (raw > 0).then_some(Self(raw))
     }
 
     /// Checks whether the `needle` is fully contained in this set.
@@ -222,6 +229,8 @@ impl fmt::Display for TypeQualifiers {
 pub struct NestedConfigMetadata {
     /// Name of the config in config sources. Empty for flattened configs. Not necessarily the Rust field name!
     pub name: &'static str,
+    /// Name of the config field in Rust code.
+    pub rust_field_name: &'static str,
     /// Config metadata.
     pub meta: &'static ConfigMetadata,
 }
