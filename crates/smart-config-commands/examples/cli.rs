@@ -12,7 +12,7 @@ use smart_config::{
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
     Yaml,
 };
-use smart_config_commands::{print_debug, print_help};
+use smart_config_commands::Printer;
 
 /// Configuration with type params of several types.
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -80,7 +80,7 @@ const JSON: &str = r#"
 }
 "#;
 
-const YAML: &str = r#"
+const YAML: &str = r"
 test:
   port: 3000
   poll_latency_ms: 300
@@ -92,7 +92,7 @@ test:
       array: [1, 2]
       map:
         value: 25
-"#;
+";
 
 fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> {
     let json = serde_json::from_str(JSON).unwrap();
@@ -147,11 +147,11 @@ fn main() {
 
     match cli {
         Cli::Print => {
-            print_help(&schema, |_| true).unwrap();
+            Printer::stderr().print_help(&schema, |_| true).unwrap();
         }
         Cli::Debug { bogus } => {
             let repo = create_mock_repo(&schema, bogus);
-            print_debug(&repo).unwrap();
+            Printer::stderr().print_debug(&repo).unwrap();
         }
     }
 }

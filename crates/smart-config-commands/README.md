@@ -19,12 +19,12 @@ smart-config-commands = "0.1.0"
 ```rust
 use std::io;
 use smart_config::ConfigSchema;
-use smart_config_commands::print_help;
+use smart_config_commands::Printer;
 
 let mut schema = ConfigSchema::default();
 // Add configurations to the schema...
 
-print_help(&schema, |param| {
+Printer::stdout().print_help(&schema, |param| {
     // Allows filtering output params.
     param.name.contains("test")
 })?;
@@ -40,14 +40,14 @@ Example output is as follows:
 ```rust
 use std::io;
 use smart_config::{ConfigSchema, ConfigRepository};
-use smart_config_commands::print_debug;
+use smart_config_commands::Printer;
 
 let mut schema = ConfigSchema::default();
 // Add configurations to the schema...
 let mut repo = ConfigRepository::new(&schema);
 // Add sources to the repo...
 
-print_debug(&repo)?;
+Printer::stdout().print_debug(&repo)?;
 io::Result::Ok(())
 ```
 

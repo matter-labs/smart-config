@@ -1,8 +1,10 @@
 use std::{io, io::Write as _, iter};
 
-use anstream::AutoStream;
+use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{metadata::ParamMetadata, ConfigRef, ConfigSchema};
+
+use crate::Printer;
 
 const INDENT: &str = "  ";
 const DIMMED: Style = Style::new().dimmed();
@@ -11,29 +13,37 @@ const FIELD: Style = Style::new().underline();
 const DEFAULT_VAL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
 const UNIT: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
 
-pub fn print_help(
-    schema: &ConfigSchema,
-    param_filter: impl Fn(&ParamMetadata) -> bool,
-) -> io::Result<()> {
-    let mut writer = AutoStream::auto(io::stderr()).lock();
-    for config_ref in schema.iter() {
-        let filtered_params: Vec<_> = config_ref
-            .metadata()
-            .params
-            .iter()
-            .filter(|&param| param_filter(param))
-            .collect();
-        if filtered_params.is_empty() {
-            continue;
-        }
+impl<W: RawStream + AsLockedWrite> Printer<W> {
+    /// Prints help on config params in the provided `schema`. Params can be filtered by the supplied predicate.
+    ///
+    /// # Errors
+    ///
+    /// Propagates I/O errors.
+    pub fn print_help(
+        self,
+        schema: &ConfigSchema,
+        param_filter: impl Fn(&ParamMetadata) -> bool,
+    ) -> io::Result<()> {
+        let mut writer = self.writer;
+        for config_ref in schema.iter() {
+            let filtered_params: Vec<_> = config_ref
+                .metadata()
+                .params
+                .iter()
+                .filter(|&param| param_filter(param))
+                .collect();
+            if filtered_params.is_empty() {
+                continue;
+            }
 
-        writeln!(&mut writer, "{}\n", config_ref.metadata().help)?;
-        for param in filtered_params {
-            write_parameter(&mut writer, config_ref, param)?;
-            writeln!(&mut writer)?;
+            writeln!(&mut writer, "{}\n", config_ref.metadata().help)?;
+            for param in filtered_params {
+                write_parameter(&mut writer, config_ref, param)?;
+                writeln!(&mut writer)?;
+            }
         }
+        Ok(())
     }
-    Ok(())
 }
 
 fn write_parameter(

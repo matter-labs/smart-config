@@ -1,11 +1,13 @@
 use std::io::{self, Write as _};
 
-use anstream::AutoStream;
+use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ConfigRepository, ParseError, ParseErrors,
 };
+
+use crate::Printer;
 
 const SECTION: Style = Style::new().bold();
 const ARROW: Style = Style::new().bold();
@@ -23,37 +25,45 @@ const ERROR_LABEL: Style = Style::new()
     .bg_color(Some(Color::Ansi(AnsiColor::Red)))
     .fg_color(None);
 
-pub fn print_debug(repo: &ConfigRepository) -> io::Result<()> {
-    let mut writer = AutoStream::auto(io::stderr()).lock();
-    if repo.sources().is_empty() {
-        writeln!(&mut writer, "configuration is empty")?;
-        return Ok(());
-    }
+impl<W: RawStream + AsLockedWrite> Printer<W> {
+    /// Prints debug info for all param values in the provided `repo`. If params fail to deserialize,
+    /// corresponding error(s) are output as well.
+    ///
+    /// # Errors
+    ///
+    /// Propagates I/O errors.
+    pub fn print_debug(self, repo: &ConfigRepository) -> io::Result<()> {
+        let mut writer = self.writer;
+        if repo.sources().is_empty() {
+            writeln!(&mut writer, "configuration is empty")?;
+            return Ok(());
+        }
 
-    writeln!(&mut writer, "{SECTION}Configuration sources:{SECTION:#}")?;
-    for source in repo.sources() {
-        write!(&mut writer, "- ")?;
-        write_origin(&mut writer, &source.origin)?;
-        writeln!(&mut writer, ", {} param(s)", source.param_count)?;
-    }
+        writeln!(&mut writer, "{SECTION}Configuration sources:{SECTION:#}")?;
+        for source in repo.sources() {
+            write!(&mut writer, "- ")?;
+            write_origin(&mut writer, &source.origin)?;
+            writeln!(&mut writer, ", {} param(s)", source.param_count)?;
+        }
 
-    writeln!(&mut writer)?;
-    writeln!(&mut writer, "{SECTION}Values:{SECTION:#}")?;
+        writeln!(&mut writer)?;
+        writeln!(&mut writer, "{SECTION}Values:{SECTION:#}")?;
 
-    let merged = repo.merged();
-    for config_parser in repo.iter() {
-        let config_ref = config_parser.config();
-        for (i, param) in config_ref.metadata().params.iter().enumerate() {
-            let param_path = format!("{}.{}", config_ref.prefix(), param.name);
-            if let Some(value) = merged.pointer(&param_path) {
-                write_param(&mut writer, &param_path, value)?;
-                if let Err(err) = config_parser.parse_param(i) {
-                    write_de_errors(&mut writer, &err)?;
+        let merged = repo.merged();
+        for config_parser in repo.iter() {
+            let config_ref = config_parser.config();
+            for (i, param) in config_ref.metadata().params.iter().enumerate() {
+                let param_path = format!("{}.{}", config_ref.prefix(), param.name);
+                if let Some(value) = merged.pointer(&param_path) {
+                    write_param(&mut writer, &param_path, value)?;
+                    if let Err(err) = config_parser.parse_param(i) {
+                        write_de_errors(&mut writer, &err)?;
+                    }
                 }
             }
         }
+        Ok(())
     }
-    Ok(())
 }
 
 fn write_origin(writer: &mut impl io::Write, origin: &ValueOrigin) -> io::Result<()> {
