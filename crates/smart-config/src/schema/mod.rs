@@ -43,6 +43,11 @@ impl<'a> ConfigRef<'a> {
         self.prefix
     }
 
+    /// Gets the config metadata.
+    pub fn metadata(&self) -> &'static ConfigMetadata {
+        self.data.metadata
+    }
+
     /// Iterates over all aliases for this config.
     pub fn aliases(&self) -> impl Iterator<Item = &'static str> + '_ {
         self.data.aliases.iter().map(|ptr| ptr.0)
@@ -92,7 +97,7 @@ pub struct ConfigSchema {
 
 impl ConfigSchema {
     /// Iterates over all configs with their canonical prefixes.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (Pointer<'_>, &ConfigData)> + '_ {
+    pub(crate) fn iter_ll(&self) -> impl Iterator<Item = (Pointer<'_>, &ConfigData)> + '_ {
         self.configs
             .iter()
             .map(|((_, prefix), data)| (Pointer(prefix), data))
@@ -123,6 +128,14 @@ impl ConfigSchema {
                 };
                 Some((path, expecting))
             })
+    }
+
+    /// Iterates over all configs contained in this schema. A unique key for a config is its type + location;
+    /// i.e., multiple returned refs may have the same config type xor same location (never both).
+    pub fn iter(&self) -> impl Iterator<Item = ConfigRef<'_>> + '_ {
+        self.configs
+            .iter()
+            .map(|((_, prefix), data)| ConfigRef { prefix, data })
     }
 
     /// Lists all prefixes for the specified config. This does not include aliases.
