@@ -730,10 +730,12 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap",
+ "doc-comment",
  "serde",
  "serde_json",
  "serde_yaml",
  "smart-config",
+ "version-sync",
 ]
 
 [[package]]

@@ -16,6 +16,8 @@ smart-config.workspace = true
 
 [dev-dependencies]
 clap = { workspace = true, features = ["derive"] }
+doc-comment.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+version-sync.workspace = true
