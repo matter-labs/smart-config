@@ -44,7 +44,6 @@ use crate::{
 ///
 /// - [`Optional`] decorates a deserializer for `T` turning it into a deserializer for `Option<T>`
 /// - [`WithDefault`] adds a default value used if the input is missing
-/// - [`Repeated`](super::Repeated) produces deserializers for array and object collections, such as `Vec`s or `HashMap`s.
 /// - [`Delimited`](super::Delimited) allows deserializing arrays from a delimited string (e.g., comma-delimited)
 /// - [`OrString`] allows to switch between structured and string deserialization
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
