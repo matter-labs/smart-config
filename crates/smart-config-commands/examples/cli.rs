@@ -1,10 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
-    env,
     path::PathBuf,
     time::Duration,
 };
 
+use clap::Parser;
 use serde::Deserialize;
 use smart_config::{
     de,
@@ -94,10 +94,7 @@ test:
         value: 25
 "#;
 
-fn main() {
-    let mut schema = ConfigSchema::default();
-    schema.insert::<TestConfig>("test").unwrap();
-
+fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> {
     let json = serde_json::from_str(JSON).unwrap();
     let json = Json::new("/config/base.json", json);
     let yaml = serde_yaml::from_str(YAML).unwrap();
@@ -110,31 +107,51 @@ fn main() {
             ("APP_TEST_CACHE_SIZE", "128 MiB"),
         ],
     );
-    let mut repo = ConfigRepository::new(&schema)
+    let mut repo = ConfigRepository::new(schema)
         .with(json)
         .with(yaml)
         .with(env_vars);
 
-    let bogus = true;
     if bogus {
         let bogus_vars = Environment::from_iter(
-            "APP_",
+            "BOGUS_",
             [
-                ("APP_TEST_TIMEOUT_SEC", "what?"),
-                ("APP_TEST_NESTED_TIMEOUTS", "nope,124us"),
-                ("APP_TEST_NESTED_COMPLEX", r#"{ "array": [1, true] }"#),
-                ("APP_TEST_CACHE_SIZE", "128 MiBis"),
+                ("BOGUS_TEST_TIMEOUT_SEC", "what?"),
+                ("BOGUS_TEST_NESTED_TIMEOUTS", "nope,124us"),
+                ("BOGUS_TEST_NESTED_COMPLEX", r#"{ "array": [1, true] }"#),
+                ("BOGUS_TEST_CACHE_SIZE", "128 MiBis"),
             ],
         );
         repo = repo.with(bogus_vars);
     }
+    repo
+}
 
-    let arg = env::args().nth(1);
-    if
-    /*arg.as_deref() == Some("debug")*/
-    true {
-        print_debug(&repo).unwrap();
-    } else {
-        print_help(&schema, |_| true).unwrap();
+#[derive(Debug, Parser)]
+enum Cli {
+    /// Prints configuration help.
+    Print,
+    /// Debugs configuration values.
+    Debug {
+        /// Whether to inject incorrect config values.
+        #[arg(long)]
+        bogus: bool,
+    },
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    let mut schema = ConfigSchema::default();
+    schema.insert::<TestConfig>("test").unwrap();
+
+    match cli {
+        Cli::Print => {
+            print_help(&schema, |_| true).unwrap();
+        }
+        Cli::Debug { bogus } => {
+            let repo = create_mock_repo(&schema, bogus);
+            print_debug(&repo).unwrap();
+        }
     }
 }
