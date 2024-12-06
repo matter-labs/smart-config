@@ -3,7 +3,7 @@
 set -e
 
 # Common `term-transcript` CLI args
-TT_ARGS="-T 1s --pure-svg --palette=gjm8 --width=860 --no-wrap --no-inputs --line-numbers=continuous --window"
+TT_ARGS="-T 1s --pure-svg --palette=ubuntu --width=860 --no-wrap --no-inputs --line-numbers=continuous --window"
 
 THIS_DIR=$(dirname "$0")
 ROOT_DIR=$(realpath "$THIS_DIR/../../..")

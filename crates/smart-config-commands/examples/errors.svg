@@ -17,28 +17,28 @@
     .italic { font-style: italic; }
     .underline { text-decoration: underline; }
     .dimmed { fill-opacity: 0.7; }
-    .fg0 { fill: #1c1c1c; } .output-bg .fg0 { stroke: #1c1c1c; }
-    .fg1 { fill: #ff005b; } .output-bg .fg1 { stroke: #ff005b; }
-    .fg2 { fill: #cee318; } .output-bg .fg2 { stroke: #cee318; }
-    .fg3 { fill: #ffe755; } .output-bg .fg3 { stroke: #ffe755; }
-    .fg4 { fill: #048ac7; } .output-bg .fg4 { stroke: #048ac7; }
-    .fg5 { fill: #833c9f; } .output-bg .fg5 { stroke: #833c9f; }
-    .fg6 { fill: #0ac1cd; } .output-bg .fg6 { stroke: #0ac1cd; }
-    .fg7 { fill: #e5e5e5; } .output-bg .fg7 { stroke: #e5e5e5; }
-    .fg8 { fill: #666666; } .output-bg .fg8 { stroke: #666666; }
-    .fg9 { fill: #ff00a0; } .output-bg .fg9 { stroke: #ff00a0; }
-    .fg10 { fill: #ccff00; } .output-bg .fg10 { stroke: #ccff00; }
-    .fg11 { fill: #ff9f00; } .output-bg .fg11 { stroke: #ff9f00; }
-    .fg12 { fill: #48c6ff; } .output-bg .fg12 { stroke: #48c6ff; }
-    .fg13 { fill: #be67e1; } .output-bg .fg13 { stroke: #be67e1; }
-    .fg14 { fill: #63e7f0; } .output-bg .fg14 { stroke: #63e7f0; }
-    .fg15 { fill: #f3f3f3; } .output-bg .fg15 { stroke: #f3f3f3; }
+    .fg0 { fill: #010101; } .output-bg .fg0 { stroke: #010101; }
+    .fg1 { fill: #de382b; } .output-bg .fg1 { stroke: #de382b; }
+    .fg2 { fill: #38b54a; } .output-bg .fg2 { stroke: #38b54a; }
+    .fg3 { fill: #ffc706; } .output-bg .fg3 { stroke: #ffc706; }
+    .fg4 { fill: #006fb8; } .output-bg .fg4 { stroke: #006fb8; }
+    .fg5 { fill: #762671; } .output-bg .fg5 { stroke: #762671; }
+    .fg6 { fill: #2cb5e9; } .output-bg .fg6 { stroke: #2cb5e9; }
+    .fg7 { fill: #cccccc; } .output-bg .fg7 { stroke: #cccccc; }
+    .fg8 { fill: #808080; } .output-bg .fg8 { stroke: #808080; }
+    .fg9 { fill: #ff0000; } .output-bg .fg9 { stroke: #ff0000; }
+    .fg10 { fill: #00ff00; } .output-bg .fg10 { stroke: #00ff00; }
+    .fg11 { fill: #ffff00; } .output-bg .fg11 { stroke: #ffff00; }
+    .fg12 { fill: #0000ff; } .output-bg .fg12 { stroke: #0000ff; }
+    .fg13 { fill: #ff00ff; } .output-bg .fg13 { stroke: #ff00ff; }
+    .fg14 { fill: #00ffff; } .output-bg .fg14 { stroke: #00ffff; }
+    .fg15 { fill: #ffffff; } .output-bg .fg15 { stroke: #ffffff; }
   </style>
-  <rect width="100%" height="100%" y="-22" rx="4.5" style="fill: #1c1c1c;" />
+  <rect width="100%" height="100%" y="-22" rx="4.5" style="fill: #010101;" />
   <rect width="100%" height="26" y="-22" clip-path="inset(0 0 -10 0 round 4.5)" style="fill: #fff; fill-opacity: 0.1;"/>
-  <circle cx="17" cy="-9" r="7" style="fill: #ff005b;"/>
-  <circle cx="37" cy="-9" r="7" style="fill: #ffe755;"/>
-  <circle cx="57" cy="-9" r="7" style="fill: #cee318;"/>
+  <circle cx="17" cy="-9" r="7" style="fill: #de382b;"/>
+  <circle cx="37" cy="-9" r="7" style="fill: #ffc706;"/>
+  <circle cx="57" cy="-9" r="7" style="fill: #38b54a;"/>
     <svg x="0" y="10" width="860" height="540" viewBox="0 0 860 540">
       <animate attributeName="viewBox" values="0 0 860 540;0 72 860 540;0 144 860 540;0 216 860 540;0 288 860 540" dur="16.0s" repeatCount="indefinite" calcMode="discrete" />
       <g class="input-bg"></g>
@@ -50,44 +50,44 @@
 </tspan><tspan xml:space="preserve" x="42" y="86" class="output-bg">  <tspan class="fg5">███</tspan></tspan><tspan xml:space="preserve" x="42" y="86" class="output">- <tspan class="bg5">env</tspan>, 4 param(s)
 </tspan><tspan xml:space="preserve" x="42" y="104" class="output">
 </tspan><tspan xml:space="preserve" x="42" y="122" class="output"><tspan class="bold">Values:</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="140" class="output">test.nested.exit_on_error = <tspan class="fg3">false</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="158" class="output-bg">          <tspan class="fg6">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="158" class="output">  Origin: <tspan class="bg6">JSON:</tspan>/config/base.json <tspan class="bold">-&gt;</tspan> .test.nested.exit_on_error
-</tspan><tspan xml:space="preserve" x="42" y="176" class="output">test.nested.complex = <tspan class="fg6">"{ \"array\": [1, true] }"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="194" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="194" class="output">  Origin: <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_COMPLEX"
-</tspan><tspan xml:space="preserve" x="42" y="212" class="output-bg">  <tspan class="fg1">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="212" class="output">  <tspan class="bold bg1">Error:</tspan> invalid type: boolean `true`, expected u32 number
-</tspan><tspan xml:space="preserve" x="42" y="230" class="output">    at <tspan class="bold">test.nested.complex</tspan>, NestedConfig.complex
-</tspan><tspan xml:space="preserve" x="42" y="248" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="248" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_COMPLEX" <tspan class="bold">-&gt;</tspan> parsed JSON string <tspan class="bold">-&gt;</tspan> .array.1
-</tspan><tspan xml:space="preserve" x="42" y="266" class="output">test.nested.more_timeouts = <tspan class="fg6">"nope,124us"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="284" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="284" class="output">  Origin: <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_TIMEOUTS"
-</tspan><tspan xml:space="preserve" x="42" y="302" class="output-bg">  <tspan class="fg1">███████</tspan></tspan><tspan xml:space="preserve" x="42" y="302" class="output">  <tspan class="bold bg1">Errors:</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="320" class="output">  - invalid type: string "nope", expected value with unit, like '10 ms'
-</tspan><tspan xml:space="preserve" x="42" y="338" class="output">    at <tspan class="bold">test.nested.more_timeouts.0</tspan>, NestedConfig.more_timeouts
-</tspan><tspan xml:space="preserve" x="42" y="356" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="356" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_TIMEOUTS" <tspan class="bold">-&gt;</tspan> ","-delimited string <tspan class="bold">-&gt;</tspan> .0
-</tspan><tspan xml:space="preserve" x="42" y="374" class="output">  - invalid value: string "us", expected duration unit, like 'ms', up to 'days'
-</tspan><tspan xml:space="preserve" x="42" y="392" class="output">    at <tspan class="bold">test.nested.more_timeouts.1</tspan>, NestedConfig.more_timeouts
-</tspan><tspan xml:space="preserve" x="42" y="410" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="410" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_TIMEOUTS" <tspan class="bold">-&gt;</tspan> ","-delimited string <tspan class="bold">-&gt;</tspan> .1
-</tspan><tspan xml:space="preserve" x="42" y="428" class="output">test.port = <tspan class="fg2">3000</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="446" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="446" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.port
-</tspan><tspan xml:space="preserve" x="42" y="464" class="output">test.app_name = <tspan class="fg6">"test"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="482" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="482" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_APP_NAME"
-</tspan><tspan xml:space="preserve" x="42" y="500" class="output">test.poll_latency = {
-</tspan><tspan xml:space="preserve" x="42" y="518" class="output">  <tspan class="bold">"ms"</tspan>: <tspan class="fg2">300</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="536" class="output">}
-</tspan><tspan xml:space="preserve" x="42" y="554" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="554" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test <tspan class="bold">-&gt;</tspan> nesting for object param 'poll_latency'
-</tspan><tspan xml:space="preserve" x="42" y="572" class="output">test.scaling_factor = <tspan class="fg2">4.2</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="590" class="output-bg">          <tspan class="fg6">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="590" class="output">  Origin: <tspan class="bg6">JSON:</tspan>/config/base.json <tspan class="bold">-&gt;</tspan> .test.scaling_factor
-</tspan><tspan xml:space="preserve" x="42" y="608" class="output">test.dir_paths = <tspan class="fg6">"/usr/bin:usr/local/bin"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="626" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="626" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_DIRS"
-</tspan><tspan xml:space="preserve" x="42" y="644" class="output">test.timeout_sec = <tspan class="fg6">"what?"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="662" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="662" class="output">  Origin: <tspan class="bg5">env:</tspan>"BOGUS_TEST_TIMEOUT_SEC"
-</tspan><tspan xml:space="preserve" x="42" y="680" class="output-bg">  <tspan class="fg1">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="680" class="output">  <tspan class="bold bg1">Error:</tspan> invalid digit found in string while parsing u64 value 'what?'
-</tspan><tspan xml:space="preserve" x="42" y="698" class="output">    at <tspan class="bold">test.timeout_sec</tspan>, TestConfig.timeout_sec
-</tspan><tspan xml:space="preserve" x="42" y="716" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="716" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_TIMEOUT_SEC"
-</tspan><tspan xml:space="preserve" x="42" y="734" class="output">test.cache_size = <tspan class="fg6">"128 MiBis"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="752" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="752" class="output">  Origin: <tspan class="bg5">env:</tspan>"BOGUS_TEST_CACHE_SIZE"
-</tspan><tspan xml:space="preserve" x="42" y="770" class="output-bg">  <tspan class="fg1">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="770" class="output">  <tspan class="bold bg1">Error:</tspan> invalid value: string "MiBis", expected duration unit, like 'KB', up to 'GB'
-</tspan><tspan xml:space="preserve" x="42" y="788" class="output">    at <tspan class="bold">test.cache_size</tspan>, TestConfig.cache_size
-</tspan><tspan xml:space="preserve" x="42" y="806" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="806" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_CACHE_SIZE"
+</tspan><tspan xml:space="preserve" x="42" y="140" class="output">test.port = <tspan class="fg2">3000</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="158" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="158" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.port
+</tspan><tspan xml:space="preserve" x="42" y="176" class="output">test.app_name = <tspan class="fg6">"test"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="194" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="194" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_APP_NAME"
+</tspan><tspan xml:space="preserve" x="42" y="212" class="output">test.poll_latency = {
+</tspan><tspan xml:space="preserve" x="42" y="230" class="output">  <tspan class="bold">"ms"</tspan>: <tspan class="fg2">300</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="248" class="output">}
+</tspan><tspan xml:space="preserve" x="42" y="266" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="266" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test <tspan class="bold">-&gt;</tspan> nesting for object param 'poll_latency'
+</tspan><tspan xml:space="preserve" x="42" y="284" class="output">test.scaling_factor = <tspan class="fg2">4.2</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="302" class="output-bg">          <tspan class="fg6">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="302" class="output">  Origin: <tspan class="bg6">JSON:</tspan>/config/base.json <tspan class="bold">-&gt;</tspan> .test.scaling_factor
+</tspan><tspan xml:space="preserve" x="42" y="320" class="output">test.dir_paths = <tspan class="fg6">"/usr/bin:usr/local/bin"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="338" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="338" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_DIRS"
+</tspan><tspan xml:space="preserve" x="42" y="356" class="output">test.timeout_sec = <tspan class="fg6">"what?"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="374" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="374" class="output">  Origin: <tspan class="bg5">env:</tspan>"BOGUS_TEST_TIMEOUT_SEC"
+</tspan><tspan xml:space="preserve" x="42" y="392" class="output-bg">  <tspan class="fg1">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="392" class="output">  <tspan class="bold bg1">Error:</tspan> invalid digit found in string while parsing u64 value 'what?'
+</tspan><tspan xml:space="preserve" x="42" y="410" class="output">    at <tspan class="bold">test.timeout_sec</tspan>, TestConfig.timeout_sec
+</tspan><tspan xml:space="preserve" x="42" y="428" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="428" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_TIMEOUT_SEC"
+</tspan><tspan xml:space="preserve" x="42" y="446" class="output">test.cache_size = <tspan class="fg6">"128 MiBis"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="464" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="464" class="output">  Origin: <tspan class="bg5">env:</tspan>"BOGUS_TEST_CACHE_SIZE"
+</tspan><tspan xml:space="preserve" x="42" y="482" class="output-bg">  <tspan class="fg1">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="482" class="output">  <tspan class="bold bg1">Error:</tspan> invalid value: string "MiBis", expected duration unit, like 'KB', up to 'GB'
+</tspan><tspan xml:space="preserve" x="42" y="500" class="output">    at <tspan class="bold">test.cache_size</tspan>, TestConfig.cache_size
+</tspan><tspan xml:space="preserve" x="42" y="518" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="518" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_CACHE_SIZE"
+</tspan><tspan xml:space="preserve" x="42" y="536" class="output">test.nested.exit_on_error = <tspan class="fg3">false</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="554" class="output-bg">          <tspan class="fg6">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="554" class="output">  Origin: <tspan class="bg6">JSON:</tspan>/config/base.json <tspan class="bold">-&gt;</tspan> .test.nested.exit_on_error
+</tspan><tspan xml:space="preserve" x="42" y="572" class="output">test.nested.complex = <tspan class="fg6">"{ \"array\": [1, true] }"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="590" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="590" class="output">  Origin: <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_COMPLEX"
+</tspan><tspan xml:space="preserve" x="42" y="608" class="output-bg">  <tspan class="fg1">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="608" class="output">  <tspan class="bold bg1">Error:</tspan> invalid type: boolean `true`, expected u32 number
+</tspan><tspan xml:space="preserve" x="42" y="626" class="output">    at <tspan class="bold">test.nested.complex</tspan>, NestedConfig.complex
+</tspan><tspan xml:space="preserve" x="42" y="644" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="644" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_COMPLEX" <tspan class="bold">-&gt;</tspan> parsed JSON string <tspan class="bold">-&gt;</tspan> .array.1
+</tspan><tspan xml:space="preserve" x="42" y="662" class="output">test.nested.more_timeouts = <tspan class="fg6">"nope,124us"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="680" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="680" class="output">  Origin: <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_TIMEOUTS"
+</tspan><tspan xml:space="preserve" x="42" y="698" class="output-bg">  <tspan class="fg1">███████</tspan></tspan><tspan xml:space="preserve" x="42" y="698" class="output">  <tspan class="bold bg1">Errors:</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="716" class="output">  - invalid type: string "nope", expected value with unit, like '10 ms'
+</tspan><tspan xml:space="preserve" x="42" y="734" class="output">    at <tspan class="bold">test.nested.more_timeouts.0</tspan>, NestedConfig.more_timeouts
+</tspan><tspan xml:space="preserve" x="42" y="752" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="752" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_TIMEOUTS" <tspan class="bold">-&gt;</tspan> ","-delimited string <tspan class="bold">-&gt;</tspan> .0
+</tspan><tspan xml:space="preserve" x="42" y="770" class="output">  - invalid value: string "us", expected duration unit, like 'ms', up to 'days'
+</tspan><tspan xml:space="preserve" x="42" y="788" class="output">    at <tspan class="bold">test.nested.more_timeouts.1</tspan>, NestedConfig.more_timeouts
+</tspan><tspan xml:space="preserve" x="42" y="806" class="output-bg">    <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="806" class="output">    <tspan class="bg5">env:</tspan>"BOGUS_TEST_NESTED_TIMEOUTS" <tspan class="bold">-&gt;</tspan> ","-delimited string <tspan class="bold">-&gt;</tspan> .1
 </tspan></text>
     </svg>
   <rect class="scrollbar" x="853" y="10" width="5" height="40">
