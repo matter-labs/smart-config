@@ -14,14 +14,45 @@ pub(crate) enum LocationInConfig {
     Param(usize),
 }
 
-pub(crate) type ErrorWithOrigin = WithOrigin<serde_json::Error>;
+/// Low-level deserialization error.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum LowLevelError {
+    /// Error coming from JSON deserialization logic.
+    Json(serde_json::Error),
+    #[doc(hidden)] // implementation detail
+    InvalidArray,
+    #[doc(hidden)] // implementation detail
+    InvalidObject,
+}
+
+impl From<serde_json::Error> for LowLevelError {
+    fn from(err: serde_json::Error) -> Self {
+        Self::Json(err)
+    }
+}
+
+impl fmt::Display for LowLevelError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Json(err) => fmt::Display::fmt(err, formatter),
+            Self::InvalidArray => formatter.write_str("error(s) deserializing array items"),
+            Self::InvalidObject => formatter.write_str("error(s) deserializing object entries"),
+        }
+    }
+}
+
+pub(crate) type ErrorWithOrigin = WithOrigin<LowLevelError>;
+
+impl ErrorWithOrigin {
+    pub(crate) fn json(err: serde_json::Error, origin: Arc<ValueOrigin>) -> Self {
+        Self::new(err.into(), origin)
+    }
+}
 
 impl de::Error for ErrorWithOrigin {
     fn custom<T: fmt::Display>(msg: T) -> Self {
-        Self {
-            inner: de::Error::custom(msg),
-            origin: Arc::default(),
-        }
+        Self::json(de::Error::custom(msg), Arc::default())
     }
 }
 
@@ -33,11 +64,14 @@ impl fmt::Display for ErrorWithOrigin {
 
 impl std::error::Error for ErrorWithOrigin {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.inner)
+        match &self.inner {
+            LowLevelError::Json(err) => Some(err),
+            LowLevelError::InvalidArray | LowLevelError::InvalidObject => None,
+        }
     }
 }
 
-/// Config deserialization errors.
+/// Config parameter deserialization errors.
 pub struct ParseError {
     pub(crate) inner: serde_json::Error,
     pub(crate) path: String,

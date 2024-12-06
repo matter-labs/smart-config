@@ -2,7 +2,7 @@
 
 use std::{any, borrow::Cow, fmt};
 
-use crate::de::ErasedDeserializer;
+use crate::de::_private::ErasedDeserializer;
 
 #[cfg(test)]
 mod tests;

@@ -443,7 +443,7 @@ fn error_parsing_array_from_string() {
     let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
     assert_eq!(err.len(), 1);
     let err = err.first();
-    assert_eq!(err.path(), "array");
+    assert_eq!(err.path(), "array.1");
     let inner = err.inner().to_string();
     assert!(inner.contains("what"), "{inner}");
 
@@ -496,7 +496,7 @@ fn parsing_complex_types_errors() {
     let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("nonzero"), "{inner}");
-    assert_eq!(err.path(), "array");
+    assert_eq!(err.path(), "array.0");
     assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "array.0");
 
     let json = config!("array": [2, 3], "float": "what");
