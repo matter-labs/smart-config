@@ -8,8 +8,8 @@ use std::{
 use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{
-    spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Field, Fields,
-    Index, Lit, LitStr, Member, Path, PathArguments, Type, TypePath,
+    ext::IdentExt, spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr,
+    Field, Fields, Index, Lit, LitStr, Member, Path, PathArguments, Type, TypePath,
 };
 
 pub(crate) fn wrap_in_option(val: Option<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
@@ -121,7 +121,7 @@ impl DefaultValue {
 
 #[derive(Debug, Default)]
 pub(crate) struct ConfigFieldAttrs {
-    pub(crate) rename: Option<String>,
+    pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
     pub(crate) default: Option<DefaultValue>,
     pub(crate) flatten: bool,
@@ -130,21 +130,19 @@ pub(crate) struct ConfigFieldAttrs {
 }
 
 impl ConfigFieldAttrs {
-    fn new(attrs: &[Attribute], name_span: proc_macro2::Span) -> syn::Result<Self> {
+    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut rename = None;
         let mut aliases = vec![];
         let mut default = None;
-        let mut flatten = false;
-        let mut nest = false;
         let mut nested_span = None;
+        let mut flatten_span = None;
         let mut with = None;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("rename") {
-                    let s: LitStr = meta.value()?.parse()?;
-                    rename = Some(s.value());
+                    rename = Some(meta.value()?.parse::<LitStr>()?);
                     Ok(())
                 } else if meta.path.is_ident("alias") {
                     aliases.push(meta.value()?.parse()?);
@@ -160,14 +158,13 @@ impl ConfigFieldAttrs {
                     default = Some(DefaultValue::Expr(meta.value()?.parse()?));
                     Ok(())
                 } else if meta.path.is_ident("flatten") {
-                    flatten = true;
+                    flatten_span = Some(meta.path.span());
                     Ok(())
                 } else if meta.path.is_ident("nest") {
-                    nest = true;
                     nested_span = Some(meta.path.span());
                     Ok(())
                 } else if meta.path.is_ident("with") {
-                    with = Some(meta.value()?.parse()?);
+                    with = Some(meta.value()?.parse::<Expr>()?);
                     Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))
@@ -175,14 +172,26 @@ impl ConfigFieldAttrs {
             })?;
         }
 
-        if flatten {
-            // All flattened configs are nested, but not necessarily vice versa.
-            nest = true;
+        if let (Some(nested_span), Some(_)) = (nested_span, flatten_span) {
+            let msg = "cannot specify both `nest` and `flatten` for config";
+            return Err(syn::Error::new(nested_span, msg));
         }
-        if with.is_some() && nest {
+        let flatten = flatten_span.is_some();
+        // All flattened configs are nested internally, but not necessarily vice versa.
+        let nest = flatten_span.is_some() || nested_span.is_some();
+
+        if let (Some(with), true) = (&with, nest) {
             let msg = "cannot specify `with` for a `nest`ed / `flatten`ed configuration";
-            let err_span = nested_span.unwrap_or(name_span);
-            return Err(syn::Error::new(err_span, msg));
+            return Err(syn::Error::new(with.span(), msg));
+        }
+        if let (Some(flatten_span), Some(_)) = (flatten_span, &rename) {
+            let msg = "`rename` attribute is useless for flattened configs; did you mean to make a config nested?";
+            return Err(syn::Error::new(flatten_span, msg));
+        }
+        if nest && !aliases.is_empty() {
+            let msg = "aliases for nested / flattened configs are not supported yet";
+            let span = flatten_span.or(nested_span).unwrap();
+            return Err(syn::Error::new(span, msg));
         }
 
         Ok(Self {
@@ -231,7 +240,7 @@ impl ConfigField {
         };
         let ty = raw.ty.clone();
 
-        let attrs = ConfigFieldAttrs::new(&raw.attrs, raw.span())?;
+        let attrs = ConfigFieldAttrs::new(&raw.attrs)?;
         Ok(Self {
             attrs,
             docs: parse_docs(&raw.attrs),
@@ -284,17 +293,24 @@ impl ConfigField {
     }
 
     pub(crate) fn param_name(&self) -> String {
-        self.attrs
-            .rename
-            .clone()
-            .unwrap_or_else(|| match &self.name {
-                Member::Named(ident) => ident.to_string(),
+        self.attrs.rename.as_ref().map_or_else(
+            || match &self.name {
+                Member::Named(ident) => ident.unraw().to_string(),
                 Member::Unnamed(idx) => idx.index.to_string(),
-            })
+            },
+            LitStr::value,
+        )
+    }
+
+    pub(crate) fn name_span(&self) -> proc_macro2::Span {
+        match &self.name {
+            Member::Named(ident) => ident.span(),
+            Member::Unnamed(_) => self.ty.span(),
+        }
     }
 
     pub(crate) fn default_fn(&self) -> Option<proc_macro2::TokenStream> {
-        let name_span = self.name.span();
+        let name_span = self.name_span();
         self.attrs
             .default
             .as_ref()
@@ -302,16 +318,75 @@ impl ConfigField {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+#[allow(clippy::enum_variant_names)]
+pub(crate) enum RenameRule {
+    LowerCase,
+    UpperCase,
+    CamelCase,
+    SnakeCase,
+    ScreamingSnakeCase,
+    KebabCase,
+    ScreamingKebabCase,
+}
+
+impl RenameRule {
+    fn parse(s: &str) -> Result<Self, &'static str> {
+        Ok(match s {
+            "lowercase" => Self::LowerCase,
+            "UPPERCASE" => Self::UpperCase,
+            "camelCase" => Self::CamelCase,
+            "snake_case" => Self::SnakeCase,
+            "SCREAMING_SNAKE_CASE" => Self::ScreamingSnakeCase,
+            "kebab-case" => Self::KebabCase,
+            "SCREAMING-KEBAB-CASE" => Self::ScreamingKebabCase,
+            _ => {
+                return Err(
+                    "Invalid case specified; should be one of: lowercase, UPPERCASE, camelCase, \
+                     snake_case, SCREAMING_SNAKE_CASE, kebab-case, SCREAMING-KEBAB-CASE",
+                )
+            }
+        })
+    }
+
+    fn transform(self, ident: &str) -> String {
+        debug_assert!(ident.is_ascii()); // Should be checked previously
+        let (spacing_char, scream) = match self {
+            Self::LowerCase => return ident.to_ascii_lowercase(),
+            Self::UpperCase => return ident.to_ascii_uppercase(),
+            Self::CamelCase => return ident[..1].to_ascii_lowercase() + &ident[1..],
+            // ^ Since `ident` is an ASCII string, indexing is safe
+            Self::SnakeCase => ('_', false),
+            Self::ScreamingSnakeCase => ('_', true),
+            Self::KebabCase => ('-', false),
+            Self::ScreamingKebabCase => ('-', true),
+        };
+
+        let mut output = String::with_capacity(ident.len());
+        for (i, ch) in ident.char_indices() {
+            if i > 0 && ch.is_ascii_uppercase() {
+                output.push(spacing_char);
+            }
+            output.push(if scream {
+                ch.to_ascii_uppercase()
+            } else {
+                ch.to_ascii_lowercase()
+            });
+        }
+        output
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ConfigContainerAttrs {
     pub(crate) cr: Option<Path>,
-    pub(crate) rename_all: Option<LitStr>,
+    pub(crate) rename_all: Option<RenameRule>,
     pub(crate) tag: Option<LitStr>,
     pub(crate) derive_default: bool,
 }
 
 impl ConfigContainerAttrs {
-    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
+    fn new(attrs: &[Attribute], is_struct: bool) -> syn::Result<Self> {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut cr = None;
@@ -324,10 +399,13 @@ impl ConfigContainerAttrs {
                     cr = Some(meta.value()?.parse()?);
                     Ok(())
                 } else if meta.path.is_ident("rename_all") {
-                    rename_all = Some(meta.value()?.parse()?);
+                    let rule: LitStr = meta.value()?.parse()?;
+                    let parsed = RenameRule::parse(&rule.value())
+                        .map_err(|msg| syn::Error::new(rule.span(), msg))?;
+                    rename_all = Some((rule, parsed));
                     Ok(())
                 } else if meta.path.is_ident("tag") {
-                    tag = Some(meta.value()?.parse()?);
+                    tag = Some(meta.value()?.parse::<LitStr>()?);
                     Ok(())
                 } else if meta.path.is_ident("derive") {
                     let content;
@@ -345,24 +423,24 @@ impl ConfigContainerAttrs {
                 }
             })?;
         }
+
+        if is_struct {
+            if let Some((rename_all, _)) = &rename_all {
+                let msg = "`rename_all` attribute must not be used on struct configs";
+                return Err(syn::Error::new(rename_all.span(), msg));
+            }
+            if let Some(tag) = &tag {
+                let msg = "`tag` attribute must not be used on struct configs";
+                return Err(syn::Error::new(tag.span(), msg));
+            }
+        }
+
         Ok(Self {
             cr,
-            rename_all,
+            rename_all: rename_all.map(|(_, parsed)| parsed),
             tag,
             derive_default,
         })
-    }
-
-    fn validate_for_struct(&self) -> syn::Result<()> {
-        if let Some(rename_all) = &self.rename_all {
-            let msg = "`rename_all` attribute must not be used on struct configs";
-            return Err(syn::Error::new(rename_all.span(), msg));
-        }
-        if let Some(tag) = &self.tag {
-            let msg = "`tag` attribute must not be used on struct configs";
-            return Err(syn::Error::new(tag.span(), msg));
-        }
-        Ok(())
     }
 }
 
@@ -374,15 +452,25 @@ pub(crate) struct ConfigEnumVariant {
 }
 
 impl ConfigEnumVariant {
-    pub(crate) fn name(&self) -> String {
-        self.attrs
-            .rename
-            .as_ref()
-            .map_or_else(|| self.name.to_string(), LitStr::value)
+    pub(crate) fn name(&self, rename_rule: Option<RenameRule>) -> String {
+        self.attrs.rename.as_ref().map_or_else(
+            || {
+                let name = self.name.to_string();
+                if let Some(rule) = rename_rule {
+                    rule.transform(&name)
+                } else {
+                    name
+                }
+            },
+            LitStr::value,
+        )
     }
 
-    pub(crate) fn expected_variants(&self) -> impl Iterator<Item = String> + '_ {
-        iter::once(self.name()).chain(self.attrs.aliases.iter().map(LitStr::value))
+    pub(crate) fn expected_variants(
+        &self,
+        rename_rule: Option<RenameRule>,
+    ) -> impl Iterator<Item = String> + '_ {
+        iter::once(self.name(rename_rule)).chain(self.attrs.aliases.iter().map(LitStr::value))
     }
 }
 
@@ -425,12 +513,9 @@ impl ConfigContainer {
             return Err(syn::Error::new_spanned(&raw.generics, message));
         }
 
-        let attrs = ConfigContainerAttrs::new(&raw.attrs)?;
+        let attrs = ConfigContainerAttrs::new(&raw.attrs, matches!(&raw.data, Data::Struct(_)))?;
         let fields = match &raw.data {
-            Data::Struct(data) => {
-                attrs.validate_for_struct()?;
-                ConfigContainerFields::Struct(Self::extract_struct_fields(data)?)
-            }
+            Data::Struct(data) => ConfigContainerFields::Struct(Self::extract_struct_fields(data)?),
             Data::Enum(data) => Self::extract_enum_fields(data, &attrs)?,
             Data::Union(_) => {
                 let message = "#[derive(DescribeConfig)] can only be placed on structs or enums";
@@ -463,11 +548,14 @@ impl ConfigContainer {
 
         for variant in &data.variants {
             let attrs = ConfigVariantAttrs::new(&variant.attrs)?;
-            if let Some(rename) = &attrs.rename {
-                if !variants_with_aliases.insert(rename.value()) {
-                    let msg = "Tag value is redefined";
-                    return Err(syn::Error::new(rename.span(), msg));
-                }
+
+            let (name, name_span) = attrs.rename.as_ref().map_or_else(
+                || (variant.ident.to_string(), variant.ident.span()),
+                |lit| (lit.value(), lit.span()),
+            );
+            if !variants_with_aliases.insert(name) {
+                let msg = "Tag value is redefined";
+                return Err(syn::Error::new(name_span, msg));
             }
             for alias in &attrs.aliases {
                 if !variants_with_aliases.insert(alias.value()) {
@@ -535,12 +623,13 @@ impl ConfigContainer {
         Ok(ConfigContainerFields::Enum { tag, variants })
     }
 
-    pub(crate) fn cr(&self) -> proc_macro2::TokenStream {
+    // Need to specify span as an input, since setting span to e.g. `self.name.span()` will lead to "stretched" error spans
+    // for validations.
+    pub(crate) fn cr(&self, span: proc_macro2::Span) -> proc_macro2::TokenStream {
         if let Some(cr) = &self.attrs.cr {
-            quote!(#cr)
+            quote_spanned!(span=> #cr)
         } else {
-            let name = &self.name;
-            quote_spanned!(name.span()=> ::smart_config)
+            quote_spanned!(span=> ::smart_config)
         }
     }
 }

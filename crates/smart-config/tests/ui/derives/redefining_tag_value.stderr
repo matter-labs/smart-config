@@ -1,0 +1,11 @@
+error: Tag value is redefined
+ --> tests/ui/derives/redefining_tag_value.rs:7:22
+  |
+7 |     #[config(alias = "V0")]
+  |                      ^^^^
+
+error: Tag value is redefined
+  --> tests/ui/derives/redefining_tag_value.rs:16:5
+   |
+16 |     V1 { value: u64 },
+   |     ^^

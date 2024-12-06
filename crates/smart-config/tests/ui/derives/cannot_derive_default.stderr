@@ -1,0 +1,5 @@
+error: Cannot derive(Default): field does not have a default value
+ --> tests/ui/derives/cannot_derive_default.rs:6:5
+  |
+6 |     field: u64,
+  |     ^^^^^

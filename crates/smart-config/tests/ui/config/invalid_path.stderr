@@ -1,0 +1,7 @@
+error[E0080]: evaluation of constant value failed
+ --> tests/ui/config/invalid_path.rs:2:5
+  |
+2 |     smart_config::config!("what?": 1);
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the evaluated program panicked at 'Path #0 `what?` is invalid: name contains a disallowed char '?' at position 4; allowed chars are [_a-z0-9.]', $DIR/tests/ui/config/invalid_path.rs:2:5
+  |
+  = note: this error originates in the macro `smart_config::config` (in Nightly builds, run with -Z macro-backtrace for more info)

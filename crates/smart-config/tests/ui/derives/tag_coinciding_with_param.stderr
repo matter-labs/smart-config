@@ -1,0 +1,5 @@
+error: Tag name coincides with an existing param name
+ --> tests/ui/derives/tag_coinciding_with_param.rs:4:16
+  |
+4 | #[config(tag = "version")]
+  |                ^^^^^^^^^

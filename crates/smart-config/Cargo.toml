@@ -12,7 +12,6 @@ readme = "README.md"
 [dependencies]
 anyhow.workspace = true
 compile-fmt.workspace = true
-once_cell.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_yaml.workspace = true # TODO: optional?
@@ -24,6 +23,7 @@ primitive-types = { workspace = true, features = ["serde"], optional = true }
 [dev-dependencies]
 assert_matches.workspace = true
 doc-comment.workspace = true
+trybuild.workspace = true
 version-sync.workspace = true
 
 [features]

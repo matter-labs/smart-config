@@ -1,0 +1,5 @@
+error: Cannot derive(Default): field does not have a default value
+ --> tests/ui/derives/cannot_derive_default_enum_field.rs:8:10
+  |
+8 |     V1 { value: u64 },
+  |          ^^^^^

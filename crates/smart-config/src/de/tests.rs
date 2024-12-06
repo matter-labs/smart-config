@@ -15,8 +15,8 @@ use crate::{
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, test_deserialize_missing,
         wrap_into_value, CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting,
-        DefaultingConfig, DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig, SimpleEnum,
-        TestParam,
+        DefaultingConfig, DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig,
+        RenamedEnumConfig, SimpleEnum, TestParam,
     },
     value::{Pointer, Value, ValueOrigin},
     ByteSize, DescribeConfig, Environment, ParseError,
@@ -165,6 +165,29 @@ fn parsing_enum_config_unknown_tag() {
     assert_eq!(err.path(), "type");
     assert_eq!(err.config().ty, EnumConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "type");
+}
+
+#[test]
+fn parsing_enum_config_with_renamed_variants() {
+    let json = config!("version": "v0");
+    let config: RenamedEnumConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config, RenamedEnumConfig::V0);
+
+    let json = config!("version": "v1", "int": 2);
+    let config: RenamedEnumConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config, RenamedEnumConfig::V1 { int: 2 });
+
+    let json = config!("version": "previous", "int": 3);
+    let config: RenamedEnumConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config, RenamedEnumConfig::V1 { int: 3 });
+
+    let json = config!("version": "v2", "str": "!!");
+    let config: RenamedEnumConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config, RenamedEnumConfig::V2 { str: "!!".into() });
+
+    let json = config!("str": "??");
+    let config: RenamedEnumConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config, RenamedEnumConfig::V2 { str: "??".into() });
 }
 
 #[test]

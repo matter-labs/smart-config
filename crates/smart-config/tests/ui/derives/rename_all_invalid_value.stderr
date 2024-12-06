@@ -1,0 +1,5 @@
+error: Invalid case specified; should be one of: lowercase, UPPERCASE, camelCase, snake_case, SCREAMING_SNAKE_CASE, kebab-case, SCREAMING-KEBAB-CASE
+ --> tests/ui/derives/rename_all_invalid_value.rs:4:40
+  |
+4 | #[config(tag = "version", rename_all = "unknown")]
+  |                                        ^^^^^^^^^

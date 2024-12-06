@@ -1,0 +1,5 @@
+error: cannot specify both `nest` and `flatten` for config
+  --> tests/ui/derives/nest_and_flatten_config.rs:10:14
+   |
+10 |     #[config(nest, flatten)]
+   |              ^^^^

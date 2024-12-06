@@ -1,5 +1,12 @@
 # Smart Schema-driven Layered Configuration System
 
+[![Build status](https://github.com/matter-labs/smart-config/actions/workflows/ci.yml/badge.svg)](https://github.com/matter-labs/smart-config/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue)](https://github.com/matter-labs/smart-config#license)
+![rust 1.78+ required](https://img.shields.io/badge/rust-1.78+-blue.svg?label=Required%20Rust)
+
+**Docs:**
+[![crate docs (main)](https://img.shields.io/badge/main-yellow.svg?label=docs)](https://matter-labs.github.io/smart-config/smart_config/)
+
 `smart-config` is a schema-driven layered configuration system with support of multiple configuration formats.
 
 The task solved by the library is merging configuration input from a variety of prioritized sources

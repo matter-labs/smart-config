@@ -1,0 +1,18 @@
+error[E0277]: `()` param cannot be deserialized
+ --> tests/ui/derives/unsupported_param_type.rs:5:12
+  |
+5 |     field: (),
+  |            ^^ the trait `WellKnown` is not implemented for `()`
+  |
+  = note: Add #[config(with = _)] attribute to specify deserializer to use
+  = note: If `()` is a config, add #[config(nest)] or #[config(flatten)]
+  = help: the following other types implement trait `WellKnown`:
+            BTreeMap<K, V>
+            BTreeSet<T>
+            HashMap<K, V, S>
+            HashSet<T, S>
+            NonZero<i16>
+            NonZero<i32>
+            NonZero<i64>
+            NonZero<i8>
+          and $N others

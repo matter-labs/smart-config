@@ -1,0 +1,5 @@
+error: `tag` attribute must not be used on struct configs
+ --> tests/ui/derives/tag_on_struct.rs:4:16
+  |
+4 | #[config(tag = "kind")]
+  |                ^^^^^^
