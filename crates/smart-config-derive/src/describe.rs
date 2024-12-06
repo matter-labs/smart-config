@@ -48,6 +48,7 @@ impl ConfigField {
         cr: &proc_macro2::TokenStream,
         meta_mod: &proc_macro2::TokenStream,
     ) -> proc_macro2::TokenStream {
+        let name = &self.name;
         let name_span = self.name.span();
         let aliases = self.attrs.aliases.iter();
         let help = &self.docs;
@@ -68,29 +69,31 @@ impl ConfigField {
         };
 
         let aliases_validation = aliases.clone().map(
-            |alias| quote_spanned!(name_span=> #meta_mod::validation::assert_param_name(#alias);),
+            |alias| quote_spanned!(alias.span()=> #meta_mod::validation::assert_param_name(#alias);),
         );
         let deserializer = self.deserializer(cr);
 
         quote_spanned! {name_span=> {
-            const _: () = {
-                #meta_mod::validation::assert_param_name(#param_name);
-                #(#aliases_validation)*
-            };
+            #meta_mod::validation::assert_param_name(#param_name);
+            #(#aliases_validation)*
+
+            let deserializer = #deserializer;
 
             #meta_mod::ParamMetadata {
                 name: #param_name,
                 aliases: &[#(#aliases,)*],
                 help: #help,
-                ty: #meta_mod::RustType::of::<#ty>(#ty_in_code),
-                expecting: const { #cr::de::extract_expected_types::<#ty, _>(&#deserializer) },
-                deserializer: const { &#cr::de::Erased::<#ty, _>::new(#deserializer) },
+                rust_field_name: ::core::stringify!(#name),
+                rust_type: #meta_mod::RustType::of::<#ty>(#ty_in_code),
+                expecting: #cr::de::extract_expected_types::<#ty, _>(&deserializer),
+                deserializer: &#cr::de::Erased::<#ty, _>::new(deserializer),
                 default_value: #default_value,
             }
         }}
     }
 
     fn describe_nested_config(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let name = &self.name;
         let ty = &self.ty;
         let config_name = if self.attrs.flatten {
             String::new()
@@ -101,6 +104,7 @@ impl ConfigField {
         quote_spanned! {self.name.span()=>
             #cr::metadata::NestedConfigMetadata {
                 name: #config_name,
+                rust_field_name: ::core::stringify!(#name),
                 meta: &<#ty as #cr::DescribeConfig>::DESCRIPTION,
             }
         }
@@ -155,6 +159,10 @@ impl ConfigContainer {
                     nested_configs: &[#(#nested_configs,)*],
                 };
             }
+
+            const _: () = {
+                <#name as #cr::DescribeConfig>::DESCRIPTION.assert_valid();
+            };
         }
     }
 

@@ -1,10 +1,11 @@
-use std::{collections::BTreeSet, marker::PhantomData, mem, sync::Arc};
+use std::{collections::BTreeSet, iter, marker::PhantomData, sync::Arc};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
+#[cfg(doc)]
+use crate::metadata::BasicTypes;
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
-    metadata::{BasicTypes, ConfigMetadata},
-    schema::{Alias, ConfigRef, ConfigSchema},
+    schema::{ConfigRef, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseError, ParseErrors,
 };
@@ -37,6 +38,11 @@ pub trait ConfigSource {
 
 /// Configuration repository containing zero or more [configuration sources](ConfigSource).
 /// Sources are preprocessed and merged according to the provided [`ConfigSchema`].
+///
+/// # Merging sources
+///
+/// [`Self::with()`] merges a new source into this repo. The new source has higher priority and will overwrite
+/// values defined in old sources, including via parameter aliases.
 ///
 /// # Type coercion
 ///
@@ -113,60 +119,26 @@ impl<'a> ConfigRepository<'a> {
     #[must_use]
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
         let source_origin = source.origin();
-        match source.into_contents() {
-            ConfigContents::KeyValue(mut kv) => {
+        let mut source_value = match source.into_contents() {
+            ConfigContents::KeyValue(kv) => {
+                let mut value = WithOrigin {
+                    inner: Value::Object(Map::default()),
+                    origin: source_origin.clone(),
+                };
                 for &object_ptr in self.all_prefixes_with_aliases.iter().rev() {
-                    self.merged
-                        .copy_key_value_entries(object_ptr, &source_origin, &mut kv);
+                    value.copy_key_value_entries(object_ptr, &source_origin, &kv);
                 }
+                value
             }
-            ConfigContents::Hierarchical(map) => {
-                self.merged.merge(WithOrigin {
-                    inner: Value::Object(map),
-                    origin: Arc::default(), // will not be used
-                });
-            }
-        }
+            ConfigContents::Hierarchical(map) => WithOrigin {
+                inner: Value::Object(map),
+                origin: source_origin,
+            },
+        };
 
-        // Copy all globally aliased values.
-        for (prefix, config_data) in self.schema.iter() {
-            for alias in &config_data.aliases {
-                self.merged.merge_alias(prefix, alias);
-            }
-        }
-
-        // Copy all locally aliased values.
-        for (prefix, config_data) in self.schema.iter() {
-            let Some(config_object) = self.merged.get_mut(prefix) else {
-                continue;
-            };
-            let Value::Object(config_object) = &mut config_object.inner else {
-                // FIXME: is it possible to break invariants (e.g., overwrite objects at mounting points)?
-                unreachable!();
-            };
-
-            for param in config_data.metadata.params {
-                if config_object.contains_key(param.name) {
-                    continue;
-                }
-
-                for &alias in param.aliases {
-                    if let Some(alias_value) = config_object.get(alias).cloned() {
-                        config_object.insert(param.name.to_owned(), alias_value);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Normalize types of all copied values. At this point we only care about canonical names,
-        // since any aliases were copied on the previous step.
-        for (prefix, config_data) in self.schema.iter() {
-            if let Some(config_map) = self.merged.get_mut(prefix) {
-                config_map.coerce_value_types(config_data.metadata);
-            }
-        }
-
+        source_value.preprocess_source(self.schema);
+        self.merged
+            .guided_merge(source_value, self.schema, Pointer(""));
         self
     }
 
@@ -227,6 +199,72 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
 }
 
 impl WithOrigin {
+    fn preprocess_source(&mut self, schema: &ConfigSchema) {
+        self.copy_aliased_values(schema);
+    }
+
+    fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
+        for (prefix, config_data) in schema.iter() {
+            let canonical_map = match self.get(prefix).map(|val| &val.inner) {
+                Some(Value::Object(map)) => Some(map),
+                Some(_) => continue, // TODO: log warning
+                None => None,
+            };
+
+            let alias_maps: Vec<_> = config_data
+                .aliases
+                .iter()
+                .filter_map(|&alias| {
+                    let val = self.get(alias)?;
+                    Some((val.inner.as_object()?, &val.origin))
+                })
+                .collect();
+
+            let mut new_values = vec![];
+            let mut new_map_origin = None;
+            for param in config_data.metadata.params {
+                if canonical_map.map_or(false, |map| map.contains_key(param.name)) {
+                    continue;
+                }
+
+                // Create a prioritized iterator of all candidates
+                let local_candidates = canonical_map
+                    .into_iter()
+                    .flat_map(|map| param.aliases.iter().map(move |&alias| (map, alias, None)));
+                let all_names = iter::once(param.name).chain(param.aliases.iter().copied());
+                let alias_candidates = alias_maps.iter().flat_map(|&(map, origin)| {
+                    all_names.clone().map(move |name| (map, name, Some(origin)))
+                });
+
+                // Find the value alias among the candidates
+                let maybe_value_and_origin = local_candidates
+                    .chain(alias_candidates)
+                    .find_map(|(map, name, origin)| Some((map.get(name)?, origin)));
+                if let Some((value, origin)) = maybe_value_and_origin {
+                    new_values.push((param.name.to_owned(), value.clone()));
+                    if new_map_origin.is_none() {
+                        new_map_origin = origin.cloned();
+                    }
+                }
+            }
+
+            if new_values.is_empty() {
+                continue;
+            }
+
+            let new_map_origin = new_map_origin.map(|source| {
+                Arc::new(ValueOrigin::Synthetic {
+                    source,
+                    transform: format!("copy to '{prefix}' per aliasing rules"),
+                })
+            });
+            // `unwrap()` below is safe: if there is no `current_map`, `new_values` are obtained from the alias maps,
+            // meaning that `new_map_origin` has been set.
+            self.ensure_object(prefix, |_| new_map_origin.clone().unwrap())
+                .extend(new_values);
+        }
+    }
+
     /// Ensures that there is an object (possibly empty) at the specified location.
     fn ensure_object(
         &mut self,
@@ -277,20 +315,20 @@ impl WithOrigin {
         &mut self,
         at: Pointer<'_>,
         source_origin: &Arc<ValueOrigin>,
-        entries: &mut Map<String>,
+        entries: &Map<String>,
     ) {
-        let matching_entries: Vec<_> = Self::take_matching_kv_entries(entries, at)
-            .into_iter()
-            .map(|(key, value)| {
-                (
-                    key,
-                    WithOrigin {
-                        inner: Value::String(value.inner),
-                        origin: value.origin,
-                    },
-                )
-            })
-            .collect();
+        let env_prefix = Self::kv_prefix(at.0);
+        let matching_entries = entries.iter().filter_map(|(name, value)| {
+            let name_suffix = name.strip_prefix(&env_prefix)?;
+            Some((
+                name_suffix.to_owned(),
+                WithOrigin {
+                    inner: Value::String(value.inner.clone()),
+                    origin: value.origin.clone(),
+                },
+            ))
+        });
+        let matching_entries: Vec<_> = matching_entries.collect();
 
         if matching_entries.is_empty() {
             return;
@@ -303,24 +341,6 @@ impl WithOrigin {
             .extend(matching_entries);
     }
 
-    fn take_matching_kv_entries(
-        from: &mut Map<String>,
-        prefix: Pointer,
-    ) -> Vec<(String, WithOrigin<String>)> {
-        let mut matching_entries = vec![];
-        let env_prefix = Self::kv_prefix(prefix.0);
-        from.retain(|name, value| {
-            if let Some(name_suffix) = name.strip_prefix(&env_prefix) {
-                let value = mem::take(value);
-                matching_entries.push((name_suffix.to_owned(), value));
-                false
-            } else {
-                true
-            }
-        });
-        matching_entries
-    }
-
     /// Converts a logical prefix like `api.limits` to `api_limits_`.
     fn kv_prefix(prefix: &str) -> String {
         let mut prefix = prefix.replace('.', "_");
@@ -330,88 +350,22 @@ impl WithOrigin {
         prefix
     }
 
-    fn merge_alias(&mut self, target_prefix: Pointer<'_>, alias: &Alias<()>) {
-        let map = self
-            .get(target_prefix)
-            .and_then(|val| val.inner.as_object());
-        let Some((alias_map, alias_origin)) = self
-            .get(alias.prefix)
-            .and_then(|val| Some((val.inner.as_object()?, &val.origin)))
-        else {
-            return; // No values at the alias
-        };
-
-        let new_entries = alias.param_names.iter().filter_map(|&param_name| {
-            if map.map_or(false, |map| map.contains_key(param_name)) {
-                None // Variable is already set
-            } else {
-                let value = alias_map.get(param_name).cloned()?;
-                Some((param_name.to_owned(), value))
-            }
-        });
-        let new_entries: Vec<_> = new_entries.collect();
-        if new_entries.is_empty() {
-            return;
-        }
-
-        let origin = Arc::new(ValueOrigin::Synthetic {
-            source: alias_origin.clone(),
-            transform: format!(
-                "copy of '{}' to '{target_prefix}' per aliasing rules",
-                alias.prefix
-            ),
-        });
-        self.ensure_object(target_prefix, |_| origin.clone())
-            .extend(new_entries);
-    }
-
-    /// This is necessary to prevent `deserialize_any` errors
-    // TODO: log coercion errors
-    fn coerce_value_types(&mut self, metadata: &ConfigMetadata) {
-        const STRUCTURED: BasicTypes = BasicTypes::ARRAY.or(BasicTypes::OBJECT);
-
-        let Value::Object(map) = &mut self.inner else {
-            unreachable!("expected an object due to previous preprocessing steps");
-        };
-
-        for param in metadata.params {
-            if let Some(value) = map.get_mut(param.name) {
-                let Value::String(str) = &value.inner else {
-                    continue;
-                };
-
-                // Attempt to transform the type to the expected type
-                let expecting = param.expecting;
-                match expecting {
-                    // We intentionally use exact comparisons; if a type supports multiple primitive representations,
-                    // we do nothing.
-                    BasicTypes::BOOL => {
-                        if let Ok(bool_value) = str.parse::<bool>() {
-                            value.inner = Value::Bool(bool_value);
-                        }
+    /// Deep merge stopped at params (i.e., params are always merged atomically).
+    fn guided_merge(&mut self, overrides: Self, schema: &ConfigSchema, current_path: Pointer<'_>) {
+        match (&mut self.inner, overrides.inner) {
+            (Value::Object(this), Value::Object(other)) if !schema.contains_param(current_path) => {
+                for (key, value) in other {
+                    if let Some(existing_value) = this.get_mut(&key) {
+                        let child_path = current_path.join(&key);
+                        existing_value.guided_merge(value, schema, Pointer(&child_path));
+                    } else {
+                        this.insert(key, value);
                     }
-                    BasicTypes::INTEGER | BasicTypes::FLOAT => {
-                        if let Ok(number) = str.parse::<serde_json::Number>() {
-                            value.inner = Value::Number(number);
-                        }
-                    }
-
-                    ty if STRUCTURED.contains(ty) => {
-                        let Ok(val) = serde_json::from_str::<serde_json::Value>(str) else {
-                            continue;
-                        };
-                        let is_value_supported = (val.is_array() && ty.contains(BasicTypes::ARRAY))
-                            || (val.is_object() && ty.contains(BasicTypes::OBJECT));
-                        if is_value_supported {
-                            let root_origin = Arc::new(ValueOrigin::Synthetic {
-                                source: value.origin.clone(),
-                                transform: "parsed JSON string".into(),
-                            });
-                            *value = Json::map_value(val, &root_origin, String::new());
-                        }
-                    }
-                    _ => { /* Do nothing */ }
                 }
+            }
+            (this, value) => {
+                *this = value;
+                self.origin = overrides.origin;
             }
         }
     }

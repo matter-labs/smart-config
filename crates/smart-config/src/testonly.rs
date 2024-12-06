@@ -84,8 +84,8 @@ impl NestedConfig {
 #[config(crate = crate)]
 pub(crate) struct ConfigWithNesting {
     pub value: u32,
-    #[config(default)]
-    pub not_merged: String,
+    #[config(default, alias = "alias")]
+    pub merged: String,
     #[config(nest)]
     pub nested: NestedConfig,
 }
