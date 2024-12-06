@@ -1,15 +1,20 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use assert_matches::assert_matches;
 
 use super::*;
 use crate::{
+    metadata::SizeUnit,
     testing,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, CompoundConfig,
-        ConfigWithNesting, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum,
-        ValueCoercingConfig,
+        ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig,
+        NestedConfig, SimpleEnum, ValueCoercingConfig,
     },
+    ByteSize,
 };
 
 #[test]
@@ -564,4 +569,254 @@ fn merging_params_is_still_atomic_with_prefixes() {
     assert_eq!(config.param.int, 3);
     assert_eq!(config.param.string, "!!");
     assert!(!config.param.bool);
+}
+
+#[test]
+fn nesting_key_value_map_to_multiple_locations() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<KvTestConfig>("").unwrap();
+
+    let mut repo = ConfigRepository::new(&schema);
+    let config: KvTestConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested_int, -3);
+    assert_eq!(config.nested.int, 12);
+
+    let env = Environment::from_iter("", [("NESTED_INT", "123")]);
+    repo = repo.with(env);
+    let config: KvTestConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested_int, 123);
+    assert_eq!(config.nested.int, 123);
+}
+
+#[test]
+fn nesting_for_object_param() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let env = Environment::from_iter("", [("TEST_PARAM_INT", "123"), ("TEST_PARAM_STRING", "??")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+
+    assert_eq!(
+        repo.merged().get(Pointer("test.param_int")).unwrap().inner,
+        Value::String("123".into())
+    );
+
+    let object = repo.merged().get(Pointer("test.param")).unwrap();
+    assert_matches!(
+        object.origin.as_ref(),
+        ValueOrigin::Synthetic { transform, .. } if transform.contains("object param")
+    );
+    assert_matches!(
+        &object.inner,
+        Value::Object(obj) if obj.len() == 2 && obj.contains_key("int") && obj.contains_key("string")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 123);
+    assert_eq!(config.param.string, "??");
+}
+
+#[test]
+fn testing_for_object_param_with_structured_source() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let json = config!(
+        "test.param_int": 123,
+        "test.param.string": "??",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+
+    let object = repo.merged().get(Pointer("test.param")).unwrap();
+    assert_matches!(
+        &object.inner,
+        Value::Object(obj) if obj.len() == 2 && obj.contains_key("int") && obj.contains_key("string")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 123);
+    assert_eq!(config.param.string, "??");
+}
+
+#[test]
+fn nesting_not_applied_if_original_param_is_defined() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_PARAM", r#"{ "int": 42 }"#),
+            ("TEST_PARAM_INT", "123"),
+        ],
+    );
+    let repo = ConfigRepository::new(&schema).with(env);
+
+    assert_eq!(
+        repo.merged().get(Pointer("test.param_int")).unwrap().inner,
+        Value::String("123".into())
+    );
+    let val = &repo.merged().get(Pointer("test.param")).unwrap().inner;
+    assert_eq!(*val, Value::String(r#"{ "int": 42 }"#.into()));
+}
+
+#[test]
+fn nesting_does_not_override_existing_values() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let json = config!(
+        "test.param_int": 123,
+        "test.param_string": "!!",
+        "test.param.string": "??",
+    );
+    let repo = ConfigRepository::new(&schema).with(json);
+
+    let object = repo.merged().get(Pointer("test.param")).unwrap();
+    assert_matches!(
+        &object.inner,
+        Value::Object(obj) if obj.len() == 2 && obj.contains_key("int") && obj.contains_key("string")
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.param.int, 123);
+    assert_eq!(config.param.string, "??");
+}
+
+#[test]
+fn nesting_with_duration_param() {
+    let json = config!("array": [4, 5], "long_dur_sec": 30);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(30));
+
+    let json = config!("array": [4, 5], "long_dur_hours": "4");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(3_600 * 4));
+
+    let json = config!("array": [4, 5], "long_dur": "3min");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(60 * 3));
+
+    let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", 1)]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(86_400));
+}
+
+#[test]
+fn nesting_with_byte_size_param() {
+    let json = config!("array": [4, 5], "disk_size_mb": 64);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size.unwrap(), ByteSize::new(64, SizeUnit::MiB));
+
+    let json = config!("array": [4, 5], "disk_size": "2 GiB");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size.unwrap(), ByteSize::new(2, SizeUnit::GiB));
+
+    let json = config!("array": [4, 5], "disk_size": HashMap::from([("kib", 512)]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size.unwrap(), ByteSize::new(512, SizeUnit::KiB));
+}
+
+#[test]
+fn nesting_with_duration_param_errors() {
+    fn assert_error(err: &ParseErrors) -> &ParseError {
+        assert_eq!(err.len(), 1);
+        let err = err.first();
+        assert_eq!(err.path(), "long_dur");
+        assert_eq!(err.param().unwrap().name, "long_dur");
+        err
+    }
+
+    let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR_SEC", "what")]);
+    let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
+    let err = assert_error(&err);
+    assert_matches!(err.origin(), ValueOrigin::Path { path, ..} if path == "LONG_DUR_SEC");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("what"), "{inner}");
+
+    let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR_WHAT", "123")]);
+    let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
+    let err = assert_error(&err);
+    assert_matches!(err.origin(), ValueOrigin::Path { path, ..} if path == "LONG_DUR_WHAT");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("unknown variant"), "{inner}");
+
+    let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR", "123 years")]);
+    let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
+    let err = assert_error(&err);
+    assert_matches!(err.origin(), ValueOrigin::Path { path, ..} if path == "LONG_DUR");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("expected duration unit"), "{inner}");
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("ARRAY", "4,5"),
+            ("LONG_DUR_SECS", "12"), // ambiguous qualifier
+            ("LONG_DUR_MIN", "1"),
+        ],
+    );
+    let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
+    let err = assert_error(&err);
+    assert_matches!(err.origin(), ValueOrigin::Synthetic { .. });
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid type"), "{inner}");
+}
+
+#[test]
+fn merging_duration_params_is_atomic() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ConfigWithComplexTypes>("test").unwrap();
+
+    // Base case: the duration is defined only in overrides
+    let base = config!("test.array": [4, 5]);
+    let overrides = config!("test.long_dur": "3 secs");
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    assert_matches!(
+        &repo.merged().get(Pointer("test.long_dur")).unwrap().inner,
+        Value::String(_)
+    );
+
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(3));
+
+    // Structured override
+    let base = config!("test.array": [4, 5], "test.long_dur": "3 secs");
+    let overrides = config!("test.long_dur": HashMap::from([("ms", 500)]));
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    assert_matches!(
+        &repo.merged().get(Pointer("test.long_dur")).unwrap().inner,
+        Value::Object(_)
+    );
+
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_millis(500));
+
+    // Prefixed override
+    let base = config!("test.array": [4, 5], "test.long_dur": "3 secs");
+    let overrides = Environment::from_iter("", [("TEST_LONG_DUR_MIN", "1")]);
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
+    assert_matches!(
+        &repo.merged().get(Pointer("test.long_dur")).unwrap().inner,
+        Value::Object(_)
+    );
+
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(60));
+
+    // Prefixed base and override
+    let base = config!("test.array": [4, 5], "test.long_dur_secs": "3");
+    let mut repo = ConfigRepository::new(&schema).with(base);
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(3));
+
+    let overrides = Environment::from_iter("", [("TEST_LONG_DUR_MIN", "2")]);
+    repo = repo.with(overrides);
+    assert_matches!(
+        &repo.merged().get(Pointer("test.long_dur")).unwrap().inner,
+        Value::Object(_)
+    );
+
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(120));
 }

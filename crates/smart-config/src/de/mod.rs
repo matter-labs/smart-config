@@ -29,10 +29,15 @@
 //!
 //! ## Durations and byte sizes
 //!
-//! [`TimeUnit`](crate::metadata::TimeUnit) and [`SizeUnit`](crate::metadata::SizeUnit) can deserialize [`Duration`]s
-//! and [`ByteSize`](crate::ByteSize)s, respectively. See their docs for more details.
+//! [`Duration`]s and [`ByteSize`]s can be deserialized in two ways:
+//!
+//! - By default, they are deserialized from an integer + unit either encapsulated in a string like "200ms" or
+//!   in a single-key object like `{ "mb": 4 }`. See [`WithUnit`] for more details.
+//! - Alternatively, [`TimeUnit`](crate::metadata::TimeUnit) and [`SizeUnit`](crate::metadata::SizeUnit) can be used
+//!   on `Duration`s and `ByteSize`s, respectively.
 //!
 //! [`Duration`]: std::time::Duration
+//! [`ByteSize`]: crate::ByteSize
 
 use std::sync::Arc;
 
@@ -47,6 +52,7 @@ pub use self::{
     param::{
         Delimited, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault,
     },
+    units::WithUnit,
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig},
@@ -62,6 +68,7 @@ mod param;
 mod primitive_types_impl;
 #[cfg(test)]
 mod tests;
+mod units;
 
 #[doc(hidden)] // used by proc macros
 pub const fn extract_expected_types<T, De: DeserializeParam<T>>(_: &De) -> BasicTypes {

@@ -9,10 +9,10 @@ error[E0277]: `()` param cannot be deserialized
   = help: the following other types implement trait `WellKnown`:
             BTreeMap<K, V>
             BTreeSet<T>
+            Duration
             HashMap<K, V, S>
             HashSet<T, S>
             NonZero<i16>
             NonZero<i32>
             NonZero<i64>
-            NonZero<i8>
           and $N others
