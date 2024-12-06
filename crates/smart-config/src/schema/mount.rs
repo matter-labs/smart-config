@@ -90,7 +90,7 @@ impl MountingPoints {
     pub(super) fn by_kv_path<'s>(
         &'s self,
         kv_path: &'s str,
-    ) -> impl Iterator<Item = (Pointer<'_>, &MountingPoint)> + 's {
+    ) -> impl Iterator<Item = (Pointer<'s>, &'s MountingPoint)> + 's {
         let kv_paths = self
             .kv_paths
             // KV path is lexicographically greatest among all equivalent paths, hence using it as the upper bound

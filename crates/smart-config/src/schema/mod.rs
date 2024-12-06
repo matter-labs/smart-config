@@ -109,7 +109,7 @@ impl ConfigSchema {
     pub(crate) fn params_with_kv_path<'s>(
         &'s self,
         kv_path: &'s str,
-    ) -> impl Iterator<Item = (Pointer<'_>, BasicTypes)> + 's {
+    ) -> impl Iterator<Item = (Pointer<'s>, BasicTypes)> + 's {
         self.mounting_points
             .by_kv_path(kv_path)
             .filter_map(|(path, mount)| {
