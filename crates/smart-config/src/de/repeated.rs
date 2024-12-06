@@ -80,7 +80,8 @@ impl<De> Repeated<De> {
         param: &'static ParamMetadata,
     ) -> Result<C, ErrorWithOrigin>
     where
-        K: FromStr<Err: fmt::Display>,
+        K: FromStr,
+        K::Err: fmt::Display,
         De: DeserializeParam<V>,
         C: FromIterator<(K, V)>,
     {
@@ -235,7 +236,8 @@ where
 
 impl<K, V, S, De> DeserializeParam<HashMap<K, V, S>> for Repeated<De>
 where
-    K: 'static + Eq + Hash + FromStr<Err: fmt::Display>,
+    K: 'static + Eq + Hash + FromStr,
+    K::Err: fmt::Display,
     S: 'static + Default + BuildHasher,
     De: DeserializeParam<V>,
 {
@@ -256,7 +258,8 @@ where
 
 impl<K, V, De> DeserializeParam<BTreeMap<K, V>> for Repeated<De>
 where
-    K: 'static + Eq + Ord + FromStr<Err: fmt::Display>,
+    K: 'static + Eq + Ord + FromStr,
+    K::Err: fmt::Display,
     De: DeserializeParam<V>,
 {
     const EXPECTING: BasicTypes = BasicTypes::OBJECT;
@@ -276,7 +279,8 @@ where
 
 impl<K, V, S> WellKnown for HashMap<K, V, S>
 where
-    K: 'static + Eq + Hash + FromStr<Err: fmt::Display>,
+    K: 'static + Eq + Hash + FromStr,
+    K::Err: fmt::Display,
     V: WellKnown,
     S: 'static + Default + BuildHasher,
 {
@@ -286,7 +290,8 @@ where
 
 impl<K, V> WellKnown for BTreeMap<K, V>
 where
-    K: 'static + Eq + Ord + FromStr<Err: fmt::Display>,
+    K: 'static + Eq + Ord + FromStr,
+    K::Err: fmt::Display,
     V: WellKnown,
 {
     type Deserializer = Repeated<V::Deserializer>;
