@@ -10,7 +10,7 @@ use crate::{
     metadata::SizeUnit,
     testing,
     testonly::{
-        extract_env_var_name, extract_json_name, test_deserialize, CompoundConfig,
+        extract_env_var_name, extract_json_name, test_deserialize, ComposedConfig, CompoundConfig,
         ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig,
         NestedConfig, SimpleEnum, ValueCoercingConfig,
     },
@@ -819,4 +819,88 @@ fn merging_duration_params_is_atomic() {
 
     let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(120));
+}
+
+#[test]
+fn nesting_with_composed_deserializers() {
+    let json = config!(
+        "arrays": "[[1, 2], [3, 4], [5, 6]]",
+        "durations": ["1 sec", "3 min"],
+        "delimited_durations": "3ms,5sec,2hr",
+        "map_of_sizes_small": "3 KiB",
+        "map_of_sizes_large": "5 MiB",
+    );
+    let config: ComposedConfig = testing::test(json).unwrap();
+    assert_eq!(config.arrays, HashSet::from([[1, 2], [3, 4], [5, 6]]));
+    assert_eq!(
+        config.durations,
+        [Duration::from_secs(1), Duration::from_secs(3 * 60)]
+    );
+    assert_eq!(
+        config.delimited_durations,
+        [
+            Duration::from_millis(3),
+            Duration::from_secs(5),
+            Duration::from_secs(2 * 3_600)
+        ]
+    );
+    assert_eq!(
+        config.map_of_sizes,
+        HashMap::from([
+            ("small".to_owned(), ByteSize(3 << 10)),
+            ("large".to_owned(), ByteSize(5 << 20)),
+        ])
+    );
+}
+
+#[test]
+fn nesting_with_composed_deserializers_errors() {
+    let json = config!("arrays": "[[1, 2], [3, 4], [-5, 6]]");
+    let err = testing::test::<ComposedConfig>(json).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "arrays.2.0");
+    let origin = err.origin().to_string();
+    assert!(
+        origin.ends_with("-> path 'arrays' -> parsed JSON string -> path '2.0'"),
+        "{origin}"
+    );
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid value"), "{inner}");
+
+    let json = config!("durations": [1]);
+    let err = testing::test::<ComposedConfig>(json).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "durations.0");
+    let origin = err.origin().to_string();
+    assert!(origin.ends_with("-> path 'durations.0'"), "{origin}");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid type"), "{inner}");
+
+    let json = config!("map_of_sizes_small": "20 gajillion bytes");
+    let err = testing::test::<ComposedConfig>(json).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "map_of_sizes.small");
+    let origin = err.origin().to_string();
+    assert!(origin.ends_with("-> path 'map_of_sizes_small'"), "{origin}");
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("invalid value") && inner.contains("gajillion"),
+        "{inner}"
+    );
+
+    let json = config!("map_of_sizes": r#"{ "small": 3 }"#);
+    let err = testing::test::<ComposedConfig>(json).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "map_of_sizes.small");
+    let origin = err.origin().to_string();
+    assert!(
+        origin.ends_with("-> path 'map_of_sizes' -> parsed JSON string -> path 'small'"),
+        "{origin}"
+    );
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid type"), "{inner}");
 }
