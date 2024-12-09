@@ -145,6 +145,63 @@ fn parsing_compound_config_with_schema() {
             map: HashMap::new(),
         }
     );
+    assert_eq!(config.nested_opt, None);
+}
+
+fn test_parsing_compound_config_with_schema_error(json: Json, expected_err_path: &str) {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<CompoundConfig>("").unwrap();
+    let repo = ConfigRepository::new(&schema).with(json);
+    let err = repo
+        .single::<CompoundConfig>()
+        .unwrap()
+        .parse()
+        .unwrap_err();
+    assert_eq!(err.len(), 1, "{err:?}");
+    let err = err.first();
+    assert_eq!(err.path(), expected_err_path);
+    let inner = err.inner().to_string();
+    assert!(inner.contains("expected config object"), "{inner}");
+}
+
+#[test]
+fn parsing_compound_config_with_schema_error() {
+    let json = config!(
+        "nested": 123,
+        "renamed": "second",
+    );
+    test_parsing_compound_config_with_schema_error(json, "nested");
+
+    let json = config!(
+        "nested": "what",
+        "renamed": "second",
+    );
+    test_parsing_compound_config_with_schema_error(json, "nested");
+
+    let json = config!(
+        "nested": (),
+        "renamed": "second",
+    );
+    test_parsing_compound_config_with_schema_error(json, "nested");
+
+    let json = config!(
+        "nested": false,
+        "renamed": "second",
+    );
+    test_parsing_compound_config_with_schema_error(json, "nested");
+
+    let json = config!(
+        "nested": [1, 2, 3],
+        "renamed": "second",
+    );
+    test_parsing_compound_config_with_schema_error(json, "nested");
+
+    let json = config!(
+        "nested.renamed": "first",
+        "nested_opt": false,
+        "renamed": "second",
+    );
+    test_parsing_compound_config_with_schema_error(json, "nested_opt");
 }
 
 #[test]

@@ -110,7 +110,15 @@ impl<'a> DeserializeContext<'a> {
             de_options: self.de_options,
             root_value: self.root_value,
             path: Pointer(&self.path).join(path),
-            patched_current_value: None,
+            patched_current_value: self.patched_current_value.and_then(|val| {
+                if path.is_empty() {
+                    Some(val)
+                } else if let Value::Object(object) = &val.inner {
+                    object.get(path)
+                } else {
+                    None
+                }
+            }),
             current_config: self.current_config,
             location_in_config,
             errors: self.errors,
@@ -202,6 +210,22 @@ impl<'a> DeserializeContext<'a> {
             location_in_config: self.location_in_config,
         });
     }
+
+    pub(crate) fn preprocess_and_deserialize<T: DeserializeConfig>(
+        mut self,
+    ) -> Result<T, DeserializeConfigError> {
+        // It is technically possible to coerce a value to an object here, but this would make merging sources not obvious:
+        // should a config specified as a string override / be overridden atomically? (Probably not, but if so, it needs to be coerced to an object
+        // before the merge, potentially recursively.)
+
+        if let Some(val) = self.current_value() {
+            if !matches!(&val.inner, Value::Object(_)) {
+                self.push_error(val.invalid_type("config object"));
+                return Err(DeserializeConfigError::new());
+            }
+        }
+        T::deserialize_config(self)
+    }
 }
 
 /// Methods used in proc macros. Not a part of public API.
@@ -218,7 +242,7 @@ impl DeserializeContext<'_> {
                 return Ok(default());
             }
         }
-        T::deserialize_config(child_ctx)
+        child_ctx.preprocess_and_deserialize()
     }
 
     pub fn deserialize_nested_config_opt<T: DeserializeConfig>(
@@ -229,7 +253,7 @@ impl DeserializeContext<'_> {
         if child_ctx.current_value().is_none() {
             return Ok(None);
         }
-        T::deserialize_config(child_ctx).map(Some)
+        child_ctx.preprocess_and_deserialize().map(Some)
     }
 
     pub fn deserialize_param<T: 'static>(

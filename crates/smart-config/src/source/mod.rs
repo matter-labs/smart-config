@@ -172,7 +172,7 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
             &mut errors,
         );
 
-        C::deserialize_config(context).map_err(|_| {
+        context.preprocess_and_deserialize::<C>().map_err(|_| {
             if errors.len() == 0 {
                 errors.push(ParseError::generic(prefix.to_owned(), metadata));
             }

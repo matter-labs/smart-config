@@ -23,6 +23,34 @@ pub struct DeserializerOptions {
     pub coerce_shouting_variant_names: bool,
 }
 
+impl WithOrigin {
+    #[cold]
+    pub(super) fn invalid_type(&self, expected: &str) -> ErrorWithOrigin {
+        let actual = match &self.inner {
+            Value::Null => de::Unexpected::Unit,
+            Value::Bool(value) => de::Unexpected::Bool(*value),
+            Value::Number(value) => {
+                if let Some(value) = value.as_u64() {
+                    de::Unexpected::Unsigned(value)
+                } else if let Some(value) = value.as_i64() {
+                    de::Unexpected::Signed(value)
+                } else if let Some(value) = value.as_f64() {
+                    de::Unexpected::Float(value)
+                } else {
+                    de::Unexpected::Other("number")
+                }
+            }
+            Value::String(s) => de::Unexpected::Str(s),
+            Value::Array(_) => de::Unexpected::Seq,
+            Value::Object(_) => de::Unexpected::Map,
+        };
+        ErrorWithOrigin::json(
+            DeError::invalid_type(actual, &expected),
+            self.origin.clone(),
+        )
+    }
+}
+
 macro_rules! parse_int_value {
     ($($ty:ident => $method:ident,)*) => {
         $(
@@ -69,27 +97,8 @@ impl<'a> ValueDeserializer<'a> {
         ErrorWithOrigin::json(err, self.value.origin.clone())
     }
 
-    #[cold]
     pub(super) fn invalid_type(&self, expected: &str) -> ErrorWithOrigin {
-        let actual = match self.value() {
-            Value::Null => de::Unexpected::Unit,
-            Value::Bool(value) => de::Unexpected::Bool(*value),
-            Value::Number(value) => {
-                if let Some(value) = value.as_u64() {
-                    de::Unexpected::Unsigned(value)
-                } else if let Some(value) = value.as_i64() {
-                    de::Unexpected::Signed(value)
-                } else if let Some(value) = value.as_f64() {
-                    de::Unexpected::Float(value)
-                } else {
-                    de::Unexpected::Other("number")
-                }
-            }
-            Value::String(s) => de::Unexpected::Str(s),
-            Value::Array(_) => de::Unexpected::Seq,
-            Value::Object(_) => de::Unexpected::Map,
-        };
-        self.enrich_err(DeError::invalid_type(actual, &expected))
+        self.value.invalid_type(expected)
     }
 
     fn parse_array<'de, V: de::Visitor<'de>>(
