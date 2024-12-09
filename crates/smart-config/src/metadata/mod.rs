@@ -210,6 +210,16 @@ impl TypeQualifiers {
         self.unit = Some(unit);
         self
     }
+
+    /// Gets the description.
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+
+    /// Gets the unit of measurement.
+    pub fn unit(&self) -> Option<UnitOfMeasurement> {
+        self.unit
+    }
 }
 
 impl fmt::Display for TypeQualifiers {

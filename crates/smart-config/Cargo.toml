@@ -8,6 +8,7 @@ license.workspace = true
 keywords.workspace = true
 categories.workspace = true
 readme = "README.md"
+description = "Schema-driven layered configuration system with support of multiple configuration formats"
 
 [dependencies]
 anyhow.workspace = true

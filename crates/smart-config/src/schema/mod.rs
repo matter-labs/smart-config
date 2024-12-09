@@ -1,6 +1,6 @@
 //! Configuration schema.
 
-use std::{any, borrow::Cow, collections::HashMap, io, iter};
+use std::{any, borrow::Cow, collections::HashMap, iter};
 
 use anyhow::Context;
 
@@ -14,8 +14,6 @@ use crate::{
 mod mount;
 #[cfg(test)]
 mod tests;
-
-const INDENT: &str = "    ";
 
 #[derive(Debug, Clone)]
 pub(crate) struct ConfigData {
@@ -43,6 +41,11 @@ impl<'a> ConfigRef<'a> {
     /// Gets the config prefix.
     pub fn prefix(&self) -> &'a str {
         self.prefix
+    }
+
+    /// Gets the config metadata.
+    pub fn metadata(&self) -> &'static ConfigMetadata {
+        self.data.metadata
     }
 
     /// Iterates over all aliases for this config.
@@ -94,16 +97,22 @@ pub struct ConfigSchema {
 
 impl ConfigSchema {
     /// Iterates over all configs with their canonical prefixes.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (Pointer<'_>, &ConfigData)> + '_ {
+    pub(crate) fn iter_ll(&self) -> impl Iterator<Item = (Pointer<'_>, &ConfigData)> + '_ {
         self.configs
             .iter()
             .map(|((_, prefix), data)| (Pointer(prefix), data))
     }
 
-    pub(crate) fn contains_param(&self, at: Pointer<'_>) -> bool {
-        self.mounting_points
-            .get(at.0)
-            .map_or(false, |mount| matches!(mount, MountingPoint::Param { .. }))
+    pub(crate) fn contains_canonical_param(&self, at: Pointer<'_>) -> bool {
+        self.mounting_points.get(at.0).map_or(false, |mount| {
+            matches!(
+                mount,
+                MountingPoint::Param {
+                    is_canonical: true,
+                    ..
+                }
+            )
+        })
     }
 
     pub(crate) fn params_with_kv_path<'s>(
@@ -114,11 +123,19 @@ impl ConfigSchema {
             .by_kv_path(kv_path)
             .filter_map(|(path, mount)| {
                 let expecting = match mount {
-                    MountingPoint::Param { expecting } => *expecting,
+                    MountingPoint::Param { expecting, .. } => *expecting,
                     MountingPoint::Config => return None,
                 };
                 Some((path, expecting))
             })
+    }
+
+    /// Iterates over all configs contained in this schema. A unique key for a config is its type + location;
+    /// i.e., multiple returned refs may have the same config type xor same location (never both).
+    pub fn iter(&self) -> impl Iterator<Item = ConfigRef<'_>> + '_ {
+        self.configs
+            .iter()
+            .map(|((_, prefix), data)| ConfigRef { prefix, data })
     }
 
     /// Lists all prefixes for the specified config. This does not include aliases.
@@ -215,36 +232,6 @@ impl ConfigSchema {
         })
     }
 
-    /// Writes help about this schema to the provided writer. `param_filter` can be used to filter displayed parameters.
-    ///
-    /// # Errors
-    ///
-    /// Propagates I/O errors should they occur when writing to the writer.
-    pub fn write_help(
-        &self,
-        writer: &mut impl io::Write,
-        mut param_filter: impl FnMut(&ParamMetadata) -> bool,
-    ) -> io::Result<()> {
-        for ((_, prefix), config_data) in &self.configs {
-            let filtered_params: Vec<_> = config_data
-                .metadata
-                .params
-                .iter()
-                .filter(|&param| param_filter(param))
-                .collect();
-            if filtered_params.is_empty() {
-                continue;
-            }
-
-            writeln!(writer, "{}\n", config_data.metadata.help)?;
-            for param in filtered_params {
-                Self::write_parameter(writer, prefix, param, config_data)?;
-                writeln!(writer)?;
-            }
-        }
-        Ok(())
-    }
-
     fn all_names<'a>(
         canonical_prefix: &'a str,
         param: &'a ParamMetadata,
@@ -260,39 +247,6 @@ impl ConfigSchema {
             .clone()
             .map(move |name| (canonical_prefix, name));
         local_aliases.chain(global_aliases)
-    }
-
-    fn write_parameter(
-        writer: &mut impl io::Write,
-        prefix: &str,
-        param: &ParamMetadata,
-        config_data: &ConfigData,
-    ) -> io::Result<()> {
-        let all_names = Self::all_names(prefix, param, config_data);
-        for (prefix, name) in all_names {
-            let prefix_sep = if prefix.is_empty() || prefix.ends_with('.') {
-                ""
-            } else {
-                "."
-            };
-            writeln!(writer, "{prefix}{prefix_sep}{name}")?;
-        }
-
-        let kind = param.expecting;
-        let ty = format!("{kind} [Rust: {}]", param.rust_type.name_in_code());
-        let default = if let Some(default) = param.default_value() {
-            format!(", default: {default:?}")
-        } else {
-            String::new()
-        };
-        writeln!(writer, "{INDENT}Type: {ty}{default}")?;
-
-        if !param.help.is_empty() {
-            for line in param.help.lines() {
-                writeln!(writer, "{INDENT}{line}")?;
-            }
-        }
-        Ok(())
     }
 }
 
@@ -396,11 +350,14 @@ impl<'a> PatchedSchema<'a> {
         for param in data.metadata.params {
             let all_names = ConfigSchema::all_names(&prefix, param, &data);
 
-            for (prefix, name) in all_names {
+            for (name_i, (prefix, name)) in all_names.enumerate() {
                 let full_name = Pointer(prefix).join(name);
-                let prev_expecting = if let Some(mount) = self.mount(&full_name) {
+                let (prev_expecting, was_canonical) = if let Some(mount) = self.mount(&full_name) {
                     match mount {
-                        MountingPoint::Param { expecting } => *expecting,
+                        &MountingPoint::Param {
+                            expecting,
+                            is_canonical,
+                        } => (expecting, is_canonical),
 
                         MountingPoint::Config => {
                             anyhow::bail!(
@@ -412,7 +369,7 @@ impl<'a> PatchedSchema<'a> {
                         }
                     }
                 } else {
-                    BasicTypes::ANY
+                    (BasicTypes::ANY, false)
                 };
 
                 let Some(expecting) = prev_expecting.and(param.expecting) else {
@@ -424,10 +381,15 @@ impl<'a> PatchedSchema<'a> {
                         expecting = param.expecting
                     );
                 };
+                let is_canonical = was_canonical || name_i == 0;
 
-                self.patch
-                    .mounting_points
-                    .insert(full_name, MountingPoint::Param { expecting });
+                self.patch.mounting_points.insert(
+                    full_name,
+                    MountingPoint::Param {
+                        expecting,
+                        is_canonical,
+                    },
+                );
             }
         }
 

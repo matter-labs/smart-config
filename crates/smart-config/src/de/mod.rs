@@ -39,7 +39,7 @@
 //! [`Duration`]: std::time::Duration
 //! [`ByteSize`]: crate::ByteSize
 
-use std::sync::Arc;
+use std::{any, sync::Arc};
 
 use serde::de::Error as DeError;
 
@@ -221,7 +221,7 @@ impl DeserializeContext<'_> {
         T::deserialize_config(child_ctx)
     }
 
-    pub fn deserialize_param<T: 'static>(&mut self, index: usize) -> Option<T> {
+    pub(crate) fn deserialize_any_param(&mut self, index: usize) -> Option<Box<dyn any::Any>> {
         let (mut child_ctx, param) = self.for_param(index);
 
         // Coerce value to the expected type.
@@ -238,16 +238,19 @@ impl DeserializeContext<'_> {
             .deserializer
             .deserialize_param(child_ctx.borrow(), param)
         {
-            Ok(param) => Some(
-                *param
-                    .downcast()
-                    .expect("Internal error: deserializer output has wrong type"),
-            ),
+            Ok(param) => Some(param),
             Err(err) => {
                 child_ctx.push_error(err);
                 None
             }
         }
+    }
+
+    pub fn deserialize_param<T: 'static>(&mut self, index: usize) -> Option<T> {
+        self.deserialize_any_param(index).map(|val| {
+            *val.downcast()
+                .expect("Internal error: deserializer output has wrong type")
+        })
     }
 }
 
