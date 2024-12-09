@@ -8,6 +8,7 @@ license.workspace = true
 keywords.workspace = true
 categories.workspace = true
 readme = "README.md"
+description = "Command-line extensions for `smart-config` library"
 
 [dependencies]
 anstream.workspace = true
