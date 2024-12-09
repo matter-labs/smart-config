@@ -55,7 +55,7 @@ use crate::{
     error::{ErrorWithOrigin, LocationInConfig, LowLevelError},
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
     value::{Pointer, Value, ValueOrigin, WithOrigin},
-    DescribeConfig, Json, ParseError, ParseErrors,
+    DescribeConfig, DeserializeConfigError, Json, ParseError, ParseErrors,
 };
 
 #[doc(hidden)]
@@ -211,17 +211,20 @@ impl DeserializeContext<'_> {
         &mut self,
         index: usize,
         default_fn: Option<fn() -> T>,
-    ) -> Option<T> {
+    ) -> Result<T, DeserializeConfigError> {
         let child_ctx = self.for_nested_config(index);
         if child_ctx.current_value().is_none() {
             if let Some(default) = default_fn {
-                return Some(default());
+                return Ok(default());
             }
         }
         T::deserialize_config(child_ctx)
     }
 
-    pub fn deserialize_param<T: 'static>(&mut self, index: usize) -> Option<T> {
+    pub fn deserialize_param<T: 'static>(
+        &mut self,
+        index: usize,
+    ) -> Result<T, DeserializeConfigError> {
         let (mut child_ctx, param) = self.for_param(index);
 
         // Coerce value to the expected type.
@@ -238,14 +241,12 @@ impl DeserializeContext<'_> {
             .deserializer
             .deserialize_param(child_ctx.borrow(), param)
         {
-            Ok(param) => Some(
-                *param
-                    .downcast()
-                    .expect("Internal error: deserializer output has wrong type"),
-            ),
+            Ok(param) => Ok(*param
+                .downcast()
+                .expect("Internal error: deserializer output has wrong type")),
             Err(err) => {
                 child_ctx.push_error(err);
-                None
+                Err(DeserializeConfigError::new())
             }
         }
     }
@@ -297,7 +298,11 @@ impl WithOrigin {
 
 /// Deserializes this configuration from the provided context.
 pub trait DeserializeConfig: DescribeConfig + Sized {
-    /// Performs deserialization. If it fails, the method should return `None` and maybe add
-    /// errors to the context.
-    fn deserialize_config(ctx: DeserializeContext<'_>) -> Option<Self>;
+    /// Performs deserialization.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error marker if deserialization fails for at least one of recursively contained params.
+    /// Error info should is contained in the context.
+    fn deserialize_config(ctx: DeserializeContext<'_>) -> Result<Self, DeserializeConfigError>;
 }

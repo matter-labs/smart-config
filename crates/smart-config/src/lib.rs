@@ -293,7 +293,7 @@ pub use smart_config_derive::DeserializeConfig;
 use self::metadata::ConfigMetadata;
 pub use self::{
     de::DeserializeConfig,
-    error::{ParseError, ParseErrors},
+    error::{DeserializeConfigError, ParseError, ParseErrors},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
     source::{ConfigParser, ConfigRepository, ConfigSource, Environment, Json, Yaml},
     types::ByteSize,

@@ -108,8 +108,8 @@ impl ConfigContainer {
                 #[allow(unused_mut)]
                 fn deserialize_config(
                     mut ctx: #cr::de::DeserializeContext<'_>,
-                ) -> ::core::option::Option<Self> {
-                    ::core::option::Option::Some(#instance)
+                ) -> ::core::result::Result<Self, #cr::DeserializeConfigError> {
+                    ::core::result::Result::Ok(#instance)
                 }
             }
         }

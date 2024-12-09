@@ -257,10 +257,7 @@ pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result
         &C::DESCRIPTION,
         &mut errors,
     );
-    match C::deserialize_config(ctx) {
-        Some(config) => Ok(config),
-        None => Err(errors),
-    }
+    C::deserialize_config(ctx).map_err(|_| errors)
 }
 
 pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, ParseErrors> {
@@ -274,10 +271,7 @@ pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, Pars
         &C::DESCRIPTION,
         &mut errors,
     );
-    match C::deserialize_config(ctx) {
-        Some(config) => Ok(config),
-        None => Err(errors),
-    }
+    C::deserialize_config(ctx).map_err(|_| errors)
 }
 
 pub(crate) fn extract_json_name(source: &ValueOrigin) -> &str {
