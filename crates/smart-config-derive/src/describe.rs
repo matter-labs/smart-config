@@ -108,7 +108,7 @@ impl ConfigField {
     fn describe_nested_config(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
         let cr = parent.cr(self.name_span());
         let name = &self.name;
-        let ty = &self.ty;
+        let ty = Self::unwrap_option(&self.ty).unwrap_or(&self.ty);
         let config_name = if self.attrs.flatten {
             String::new()
         } else {

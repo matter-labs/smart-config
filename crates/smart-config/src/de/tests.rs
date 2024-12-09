@@ -215,6 +215,7 @@ fn parsing_compound_config() {
             map: HashMap::new(),
         }
     );
+    assert_eq!(config.nested_opt, None);
 
     let json = config!(
         "nested.renamed": "first",
@@ -222,6 +223,7 @@ fn parsing_compound_config() {
         "default.renamed": "second",
         "default.map": HashMap::from([("foo", 3)]),
         "renamed": "second",
+        "nested_opt.renamed": "second",
     );
     let config: CompoundConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -238,6 +240,14 @@ fn parsing_compound_config() {
             simple_enum: SimpleEnum::Second,
             other_int: 42,
             map: HashMap::from([("foo".to_owned(), 3)]),
+        }
+    );
+    assert_eq!(
+        config.nested_opt.unwrap(),
+        NestedConfig {
+            simple_enum: SimpleEnum::Second,
+            other_int: 42,
+            map: HashMap::new(),
         }
     );
 }

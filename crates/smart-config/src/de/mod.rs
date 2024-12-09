@@ -221,6 +221,17 @@ impl DeserializeContext<'_> {
         T::deserialize_config(child_ctx)
     }
 
+    pub fn deserialize_nested_config_opt<T: DeserializeConfig>(
+        &mut self,
+        index: usize,
+    ) -> Result<Option<T>, DeserializeConfigError> {
+        let child_ctx = self.for_nested_config(index);
+        if child_ctx.current_value().is_none() {
+            return Ok(None);
+        }
+        T::deserialize_config(child_ctx).map(Some)
+    }
+
     pub fn deserialize_param<T: 'static>(
         &mut self,
         index: usize,

@@ -9,7 +9,8 @@ use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{
     ext::IdentExt, spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr,
-    Field, Fields, Index, Lit, LitStr, Member, Path, PathArguments, Type, TypePath,
+    Field, Fields, GenericArgument, Index, Lit, LitStr, Member, Path, PathArguments, Type,
+    TypePath,
 };
 
 pub(crate) fn wrap_in_option(val: Option<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
@@ -276,20 +277,30 @@ impl ConfigField {
     }
 
     pub(crate) fn is_option(ty: &Type) -> bool {
+        Self::unwrap_option(ty).is_some()
+    }
+
+    pub(crate) fn unwrap_option(ty: &Type) -> Option<&Type> {
         let Type::Path(TypePath { path, .. }) = ty else {
-            return false;
+            return None;
         };
         if path.segments.len() != 1 {
-            return false;
+            return None;
         }
         let segment = &path.segments[0];
         if segment.ident != "Option" {
-            return false;
+            return None;
         }
         let PathArguments::AngleBracketed(angle_bracketed) = &segment.arguments else {
-            return false;
+            return None;
         };
-        angle_bracketed.args.len() == 1
+        if angle_bracketed.args.len() != 1 {
+            return None;
+        }
+        match &angle_bracketed.args[0] {
+            GenericArgument::Type(ty) => Some(ty),
+            _ => None,
+        }
     }
 
     pub(crate) fn param_name(&self) -> String {

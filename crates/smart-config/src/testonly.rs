@@ -126,6 +126,8 @@ pub(crate) enum RenamedEnumConfig {
 pub(crate) struct CompoundConfig {
     #[config(nest)]
     pub nested: NestedConfig,
+    #[config(nest)]
+    pub nested_opt: Option<NestedConfig>,
     #[config(rename = "default", nest, default = NestedConfig::default_nested)]
     pub nested_default: NestedConfig,
     #[config(flatten)]
