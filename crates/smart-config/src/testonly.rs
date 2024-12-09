@@ -212,6 +212,21 @@ pub(crate) struct ConfigWithComplexTypes {
     pub map_or_string: MapOrString,
 }
 
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ComposedConfig {
+    #[config(default)]
+    pub arrays: HashSet<[u64; 2]>,
+    #[config(default)]
+    pub durations: Vec<Duration>,
+    #[config(default, with = de::Delimited(","))]
+    pub delimited_durations: Vec<Duration>,
+    #[config(default)]
+    pub map_of_sizes: HashMap<String, ByteSize>,
+    #[config(default)]
+    pub map_of_ints: HashMap<u64, Duration>,
+}
+
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
     let ConfigContents::KeyValue(map) = env.into_contents() else {
         unreachable!();

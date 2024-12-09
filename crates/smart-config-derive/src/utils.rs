@@ -258,7 +258,7 @@ impl ConfigField {
         // FIXME: use `WithDefault` here?
         let default_opt = wrap_in_option(default.map(|val| quote!(#val)));
         let with = syn::parse_quote! {
-            #cr::de::TagDeserializer::new(&[#(#variants,)*], #default_opt)
+            #cr::de::_private::TagDeserializer::new(&[#(#variants,)*], #default_opt)
         };
 
         Self {

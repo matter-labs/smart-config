@@ -14,7 +14,7 @@ use crate::{
     metadata::SizeUnit,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, test_deserialize_missing,
-        wrap_into_value, CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting,
+        wrap_into_value, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting,
         DefaultingConfig, DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig,
         RenamedEnumConfig, SimpleEnum, TestParam,
     },
@@ -448,12 +448,46 @@ fn parsing_complex_types() {
 }
 
 #[test]
+fn parsing_composed_params() {
+    let json = config!("durations": ["1sec", "5 min"]);
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    let expected_array = [Duration::from_secs(1), Duration::from_secs(300)];
+    assert_eq!(config.durations, expected_array);
+
+    let json = config!(
+        "durations": serde_json::json!(["1 sec", { "min": 5 }])
+    );
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.durations, expected_array);
+
+    let json = config!("delimited_durations": ["1sec", "5 min"]);
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.delimited_durations, expected_array);
+
+    let json = config!("delimited_durations": "1 sec,5 min");
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.delimited_durations, expected_array);
+
+    let json = config!("map_of_sizes": HashMap::from([("small", "1 MiB"), ("large", "3 MiB")]));
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    let expected_map = HashMap::from([
+        ("small".to_owned(), ByteSize(1 << 20)),
+        ("large".to_owned(), ByteSize(3 << 20)),
+    ]);
+    assert_eq!(config.map_of_sizes, expected_map);
+
+    let json = config!("map_of_ints": HashMap::from([(5, "30 sec")]));
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.map_of_ints[&5], Duration::from_secs(30));
+}
+
+#[test]
 fn error_parsing_array_from_string() {
     let json = config!("array": "4,what");
     let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
     assert_eq!(err.len(), 1);
     let err = err.first();
-    assert_eq!(err.path(), "array");
+    assert_eq!(err.path(), "array.1");
     let inner = err.inner().to_string();
     assert!(inner.contains("what"), "{inner}");
 
@@ -506,7 +540,7 @@ fn parsing_complex_types_errors() {
     let err = errors.first();
     let inner = err.inner().to_string();
     assert!(inner.contains("nonzero"), "{inner}");
-    assert_eq!(err.path(), "array");
+    assert_eq!(err.path(), "array.0");
     assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "array.0");
 
     let json = config!("array": [2, 3], "float": "what");
@@ -527,4 +561,50 @@ fn parsing_complex_types_errors() {
     );
     assert_eq!(err.path(), "assumed");
     assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "assumed");
+}
+
+#[test]
+fn multiple_errors_for_composed_deserializers() {
+    let json = config!("array": "-4,what");
+    let errors = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(errors.len(), 2);
+    let err = errors.iter().find(|err| err.path() == "array.0").unwrap();
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid value"), "{inner}");
+    let err = errors.iter().find(|err| err.path() == "array.1").unwrap();
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid type"), "{inner}");
+
+    let json = config!("durations": r#"[5, "30us"]"#);
+    let errors = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(errors.len(), 2);
+    let err = errors
+        .iter()
+        .find(|err| err.path() == "durations.0")
+        .unwrap();
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid type"), "{inner}");
+    let err = errors
+        .iter()
+        .find(|err| err.path() == "durations.1")
+        .unwrap();
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("invalid value") && inner.contains("duration unit"),
+        "{inner}"
+    );
+
+    let json = config!("map_of_ints": r#"{ "what": 120 }"#);
+    let errors = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(errors.len(), 2);
+    assert!(errors.iter().any(|err| {
+        err.path() == "map_of_ints.what"
+            && err
+                .inner()
+                .to_string()
+                .starts_with("cannot deserialize key")
+    }));
+    assert!(errors.iter().any(|err| {
+        err.path() == "map_of_ints.what" && err.inner().to_string().starts_with("invalid type")
+    }));
 }
