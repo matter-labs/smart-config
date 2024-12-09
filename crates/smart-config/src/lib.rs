@@ -217,7 +217,7 @@
 /// ## `nest`
 ///
 /// If specified, the field is treated as a nested sub-config rather than a param. Correspondingly, its type must
-/// implement `DescribeConfig`.
+/// implement `DescribeConfig`, or wrap such a type in an `Option`.
 ///
 /// ## `flatten`
 ///

@@ -1,0 +1,5 @@
+error: cannot make `flatten`ed config optional; did you mean to make it nested?
+  --> tests/ui/derives/optional_flattened_config.rs:10:14
+   |
+10 |     #[config(flatten)]
+   |              ^^^^^^^

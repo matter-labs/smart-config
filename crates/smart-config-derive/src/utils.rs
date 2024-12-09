@@ -131,7 +131,7 @@ pub(crate) struct ConfigFieldAttrs {
 }
 
 impl ConfigFieldAttrs {
-    fn new(attrs: &[Attribute]) -> syn::Result<Self> {
+    fn new(attrs: &[Attribute], is_option: bool) -> syn::Result<Self> {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut rename = None;
@@ -189,6 +189,10 @@ impl ConfigFieldAttrs {
             let msg = "`rename` attribute is useless for flattened configs; did you mean to make a config nested?";
             return Err(syn::Error::new(flatten_span, msg));
         }
+        if let (Some(flatten_span), true) = (flatten_span, is_option) {
+            let msg = "cannot make `flatten`ed config optional; did you mean to make it nested?";
+            return Err(syn::Error::new(flatten_span, msg));
+        }
         if nest && !aliases.is_empty() {
             let msg = "aliases for nested / flattened configs are not supported yet";
             let span = flatten_span.or(nested_span).unwrap();
@@ -241,7 +245,7 @@ impl ConfigField {
         };
         let ty = raw.ty.clone();
 
-        let attrs = ConfigFieldAttrs::new(&raw.attrs)?;
+        let attrs = ConfigFieldAttrs::new(&raw.attrs, Self::is_option(&ty))?;
         Ok(Self {
             attrs,
             docs: parse_docs(&raw.attrs),
