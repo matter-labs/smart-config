@@ -145,6 +145,15 @@ pub(crate) struct DefaultingConfig {
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct KvTestConfig {
+    #[config(default_t = -3)]
+    pub nested_int: i32,
+    #[config(nest)]
+    pub nested: DefaultingConfig,
+}
+
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate, tag = "kind", derive(Default))]
 pub(crate) enum DefaultingEnumConfig {
     First,
@@ -189,11 +198,14 @@ pub(crate) struct ConfigWithComplexTypes {
     pub assumed: Option<serde_json::Value>,
     #[config(default_t = Duration::from_millis(100), with = TimeUnit::Millis)]
     pub short_dur: Duration,
+    #[config(default_t = Duration::from_secs(5))]
+    pub long_dur: Duration,
     #[config(default_t = "./test".into())]
     pub path: PathBuf,
     #[config(with = de::Optional(SizeUnit::MiB))]
     #[config(default_t = Some(ByteSize::new(128, SizeUnit::MiB)))]
     pub memory_size_mb: Option<ByteSize>,
+    pub disk_size: Option<ByteSize>,
     #[config(default, with = de::Delimited(":"))]
     pub paths: Vec<PathBuf>,
     #[config(default, with = de::OrString(Serde![object]))]

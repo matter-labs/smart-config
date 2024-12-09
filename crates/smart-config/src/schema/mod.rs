@@ -1,20 +1,17 @@
 //! Configuration schema.
 
-use std::{
-    any,
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    io, iter,
-};
+use std::{any, borrow::Cow, collections::HashMap, io, iter};
 
 use anyhow::Context;
 
+use self::mount::{MountingPoint, MountingPoints};
 use crate::{
     metadata::{BasicTypes, ConfigMetadata, NestedConfigMetadata, ParamMetadata},
     value::Pointer,
     DescribeConfig,
 };
 
+mod mount;
 #[cfg(test)]
 mod tests;
 
@@ -88,32 +85,14 @@ impl ConfigMut<'_> {
     }
 }
 
-/// Mounting point info sufficient to resolve the mounted config / param.
-// TODO: add refs
-#[derive(Debug, Clone)]
-enum MountingPoint {
-    /// Contains type IDs of mounted config(s).
-    Config,
-    Param {
-        expecting: BasicTypes,
-    },
-}
-
 /// Schema for configuration. Can contain multiple configs bound to different paths.
 #[derive(Debug, Clone, Default)]
 pub struct ConfigSchema {
     configs: HashMap<(any::TypeId, Cow<'static, str>), ConfigData>,
-    mounting_points: BTreeMap<String, MountingPoint>,
+    mounting_points: MountingPoints,
 }
 
 impl ConfigSchema {
-    /// Lists prefixes and aliases for all configs. There may be duplicates!
-    pub(crate) fn prefixes_with_aliases(&self) -> impl Iterator<Item = Pointer<'_>> + '_ {
-        self.configs.iter().flat_map(|((_, prefix), data)| {
-            iter::once(Pointer(prefix)).chain(data.aliases.iter().copied())
-        })
-    }
-
     /// Iterates over all configs with their canonical prefixes.
     pub(crate) fn iter(&self) -> impl Iterator<Item = (Pointer<'_>, &ConfigData)> + '_ {
         self.configs
@@ -125,6 +104,21 @@ impl ConfigSchema {
         self.mounting_points
             .get(at.0)
             .map_or(false, |mount| matches!(mount, MountingPoint::Param { .. }))
+    }
+
+    pub(crate) fn params_with_kv_path<'s>(
+        &'s self,
+        kv_path: &'s str,
+    ) -> impl Iterator<Item = (Pointer<'s>, BasicTypes)> + 's {
+        self.mounting_points
+            .by_kv_path(kv_path)
+            .filter_map(|(path, mount)| {
+                let expecting = match mount {
+                    MountingPoint::Param { expecting } => *expecting,
+                    MountingPoint::Config => return None,
+                };
+                Some((path, expecting))
+            })
     }
 
     /// Lists all prefixes for the specified config. This does not include aliases.

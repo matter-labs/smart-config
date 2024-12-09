@@ -8,36 +8,35 @@ use std::{
     },
     path::PathBuf,
     str::FromStr,
-    time::Duration,
 };
 
-use serde::{
-    de::{DeserializeOwned, Error as DeError},
-    Deserialize,
-};
+use serde::de::{DeserializeOwned, Error as DeError};
 
 use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeQualifiers},
+    metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
     value::{Value, WithOrigin},
-    ByteSize,
 };
 
 /// Deserializes a parameter of the specified type.
 ///
 /// # Implementations
 ///
-/// `DeserializeParam` includes the following implementations:
+/// ## Basic implementations
 ///
-/// - `()` is the default deserializer used unless explicitly overwritten with `#[config(with = _)]`.
-///   It supports types known to deserialize well (see [`WellKnown`]), and can be switched for user-defined types
-///   by implementing `WellKnown` for the type.
 /// - [`Serde`] allows deserializing any type implementing [`serde::Deserialize`].
+/// - [`TimeUnit`](crate::metadata::TimeUnit) deserializes [`Duration`](std::time::Duration)
+///   from a numeric value that has the specified unit of measurement
+/// - [`SizeUnit`](crate::metadata::SizeUnit) similarly deserializes [`ByteSize`](crate::ByteSize)
+/// - [`WithUnit`](super::WithUnit) deserializes `Duration`s / `ByteSize`s as an integer + unit of measurement
+///   (either in a string or object form).
+///
+/// ## Decorators
+///
 /// - [`Optional`] decorates a deserializer for `T` turning it into a deserializer for `Option<T>`
-/// - [`TimeUnit`] allows deserializing [`Duration`] from a number
-/// - [`SizeUnit`] similarly allows deserializing [`ByteSize`]
-/// - [`Delimited`] allows deserializing arrays from delimited string (e.g., comma-delimited)
+/// - [`WithDefault`] adds a default value used if the input is missing
+/// - [`Delimited`](super::Delimited) allows deserializing arrays from a delimited string (e.g., comma-delimited)
 /// - [`OrString`] allows to switch between structured and string deserialization
 pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     /// Describes which parameter this deserializer is expecting.
@@ -75,12 +74,17 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
 /// - Signed and unsigned integers, including non-zero variants
 /// - `f32`, `f64`
 ///
-/// It is also implemented for collections, items of which implement `WellKnown`:
+/// These types use [`Serde`] deserializer.
 ///
-/// - [`Option`]
-/// - [`Vec`], arrays
-/// - [`HashSet`], [`BTreeSet`]
-/// - [`HashMap`], [`BTreeMap`]
+/// `WellKnown` is also implemented for more complex types:
+///
+/// | Rust type | Deserializer | Expected JSON |
+/// |:-----------|:-------------|:----------------|
+/// | [`Duration`](std::time::Duration) | [`WithUnit`](super::WithUnit) | string or object |
+/// | [`ByteSize`](crate::ByteSize) | [`WithUnit`](super::WithUnit) | string or object |
+/// | [`Option`] | [`Optional`] | value, or `null`, or nothing |
+/// | [`Vec`], `[_; N]`, [`HashSet`](std::collections::HashSet), [`BTreeSet`](std::collections::BTreeSet) | [`Repeated`](super::Repeated) | array |
+/// | [`HashMap`](std::collections::HashMap), [`BTreeMap`](std::collections::BTreeSet) | [`Repeated`](super::Repeated) | object |
 #[diagnostic::on_unimplemented(
     message = "`{Self}` param cannot be deserialized",
     note = "Add #[config(with = _)] attribute to specify deserializer to use",
@@ -295,122 +299,6 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
             return Ok(None);
         }
         self.0.deserialize_param(ctx, param).map(Some)
-    }
-}
-
-impl TimeUnit {
-    fn overflow_err(self, raw_val: u64) -> serde_json::Error {
-        let plural = self.plural();
-        DeError::custom(format!(
-            "{raw_val} {plural} does not fit into `u64` when converted to seconds"
-        ))
-    }
-}
-
-/// Supports deserializing a [`Duration`] from a number, with `self` being the unit of measurement.
-///
-/// # Examples
-///
-/// ```
-/// # use std::time::Duration;
-/// # use smart_config::{metadata::TimeUnit, DescribeConfig, DeserializeConfig};
-/// use smart_config::testing;
-///
-/// #[derive(DescribeConfig, DeserializeConfig)]
-/// struct TestConfig {
-///     #[config(with = TimeUnit::Millis)]
-///     time_ms: Duration,
-/// }
-///
-/// let source = smart_config::config!("time_ms": 100);
-/// let config = testing::test::<TestConfig>(source)?;
-/// assert_eq!(config.time_ms, Duration::from_millis(100));
-/// # anyhow::Ok(())
-/// ```
-impl DeserializeParam<Duration> for TimeUnit {
-    const EXPECTING: BasicTypes = BasicTypes::INTEGER;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("time duration").with_unit((*self).into())
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<Duration, ErrorWithOrigin> {
-        const SECONDS_IN_MINUTE: u64 = 60;
-        const SECONDS_IN_HOUR: u64 = 3_600;
-        const SECONDS_IN_DAY: u64 = 86_400;
-
-        let deserializer = ctx.current_value_deserializer(param.name)?;
-        let raw_value = u64::deserialize(deserializer)?;
-        Ok(match self {
-            Self::Millis => Duration::from_millis(raw_value),
-            Self::Seconds => Duration::from_secs(raw_value),
-            Self::Minutes => {
-                let val = raw_value
-                    .checked_mul(SECONDS_IN_MINUTE)
-                    .ok_or_else(|| deserializer.enrich_err(self.overflow_err(raw_value)))?;
-                Duration::from_secs(val)
-            }
-            Self::Hours => {
-                let val = raw_value
-                    .checked_mul(SECONDS_IN_HOUR)
-                    .ok_or_else(|| deserializer.enrich_err(self.overflow_err(raw_value)))?;
-                Duration::from_secs(val)
-            }
-            Self::Days => {
-                let val = raw_value
-                    .checked_mul(SECONDS_IN_DAY)
-                    .ok_or_else(|| deserializer.enrich_err(self.overflow_err(raw_value)))?;
-                Duration::from_secs(val)
-            }
-        })
-    }
-}
-
-/// Supports deserializing a [`ByteSize`] from a number, with `self` being the unit of measurement.
-///
-/// # Examples
-///
-/// ```
-/// # use std::time::Duration;
-/// # use smart_config::{metadata::SizeUnit, DescribeConfig, DeserializeConfig, ByteSize};
-/// use smart_config::testing;
-///
-/// #[derive(DescribeConfig, DeserializeConfig)]
-/// struct TestConfig {
-///     #[config(with = SizeUnit::MiB)]
-///     size_mb: ByteSize,
-/// }
-///
-/// let source = smart_config::config!("size_mb": 4);
-/// let config = testing::test::<TestConfig>(source)?;
-/// assert_eq!(config.size_mb, ByteSize(4 << 20));
-/// # anyhow::Ok(())
-/// ```
-impl DeserializeParam<ByteSize> for SizeUnit {
-    const EXPECTING: BasicTypes = BasicTypes::INTEGER;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("byte size").with_unit((*self).into())
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<ByteSize, ErrorWithOrigin> {
-        let deserializer = ctx.current_value_deserializer(param.name)?;
-        let raw_value = u64::deserialize(deserializer)?;
-        ByteSize::checked(raw_value, *self).ok_or_else(|| {
-            let err = DeError::custom(format!(
-                "{raw_value} {unit} does not fit into `u64`",
-                unit = self.plural()
-            ));
-            deserializer.enrich_err(err)
-        })
     }
 }
 

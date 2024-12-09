@@ -99,8 +99,6 @@ fn using_alias() {
         .push_alias("")
         .unwrap();
 
-    let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
-    assert_eq!(all_prefixes, HashSet::from([Pointer("test"), Pointer("")]));
     let config_prefixes: Vec<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
     assert_eq!(config_prefixes, ["test"]);
     let config_ref = schema.single(&TestConfig::DESCRIPTION).unwrap();
@@ -135,11 +133,6 @@ fn using_multiple_aliases() {
         .push_alias("deprecated")
         .unwrap();
 
-    let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
-    assert_eq!(
-        all_prefixes,
-        HashSet::from([Pointer("test"), Pointer(""), Pointer("deprecated")])
-    );
     let config_prefixes: Vec<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
     assert_eq!(config_prefixes, ["test"]);
     let config_ref = schema.single(&TestConfig::DESCRIPTION).unwrap();
@@ -169,12 +162,6 @@ fn using_multiple_aliases() {
 fn using_nesting() {
     let mut schema = ConfigSchema::default();
     schema.insert::<NestingConfig>("").unwrap();
-
-    let all_prefixes: HashSet<_> = schema.prefixes_with_aliases().collect();
-    assert_eq!(
-        all_prefixes,
-        HashSet::from([Pointer(""), Pointer("hierarchical")])
-    );
 
     let config_prefixes: Vec<_> = schema.locate(&NestingConfig::DESCRIPTION).collect();
     assert_eq!(config_prefixes, [""]);
