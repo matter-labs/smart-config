@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FileFormat","Value","ValueOrigin"],"struct":["WithOrigin"],"type":["Map"]};
