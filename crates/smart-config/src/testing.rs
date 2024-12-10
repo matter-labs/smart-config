@@ -53,7 +53,10 @@ use crate::{
 /// let err = testing::test::<TestConfig>(sample).unwrap_err();
 /// let err = err.first();
 /// assert_eq!(err.path(), "boolean");
-/// assert!(err.inner().to_string().contains("invalid type"));
+/// assert!(err
+///     .inner()
+///     .to_string()
+///     .contains("provided string was not `true` or `false`"));
 /// ```
 #[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible
 pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {

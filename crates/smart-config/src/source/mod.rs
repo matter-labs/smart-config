@@ -82,6 +82,15 @@ pub trait ConfigSource {
 /// assert_eq!(config.map, HashMap::from([("value".into(), 5)]));
 /// # anyhow::Ok(())
 /// ```
+///
+/// # Other preprocessing
+///
+/// Besides type coercion, sources undergo a couple of additional transforms:
+///
+/// - **Garbage collection:** All values not corresponding to params or their ancestor objects
+///   are removed.
+/// - **Hiding secrets:** Values corresponding to [secret params](crate::de#secrets) are wrapped in
+///   opaque, zero-on-drop wrappers.
 #[derive(Debug, Clone)]
 pub struct ConfigRepository<'a> {
     schema: &'a ConfigSchema,

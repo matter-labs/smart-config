@@ -36,6 +36,16 @@
 //! - Alternatively, [`TimeUnit`](crate::metadata::TimeUnit) and [`SizeUnit`](crate::metadata::SizeUnit) can be used
 //!   on `Duration`s and `ByteSize`s, respectively.
 //!
+//! ## Secrets
+//!
+//! A param is secret iff it uses a [`Secret`] deserializer (perhaps, with decorators on top, like
+//! [`Optional`] / [`WithDefault`]). Secret params must be deserializable from a string; this is because
+//! strings are the only type of secret values currently supported.
+//!
+//! Secret values are wrapped in opaque, zero-on-drop wrappers during source preprocessing so that
+//! they do not get accidentally exposed via debug logs etc. See [`ConfigRepository`](crate::ConfigRepository)
+//! for details.
+//!
 //! [`Duration`]: std::time::Duration
 //! [`ByteSize`]: crate::ByteSize
 
@@ -49,7 +59,7 @@ pub use self::{
     macros::Serde,
     param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
     repeated::{Delimited, Repeated},
-    secrets::Secret,
+    secret::Secret,
     units::WithUnit,
 };
 use crate::{
@@ -67,7 +77,7 @@ mod param;
 #[cfg(feature = "primitive-types")]
 mod primitive_types_impl;
 mod repeated;
-mod secrets;
+mod secret;
 #[cfg(test)]
 mod tests;
 mod units;

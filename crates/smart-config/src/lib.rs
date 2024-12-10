@@ -40,6 +40,7 @@
 //! - Supports multiple configuration formats and programmable source priorities (e.g., `base.yml` + overrides from the
 //!   `overrides/` dir in the alphabetic order + env vars).
 //! - Rich and complete deserialization errors including locations and value origins.
+//! - [Built-in support for secret params](de#secrets).
 //!
 //! # Crate features
 //!
