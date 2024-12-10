@@ -83,7 +83,7 @@ impl fmt::Display for ValueOrigin {
 }
 
 /// String value: either a plaintext one, or a secret.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum StrValue {
     /// Plain string value.
     Plain(String),
@@ -110,6 +110,15 @@ impl StrValue {
                 *self = Self::Secret(mem::take(s).into());
             }
             Self::Secret(_) => { /* value is already secret; do nothing */ }
+        }
+    }
+}
+
+impl fmt::Debug for StrValue {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Plain(s) => fmt::Debug::fmt(s, formatter),
+            Self::Secret(_) => formatter.write_str("[REDACTED]"),
         }
     }
 }
