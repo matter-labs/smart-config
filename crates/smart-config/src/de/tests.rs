@@ -299,7 +299,7 @@ fn parsing_defaulting_config_from_missing_value() {
 #[test]
 fn parsing_defaulting_config_with_null_override() {
     let json = config!("url": ());
-    assert_eq!(json.inner().get(Pointer("url")).unwrap().inner, Value::Null);
+    assert_matches!(json.inner().get(Pointer("url")).unwrap().inner, Value::Null);
     let config: DefaultingConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config,

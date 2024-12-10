@@ -2,6 +2,8 @@
 
 use std::{collections::HashMap, fmt, iter, sync::Arc};
 
+use secrecy::SecretString;
+
 use crate::metadata::BasicTypes;
 
 /// Supported file formats.
@@ -81,7 +83,7 @@ impl fmt::Display for ValueOrigin {
 }
 
 /// JSON value with additional origin information.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Default)]
 pub enum Value {
     /// `null`.
     #[default]
@@ -92,6 +94,8 @@ pub enum Value {
     Number(serde_json::Number),
     /// String value.
     String(String),
+    /// Secret string value.
+    SecretString(SecretString),
     /// Array of values.
     Array(Vec<WithOrigin>),
     /// Object / map of values.
@@ -107,7 +111,7 @@ impl Value {
                 types.contains(BasicTypes::INTEGER)
             }
             Self::Number(_) => types.contains(BasicTypes::FLOAT),
-            Self::String(_) => types.contains(BasicTypes::STRING),
+            Self::String(_) | Self::SecretString(_) => types.contains(BasicTypes::STRING),
             Self::Array(_) => types.contains(BasicTypes::ARRAY),
             Self::Object(_) => types.contains(BasicTypes::OBJECT),
         }
@@ -132,12 +136,6 @@ pub struct WithOrigin<T = Value> {
     pub inner: T,
     /// Origin of the value.
     pub origin: Arc<ValueOrigin>,
-}
-
-impl PartialEq for WithOrigin {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
-    }
 }
 
 impl<T> WithOrigin<T> {

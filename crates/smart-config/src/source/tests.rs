@@ -90,9 +90,9 @@ fn parsing_enum_config_with_schema() {
         ],
     );
     let repo = ConfigRepository::new(&schema).with(env);
-    assert_eq!(
-        repo.merged().get(Pointer("flag")).unwrap().inner,
-        Value::String("false".into())
+    assert_matches!(
+        &repo.merged().get(Pointer("flag")).unwrap().inner,
+        Value::String(s) if s == "false"
     );
 
     let config: EnumConfig = repo.single().unwrap().parse().unwrap();
@@ -219,17 +219,17 @@ fn nesting_json() {
     schema.insert::<ConfigWithNesting>("").unwrap();
     let map = ConfigRepository::new(&schema).with(env).merged;
 
-    assert_eq!(
-        map.get(Pointer("value")).unwrap().inner,
-        Value::String("123".into())
+    assert_matches!(
+        &map.get(Pointer("value")).unwrap().inner,
+        Value::String(s) if s == "123"
     );
-    assert_eq!(
-        map.get(Pointer("nested.renamed")).unwrap().inner,
-        Value::String("first".to_owned())
+    assert_matches!(
+        &map.get(Pointer("nested.renamed")).unwrap().inner,
+        Value::String(s) if s == "first"
     );
-    assert_eq!(
-        map.get(Pointer("nested.other_int")).unwrap().inner,
-        Value::String("321".into())
+    assert_matches!(
+        &map.get(Pointer("nested.other_int")).unwrap().inner,
+        Value::String(s) if s == "321"
     );
 
     let config: ConfigWithNesting = test_deserialize(&map).unwrap();
@@ -387,12 +387,12 @@ fn merging_configs() {
         panic!("unexpected merged value");
     };
 
-    assert_eq!(merged["int"].inner, Value::Number(123_u64.into()));
+    assert_matches!(&merged["int"].inner, Value::Number(num) if *num == 123_u64.into());
     assert_matches!(
         merged["int"].origin.as_ref(),
         ValueOrigin::Path { source, .. } if extract_json_name(source) == "base.json"
     );
-    assert_eq!(merged["bool"].inner, Value::Bool(false));
+    assert_matches!(merged["bool"].inner, Value::Bool(false));
     assert_matches!(
         merged["bool"].origin.as_ref(),
         ValueOrigin::Path { source, .. } if extract_json_name(source) == "overrides.json"
@@ -411,14 +411,14 @@ fn merging_configs() {
         Value::Object(items) if items.len() == 3
     );
     let nested_int = merged["nested"].get(Pointer("int")).unwrap();
-    assert_eq!(nested_int.inner, Value::Number(123_u64.into()));
+    assert_matches!(&nested_int.inner, Value::Number(num) if *num == 123_u64.into());
     assert_matches!(
         nested_int.origin.as_ref(),
         ValueOrigin::Path { source, .. } if extract_json_name(source) == "overrides.json"
     );
 
     let nested_str = merged["nested"].get(Pointer("string")).unwrap();
-    assert_eq!(nested_str.inner, Value::String("???".into()));
+    assert_matches!(&nested_str.inner, Value::String(s) if s == "???");
     assert_matches!(
         nested_str.origin.as_ref(),
         ValueOrigin::Path { source, .. } if extract_json_name(source) == "base.json"
@@ -478,7 +478,7 @@ fn using_env_config_overrides() {
     repo = repo.with(env);
 
     let enum_value = repo.merged().get(Pointer("test.nested.renamed")).unwrap();
-    assert_eq!(enum_value.inner, Value::String("second".into()));
+    assert_matches!(&enum_value.inner, Value::String(s) if s == "second");
     extract_env_var_name(&enum_value.origin);
 
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
@@ -489,7 +489,7 @@ fn using_env_config_overrides() {
     repo = repo.with(env);
 
     let int_value = repo.merged().get(Pointer("test.value")).unwrap();
-    assert_eq!(int_value.inner, Value::String("555".into()));
+    assert_matches!(&int_value.inner, Value::String(s) if s == "555");
 
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 555);
@@ -653,9 +653,9 @@ fn nesting_for_object_param() {
     let env = Environment::from_iter("", [("TEST_PARAM_INT", "123"), ("TEST_PARAM_STRING", "??")]);
     let repo = ConfigRepository::new(&schema).with(env);
 
-    assert_eq!(
-        repo.merged().get(Pointer("test.param_int")).unwrap().inner,
-        Value::String("123".into())
+    assert_matches!(
+        &repo.merged().get(Pointer("test.param_int")).unwrap().inner,
+        Value::String(s) if s == "123"
     );
 
     let object = repo.merged().get(Pointer("test.param")).unwrap();
@@ -709,12 +709,12 @@ fn nesting_not_applied_if_original_param_is_defined() {
     );
     let repo = ConfigRepository::new(&schema).with(env);
 
-    assert_eq!(
-        repo.merged().get(Pointer("test.param_int")).unwrap().inner,
-        Value::String("123".into())
+    assert_matches!(
+        &repo.merged().get(Pointer("test.param_int")).unwrap().inner,
+        Value::String(s) if s == "123"
     );
     let val = &repo.merged().get(Pointer("test.param")).unwrap().inner;
-    assert_eq!(*val, Value::String(r#"{ "int": 42 }"#.into()));
+    assert_matches!(val, Value::String(s) if s == r#"{ "int": 42 }"#);
 }
 
 #[test]

@@ -145,21 +145,21 @@ array:
         };
         let yaml = Yaml::new("test.yml", yaml).unwrap();
 
-        assert_eq!(yaml.inner["bool"].inner, Value::Bool(true));
+        assert_matches!(yaml.inner["bool"].inner, Value::Bool(true));
         assert_matches!(
             yaml.inner["bool"].origin.as_ref(),
             ValueOrigin::Path { path, source } if filename(source) == "test.yml" && path == "bool"
         );
 
         let str = yaml.inner["nested"].get(Pointer("string")).unwrap();
-        assert_eq!(str.inner, Value::String("what?".into()));
+        assert_matches!(&str.inner, Value::String(s) if s == "what?");
         assert_matches!(
             str.origin.as_ref(),
             ValueOrigin::Path { path, source } if filename(source) == "test.yml" && path == "nested.string"
         );
 
         let inner_int = yaml.inner["array"].get(Pointer("0.test")).unwrap();
-        assert_eq!(inner_int.inner, Value::Number(23_u64.into()));
+        assert_matches!(&inner_int.inner, Value::Number(num) if *num == 23_u64.into());
     }
 
     #[test]

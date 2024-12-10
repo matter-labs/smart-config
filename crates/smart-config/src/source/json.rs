@@ -156,14 +156,14 @@ mod tests {
         let mut json = Json::new("test.json", json);
 
         let bool_value = json.inner.get(Pointer("bool_value")).unwrap();
-        assert_eq!(bool_value.inner, Value::Bool(true));
+        assert_matches!(bool_value.inner, Value::Bool(true));
         assert_matches!(
             bool_value.origin.as_ref(),
             ValueOrigin::Path { path, source } if path == "bool_value" && extract_json_name(source) == "test.json"
         );
 
         let str = json.inner.get(Pointer("nested.str")).unwrap();
-        assert_eq!(str.inner, Value::String("???".into()));
+        assert_matches!(&str.inner, Value::String(s) if s == "???");
         assert_matches!(
             str.origin.as_ref(),
             ValueOrigin::Path { path, source } if path == "nested.str" && extract_json_name(source) == "test.json"
@@ -171,7 +171,7 @@ mod tests {
 
         json.merge("nested.str", "!!!");
         let str = json.inner.get(Pointer("nested.str")).unwrap();
-        assert_eq!(str.inner, Value::String("!!!".into()));
+        assert_matches!(&str.inner, Value::String(s) if s == "!!!");
 
         json.merge(
             "nested",
@@ -181,9 +181,9 @@ mod tests {
             }),
         );
         let str = json.inner.get(Pointer("nested.str")).unwrap();
-        assert_eq!(str.inner, Value::String("!!!".into()));
+        assert_matches!(&str.inner, Value::String(s) if s == "!!!");
         let int_value = json.inner.get(Pointer("nested.int_value")).unwrap();
-        assert_eq!(int_value.inner, Value::Number(5_u64.into()));
+        assert_matches!(&int_value.inner, Value::Number(num) if *num == 5_u64.into());
         let array = json.inner.get(Pointer("nested.array")).unwrap();
         assert_matches!(&array.inner, Value::Array(items) if items.len() == 2);
     }
@@ -197,7 +197,7 @@ mod tests {
         };
 
         let bool_value = json.inner.get(Pointer("bool_value")).unwrap();
-        assert_eq!(bool_value.inner, Value::Bool(true));
+        assert_matches!(bool_value.inner, Value::Bool(true));
         assert_matches!(
             bool_value.origin.as_ref(),
             ValueOrigin::Path { path, source }
@@ -205,7 +205,7 @@ mod tests {
         );
 
         let str = json.inner.get(Pointer("nested.str")).unwrap();
-        assert_eq!(str.inner, Value::String("???".into()));
+        assert_matches!(&str.inner, Value::String(s) if s == "???");
         assert_matches!(
             str.origin.as_ref(),
             ValueOrigin::Path { path, .. } if path == "nested.str"

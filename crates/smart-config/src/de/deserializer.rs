@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use secrecy::ExposeSecret;
 use serde::{
     de::{
         self,
@@ -41,6 +42,7 @@ impl WithOrigin {
                 }
             }
             Value::String(s) => de::Unexpected::Str(s),
+            Value::SecretString(_) => de::Unexpected::Other("secret"),
             Value::Array(_) => de::Unexpected::Seq,
             Value::Object(_) => de::Unexpected::Map,
         };
@@ -143,6 +145,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
                 .deserialize_any(visitor)
                 .map_err(|err| self.enrich_err(err)),
             Value::String(value) => visitor.visit_str(value),
+            Value::SecretString(value) => visitor.visit_str(value.expose_secret()),
             Value::Array(array) => self.parse_array(array, visitor),
             Value::Object(object) => self.parse_object(object, visitor),
         };
