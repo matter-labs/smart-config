@@ -234,7 +234,7 @@ impl<'a, C> ConfigParser<'a, C> {
     }
 }
 
-impl<'a, C: DeserializeConfig> ConfigParser<'a, C> {
+impl<C: DeserializeConfig> ConfigParser<'_, C> {
     /// Performs parsing.
     ///
     /// # Errors

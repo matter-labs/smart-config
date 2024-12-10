@@ -12,7 +12,7 @@ use smart_config::{
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
     Yaml,
 };
-use smart_config_commands::Printer;
+use smart_config_commands::{ParamRef, Printer};
 
 /// Configuration with type params of several types.
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -130,12 +130,17 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
 #[derive(Debug, Parser)]
 enum Cli {
     /// Prints configuration help.
-    Print,
+    Print {
+        /// Filter for param paths.
+        filter: Option<String>,
+    },
     /// Debugs configuration values.
     Debug {
         /// Whether to inject incorrect config values.
         #[arg(long)]
         bogus: bool,
+        /// Filter for param paths.
+        filter: Option<String>,
     },
 }
 
@@ -146,12 +151,22 @@ fn main() {
     schema.insert::<TestConfig>("test").unwrap();
 
     match cli {
-        Cli::Print => {
-            Printer::stderr().print_help(&schema, |_| true).unwrap();
+        Cli::Print { filter } => {
+            let filter = |param_ref: ParamRef<'_>| {
+                filter.as_ref().map_or(true, |needle| {
+                    param_ref.all_paths().any(|path| path.contains(needle))
+                })
+            };
+            Printer::stderr().print_help(&schema, filter).unwrap();
         }
-        Cli::Debug { bogus } => {
+        Cli::Debug { bogus, filter } => {
             let repo = create_mock_repo(&schema, bogus);
-            Printer::stderr().print_debug(&repo).unwrap();
+            let filter = |param_ref: ParamRef<'_>| {
+                filter.as_ref().map_or(true, |needle| {
+                    param_ref.all_paths().any(|path| path.contains(needle))
+                })
+            };
+            Printer::stderr().print_debug(&repo, filter).unwrap();
         }
     }
 }

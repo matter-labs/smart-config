@@ -7,7 +7,7 @@ use smart_config::{
     ConfigRepository, ParseError, ParseErrors,
 };
 
-use crate::Printer;
+use crate::{ParamRef, Printer};
 
 const SECTION: Style = Style::new().bold();
 const ARROW: Style = Style::new().bold();
@@ -32,7 +32,11 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
     /// # Errors
     ///
     /// Propagates I/O errors.
-    pub fn print_debug(self, repo: &ConfigRepository) -> io::Result<()> {
+    pub fn print_debug(
+        self,
+        repo: &ConfigRepository,
+        mut filter: impl FnMut(ParamRef<'_>) -> bool,
+    ) -> io::Result<()> {
         let mut writer = self.writer;
         if repo.sources().is_empty() {
             writeln!(&mut writer, "configuration is empty")?;
@@ -51,11 +55,16 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
 
         let merged = repo.merged();
         for config_parser in repo.iter() {
-            let config_ref = config_parser.config();
-            for (i, param) in config_ref.metadata().params.iter().enumerate() {
-                let param_path = format!("{}.{}", config_ref.prefix(), param.name);
-                if let Some(value) = merged.pointer(&param_path) {
-                    write_param(&mut writer, &param_path, value)?;
+            let config = config_parser.config();
+            for (i, param) in config.metadata().params.iter().enumerate() {
+                let param_ref = ParamRef { config, param };
+                if !filter(param_ref) {
+                    continue;
+                }
+                let canonical_path = param_ref.canonical_path();
+
+                if let Some(value) = merged.pointer(&canonical_path) {
+                    write_param(&mut writer, &canonical_path, value)?;
                     if let Err(err) = config_parser.parse_param(i) {
                         write_de_errors(&mut writer, &err)?;
                     }
