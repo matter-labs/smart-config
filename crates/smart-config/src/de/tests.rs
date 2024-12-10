@@ -340,7 +340,7 @@ fn type_mismatch_parsing_error() {
     let errors = test_deserialize::<NestedConfig>(&env).unwrap_err();
     let err = errors.first();
 
-    assert!(err.inner().to_string().contains("invalid type"), "{err}");
+    assert!(err.inner().to_string().contains("invalid digit"), "{err}");
     assert_eq!(extract_env_var_name(err.origin()), "other_int");
     assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "other_int");
@@ -583,7 +583,7 @@ fn multiple_errors_for_composed_deserializers() {
     assert!(inner.contains("invalid value"), "{inner}");
     let err = errors.iter().find(|err| err.path() == "array.1").unwrap();
     let inner = err.inner().to_string();
-    assert!(inner.contains("invalid type"), "{inner}");
+    assert!(inner.contains("invalid digit"), "{inner}");
 
     let json = config!("durations": r#"[5, "30us"]"#);
     let errors = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();

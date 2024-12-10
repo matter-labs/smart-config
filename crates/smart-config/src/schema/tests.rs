@@ -4,8 +4,9 @@ use assert_matches::assert_matches;
 
 use super::*;
 use crate::{
-    metadata::BasicTypes, value::Value, ConfigRepository, DescribeConfig, DeserializeConfig,
-    Environment,
+    metadata::BasicTypes,
+    value::{StrValue, Value},
+    ConfigRepository, DescribeConfig, DeserializeConfig, Environment,
 };
 
 /// # Test configuration
@@ -110,11 +111,11 @@ fn using_alias() {
     let parser = ConfigRepository::new(&schema).with(env);
     assert_matches!(
         &parser.merged().get(Pointer("test.str")).unwrap().inner,
-        Value::String(s) if s == "test"
+        Value::String(StrValue::Plain(s)) if s == "test"
     );
     assert_matches!(
         &parser.merged().get(Pointer("test.optional")).unwrap().inner,
-        Value::String(s) if s == "123"
+        Value::String(StrValue::Plain(s)) if s == "123"
     );
 
     let config: TestConfig = parser.single().unwrap().parse().unwrap();
@@ -186,18 +187,18 @@ fn using_nesting() {
     let repo = ConfigRepository::new(&schema).with(env);
     assert_matches!(
         &repo.merged().get(Pointer("bool_value")).unwrap().inner,
-        Value::String(s) if s == "true"
+        Value::String(StrValue::Plain(s)) if s == "true"
     );
     assert_matches!(
         &repo.merged()
             .get(Pointer("hierarchical.str"))
             .unwrap()
             .inner,
-        Value::String(s) if s == "???"
+        Value::String(StrValue::Plain(s)) if s == "???"
     );
     assert_matches!(
         &repo.merged().get(Pointer("optional")).unwrap().inner,
-        Value::String(s) if s == "777"
+        Value::String(StrValue::Plain(s)) if s == "777"
     );
 
     let config: NestingConfig = repo.single().unwrap().parse().unwrap();

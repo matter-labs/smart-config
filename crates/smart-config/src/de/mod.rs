@@ -49,12 +49,13 @@ pub use self::{
     macros::Serde,
     param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
     repeated::{Delimited, Repeated},
+    secrets::Secret,
     units::WithUnit,
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig, LowLevelError},
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
-    value::{Pointer, Value, ValueOrigin, WithOrigin},
+    value::{Pointer, StrValue, Value, ValueOrigin, WithOrigin},
     DescribeConfig, DeserializeConfigError, Json, ParseError, ParseErrors,
 };
 
@@ -293,7 +294,7 @@ impl WithOrigin {
     fn coerce_value_type(&self, expecting: BasicTypes) -> Option<Self> {
         const STRUCTURED: BasicTypes = BasicTypes::ARRAY.or(BasicTypes::OBJECT);
 
-        let Value::String(str) = &self.inner else {
+        let Value::String(StrValue::Plain(str)) = &self.inner else {
             return None; // we only know how to coerce strings so far
         };
 

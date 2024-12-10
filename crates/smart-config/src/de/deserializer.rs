@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use secrecy::ExposeSecret;
 use serde::{
     de::{
         self,
@@ -14,7 +13,7 @@ use serde::{
 
 use crate::{
     error::ErrorWithOrigin,
-    value::{Map, Value, ValueOrigin, WithOrigin},
+    value::{Map, StrValue, Value, ValueOrigin, WithOrigin},
 };
 
 /// Available deserialization options.
@@ -41,8 +40,8 @@ impl WithOrigin {
                     de::Unexpected::Other("number")
                 }
             }
-            Value::String(s) => de::Unexpected::Str(s),
-            Value::SecretString(_) => de::Unexpected::Other("secret"),
+            Value::String(StrValue::Plain(s)) => de::Unexpected::Str(s),
+            Value::String(StrValue::Secret(_)) => de::Unexpected::Other("secret"),
             Value::Array(_) => de::Unexpected::Seq,
             Value::Object(_) => de::Unexpected::Map,
         };
@@ -59,7 +58,7 @@ macro_rules! parse_int_value {
         fn $method<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
             let result = match self.value() {
                 Value::String(s) => {
-                    match s.parse::<$ty>() {
+                    match s.expose().parse::<$ty>() {
                         Ok(val) => val.into_deserializer().$method(visitor),
                         Err(err) => {
                             let err = DeError::custom(format_args!("{err} while parsing {} value '{s}'", stringify!($ty)));
@@ -144,8 +143,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
             Value::Number(value) => value
                 .deserialize_any(visitor)
                 .map_err(|err| self.enrich_err(err)),
-            Value::String(value) => visitor.visit_str(value),
-            Value::SecretString(value) => visitor.visit_str(value.expose_secret()),
+            Value::String(value) => visitor.visit_str(value.expose()),
             Value::Array(array) => self.parse_array(array, visitor),
             Value::Object(object) => self.parse_object(object, visitor),
         };
@@ -230,7 +228,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
                 let (variant, value) = object.iter().next().unwrap();
                 (variant.as_str(), Some(value))
             }
-            Value::String(s) => (s.as_str(), None),
+            Value::String(s) => (s.expose(), None),
             _ => return Err(self.invalid_type("string or object with single key")),
         };
 
@@ -262,7 +260,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
     fn deserialize_bool<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let result = match self.value() {
             Value::Bool(value) => visitor.visit_bool(*value),
-            Value::String(s) => match s.parse::<bool>() {
+            Value::String(s) => match s.expose().parse::<bool>() {
                 Ok(val) => visitor.visit_bool(val),
                 Err(err) => {
                     let err =
@@ -290,7 +288,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
 
     fn deserialize_string<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let result = match self.value() {
-            Value::String(s) => visitor.visit_str(s),
+            Value::String(s) => visitor.visit_str(s.expose()),
             Value::Null => visitor.visit_string("null".to_string()),
             Value::Bool(value) => visitor.visit_string(value.to_string()),
             Value::Number(value) => visitor.visit_string(value.to_string()),
@@ -312,7 +310,7 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
         let result = match self.value() {
-            Value::String(s) => visitor.visit_str(s),
+            Value::String(s) => visitor.visit_str(s.expose()),
             Value::Array(array) => self.parse_array(array, visitor),
             _ => return Err(self.invalid_type("string or array")),
         };

@@ -127,6 +127,7 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) default: Option<DefaultValue>,
     pub(crate) flatten: bool,
     pub(crate) nest: bool,
+    pub(crate) is_secret: bool,
     pub(crate) with: Option<Expr>,
 }
 
@@ -140,6 +141,7 @@ impl ConfigFieldAttrs {
         let mut nested_span = None;
         let mut flatten_span = None;
         let mut with = None;
+        let mut secret_span = None;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("rename") {
@@ -163,6 +165,9 @@ impl ConfigFieldAttrs {
                     Ok(())
                 } else if meta.path.is_ident("nest") {
                     nested_span = Some(meta.path.span());
+                    Ok(())
+                } else if meta.path.is_ident("secret") {
+                    secret_span = Some(meta.path.span());
                     Ok(())
                 } else if meta.path.is_ident("with") {
                     with = Some(meta.value()?.parse::<Expr>()?);
@@ -198,6 +203,10 @@ impl ConfigFieldAttrs {
             let span = flatten_span.or(nested_span).unwrap();
             return Err(syn::Error::new(span, msg));
         }
+        if let (Some(secret_span), true) = (secret_span, nest) {
+            let msg = "only params can be marked as secret, sub-configs cannot";
+            return Err(syn::Error::new(secret_span, msg));
+        }
 
         Ok(Self {
             rename,
@@ -206,6 +215,7 @@ impl ConfigFieldAttrs {
             flatten,
             nest,
             with,
+            is_secret: secret_span.is_some(),
         })
     }
 }

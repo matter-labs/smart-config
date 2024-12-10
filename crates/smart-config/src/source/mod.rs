@@ -1,11 +1,11 @@
-use std::{iter, marker::PhantomData, mem, sync::Arc};
+use std::{iter, marker::PhantomData, sync::Arc};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
-    value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
+    value::{Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseError, ParseErrors,
 };
 
@@ -315,11 +315,8 @@ impl WithOrigin {
                     continue;
                 };
 
-                if matches!(&value.inner, Value::String(_)) {
-                    let Value::String(str) = mem::take(&mut value.inner) else {
-                        unreachable!(); // just checked
-                    };
-                    value.inner = Value::SecretString(str.into());
+                if let Value::String(str) = &mut value.inner {
+                    str.make_secret();
                 }
                 // TODO: log warning otherwise
             }
@@ -401,7 +398,7 @@ impl WithOrigin {
         };
 
         for (key, value) in kvs {
-            let value = Self::new(Value::String(value.inner.clone()), value.origin);
+            let value = Self::new(Value::String(StrValue::Plain(value.inner)), value.origin);
 
             // Get all params with full paths matching a prefix of `key` split on one of `_`s. E.g.,
             // for `key = "very_long_prefix_value"`, we'll try "very_long_prefix_value", "very_long_prefix", ..., "very".

@@ -263,7 +263,8 @@ impl DeserializeParam<Duration> for WithUnit {
     ) -> Result<Duration, ErrorWithOrigin> {
         let deserializer = ctx.current_value_deserializer(param.name)?;
         let raw = if let Value::String(s) = deserializer.value() {
-            s.parse::<RawDuration>()
+            s.expose()
+                .parse::<RawDuration>()
                 .map_err(|err| deserializer.enrich_err(err))?
         } else {
             RawDuration::deserialize(deserializer)?
@@ -355,7 +356,8 @@ impl DeserializeParam<ByteSize> for WithUnit {
     ) -> Result<ByteSize, ErrorWithOrigin> {
         let deserializer = ctx.current_value_deserializer(param.name)?;
         let raw = if let Value::String(s) = deserializer.value() {
-            s.parse::<RawByteSize>()
+            s.expose()
+                .parse::<RawByteSize>()
                 .map_err(|err| deserializer.enrich_err(err))?
         } else {
             RawByteSize::deserialize(deserializer)?

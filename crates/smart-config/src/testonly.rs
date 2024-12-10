@@ -18,7 +18,7 @@ use crate::{
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
     metadata::{SizeUnit, TimeUnit},
     source::ConfigContents,
-    value::{FileFormat, Value, ValueOrigin, WithOrigin},
+    value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
 
@@ -235,6 +235,13 @@ pub(crate) struct ComposedConfig {
 pub(crate) struct SecretConfig {
     pub key: SecretString,
     pub opt: Option<SecretString>,
+    #[config(secret)]
+    pub path: Option<PathBuf>,
+    /// We need to override the default deserializer to be able to read from string.
+    #[config(default, secret, with = de::OrString(()))]
+    pub int: u64,
+    #[config(default_t = vec![1], secret, with = de::Delimited(","))]
+    pub seq: Vec<u64>,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
@@ -245,7 +252,7 @@ pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
         (
             key,
             WithOrigin {
-                inner: Value::String(value.inner),
+                inner: Value::String(StrValue::Plain(value.inner)),
                 origin: value.origin,
             },
         )

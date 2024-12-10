@@ -1,8 +1,8 @@
 //! Enriched JSON object model that allows to associate values with origins.
 
-use std::{collections::HashMap, fmt, iter, sync::Arc};
+use std::{collections::HashMap, fmt, iter, mem, sync::Arc};
 
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 
 use crate::metadata::BasicTypes;
 
@@ -82,6 +82,47 @@ impl fmt::Display for ValueOrigin {
     }
 }
 
+/// String value: either a plaintext one, or a secret.
+#[derive(Debug, Clone)]
+pub enum StrValue {
+    /// Plain string value.
+    Plain(String),
+    /// Secret string value.
+    Secret(SecretString),
+}
+
+impl StrValue {
+    /// Exposes a secret string if appropriate.
+    pub fn expose(&self) -> &str {
+        match self {
+            Self::Plain(s) => s,
+            Self::Secret(s) => s.expose_secret(),
+        }
+    }
+
+    pub(crate) fn is_secret(&self) -> bool {
+        matches!(self, Self::Secret(_))
+    }
+
+    pub(crate) fn make_secret(&mut self) {
+        match self {
+            Self::Plain(s) => {
+                *self = Self::Secret(mem::take(s).into());
+            }
+            Self::Secret(_) => { /* value is already secret; do nothing */ }
+        }
+    }
+}
+
+impl fmt::Display for StrValue {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Plain(s) => s,
+            Self::Secret(_) => "[REDACTED]",
+        })
+    }
+}
+
 /// JSON value with additional origin information.
 #[derive(Debug, Clone, Default)]
 pub enum Value {
@@ -93,9 +134,7 @@ pub enum Value {
     /// Numeric value.
     Number(serde_json::Number),
     /// String value.
-    String(String),
-    /// Secret string value.
-    SecretString(SecretString),
+    String(StrValue),
     /// Array of values.
     Array(Vec<WithOrigin>),
     /// Object / map of values.
@@ -111,7 +150,13 @@ impl Value {
                 types.contains(BasicTypes::INTEGER)
             }
             Self::Number(_) => types.contains(BasicTypes::FLOAT),
-            Self::String(_) | Self::SecretString(_) => types.contains(BasicTypes::STRING),
+            Self::String(_) => {
+                // Relax type consistency check in order to be able to deserialize numbers / bools
+                // (which is supported on the `ValueDeserializer` level).
+                types.contains(BasicTypes::STRING)
+                    || types.contains(BasicTypes::INTEGER)
+                    || types.contains(BasicTypes::BOOL)
+            }
             Self::Array(_) => types.contains(BasicTypes::ARRAY),
             Self::Object(_) => types.contains(BasicTypes::OBJECT),
         }

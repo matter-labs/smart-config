@@ -4,13 +4,15 @@ use super::{DeserializeContext, DeserializeParam, WellKnown};
 use crate::{
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
-    value::Value,
+    value::{StrValue, Value},
 };
 
+/// FIXME
 #[derive(Debug)]
 pub struct Secret<De>(pub De);
 
-impl DeserializeParam<SecretString> for Secret<()> {
+// We don't really caret about the `Secret` type param; we just need so it doesn't intersect with the generic implementation below.
+impl DeserializeParam<SecretString> for Secret<String> {
     const EXPECTING: BasicTypes = BasicTypes::STRING;
 
     fn type_qualifiers(&self) -> TypeQualifiers {
@@ -24,16 +26,16 @@ impl DeserializeParam<SecretString> for Secret<()> {
     ) -> Result<SecretString, ErrorWithOrigin> {
         let de = ctx.current_value_deserializer(param.name)?;
         Ok(match de.value() {
-            Value::SecretString(s) => s.clone(),
-            Value::String(s) => s.clone().into(),
+            Value::String(StrValue::Secret(s)) => s.clone(),
+            Value::String(StrValue::Plain(s)) => s.clone().into(),
             _ => return Err(de.invalid_type("secret string")),
         })
     }
 }
 
 impl WellKnown for SecretString {
-    type Deserializer = Secret<()>;
-    const DE: Self::Deserializer = Secret(());
+    type Deserializer = Secret<String>;
+    const DE: Self::Deserializer = Secret(String::new());
 }
 
 impl<T, De> DeserializeParam<T> for Secret<De>

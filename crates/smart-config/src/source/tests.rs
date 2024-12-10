@@ -93,7 +93,7 @@ fn parsing_enum_config_with_schema() {
     let repo = ConfigRepository::new(&schema).with(env);
     assert_matches!(
         &repo.merged().get(Pointer("flag")).unwrap().inner,
-        Value::String(s) if s == "false"
+        Value::String(StrValue::Plain(s)) if s == "false"
     );
 
     let config: EnumConfig = repo.single().unwrap().parse().unwrap();
@@ -222,15 +222,15 @@ fn nesting_json() {
 
     assert_matches!(
         &map.get(Pointer("value")).unwrap().inner,
-        Value::String(s) if s == "123"
+        Value::String(StrValue::Plain(s)) if s == "123"
     );
     assert_matches!(
         &map.get(Pointer("nested.renamed")).unwrap().inner,
-        Value::String(s) if s == "first"
+        Value::String(StrValue::Plain(s)) if s == "first"
     );
     assert_matches!(
         &map.get(Pointer("nested.other_int")).unwrap().inner,
-        Value::String(s) if s == "321"
+        Value::String(StrValue::Plain(s)) if s == "321"
     );
 
     let config: ConfigWithNesting = test_deserialize(&map).unwrap();
@@ -419,7 +419,7 @@ fn merging_configs() {
     );
 
     let nested_str = merged["nested"].get(Pointer("string")).unwrap();
-    assert_matches!(&nested_str.inner, Value::String(s) if s == "???");
+    assert_matches!(&nested_str.inner, Value::String(StrValue::Plain(s)) if s == "???");
     assert_matches!(
         nested_str.origin.as_ref(),
         ValueOrigin::Path { source, .. } if extract_json_name(source) == "base.json"
@@ -479,7 +479,7 @@ fn using_env_config_overrides() {
     repo = repo.with(env);
 
     let enum_value = repo.merged().get(Pointer("test.nested.renamed")).unwrap();
-    assert_matches!(&enum_value.inner, Value::String(s) if s == "second");
+    assert_matches!(&enum_value.inner, Value::String(StrValue::Plain(s)) if s == "second");
     extract_env_var_name(&enum_value.origin);
 
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
@@ -490,7 +490,7 @@ fn using_env_config_overrides() {
     repo = repo.with(env);
 
     let int_value = repo.merged().get(Pointer("test.value")).unwrap();
-    assert_matches!(&int_value.inner, Value::String(s) if s == "555");
+    assert_matches!(&int_value.inner, Value::String(StrValue::Plain(s)) if s == "555");
 
     let config: ConfigWithNesting = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.value, 555);
@@ -656,7 +656,7 @@ fn nesting_for_object_param() {
 
     assert_matches!(
         &repo.merged().get(Pointer("test.param_int")).unwrap().inner,
-        Value::String(s) if s == "123"
+        Value::String(StrValue::Plain(s)) if s == "123"
     );
 
     let object = repo.merged().get(Pointer("test.param")).unwrap();
@@ -712,10 +712,10 @@ fn nesting_not_applied_if_original_param_is_defined() {
 
     assert_matches!(
         &repo.merged().get(Pointer("test.param_int")).unwrap().inner,
-        Value::String(s) if s == "123"
+        Value::String(StrValue::Plain(s)) if s == "123"
     );
     let val = &repo.merged().get(Pointer("test.param")).unwrap().inner;
-    assert_matches!(val, Value::String(s) if s == r#"{ "int": 42 }"#);
+    assert_matches!(val, Value::String(StrValue::Plain(s)) if s == r#"{ "int": 42 }"#);
 }
 
 #[test]
@@ -972,26 +972,47 @@ fn reading_secrets() {
 
     assert_matches!(
         &repo.merged().get(Pointer("key")).unwrap().inner,
-        Value::SecretString(_)
+        Value::String(StrValue::Secret(_))
     );
     let config: SecretConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.key.expose_secret(), "super_secret");
     assert!(config.opt.is_none());
 
-    let overrides = config!("key": "override_secret", "opt": "opt_secret");
+    let overrides = config!(
+        "key": "override_secret",
+        "opt": "opt_secret",
+        "path": "/super/secret/path",
+        "int": "123",
+        "seq": "1,2,3",
+    );
     repo = repo.with(overrides);
 
     assert_matches!(
         &repo.merged().get(Pointer("key")).unwrap().inner,
-        Value::SecretString(_)
+        Value::String(StrValue::Secret(_))
     );
     assert_matches!(
         &repo.merged().get(Pointer("opt")).unwrap().inner,
-        Value::SecretString(_)
+        Value::String(StrValue::Secret(_))
+    );
+    assert_matches!(
+        &repo.merged().get(Pointer("path")).unwrap().inner,
+        Value::String(StrValue::Secret(_))
+    );
+    assert_matches!(
+        &repo.merged().get(Pointer("int")).unwrap().inner,
+        Value::String(StrValue::Secret(_))
+    );
+    assert_matches!(
+        &repo.merged().get(Pointer("seq")).unwrap().inner,
+        Value::String(StrValue::Secret(_))
     );
     let config: SecretConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.key.expose_secret(), "override_secret");
     assert_eq!(config.opt.unwrap().expose_secret(), "opt_secret");
+    assert_eq!(config.path.unwrap().as_os_str(), "/super/secret/path");
+    assert_eq!(config.int, 123);
+    assert_eq!(config.seq, [1, 2, 3]);
 
     let debug_str = format!("{:?}", repo.merged());
     assert!(!debug_str.contains("override_secret"), "{debug_str}");

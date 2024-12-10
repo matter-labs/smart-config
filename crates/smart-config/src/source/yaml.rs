@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Context;
 
 use super::{ConfigContents, ConfigSource};
-use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
+use crate::value::{FileFormat, Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin};
 
 /// YAML-based configuration source.
 #[derive(Debug)]
@@ -64,7 +64,7 @@ impl Yaml {
             serde_yaml::Value::Null => Value::Null,
             serde_yaml::Value::Bool(value) => Value::Bool(value),
             serde_yaml::Value::Number(value) => Value::Number(Self::map_number(&value, &path)?),
-            serde_yaml::Value::String(value) => Value::String(value),
+            serde_yaml::Value::String(value) => Value::String(StrValue::Plain(value)),
             serde_yaml::Value::Sequence(items) => Value::Array(
                 items
                     .into_iter()
@@ -152,7 +152,7 @@ array:
         );
 
         let str = yaml.inner["nested"].get(Pointer("string")).unwrap();
-        assert_matches!(&str.inner, Value::String(s) if s == "what?");
+        assert_matches!(&str.inner, Value::String(StrValue::Plain(s)) if s == "what?");
         assert_matches!(
             str.origin.as_ref(),
             ValueOrigin::Path { path, source } if filename(source) == "test.yml" && path == "nested.string"

@@ -37,6 +37,9 @@ impl ConfigField {
         };
         let default_fn = self.default_fn();
 
+        if self.attrs.is_secret {
+            deserializer = quote!(#cr::de::Secret(#deserializer));
+        }
         if let Some(default_fn) = &default_fn {
             deserializer = quote!(#cr::de::WithDefault::new(#deserializer, #default_fn));
         }
