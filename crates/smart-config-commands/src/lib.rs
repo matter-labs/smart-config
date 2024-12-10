@@ -35,7 +35,10 @@
 //! let mut repo = ConfigRepository::new(&schema);
 //! // Add sources to the repository...
 //!
-//! Printer::stderr().print_debug(&repo)?;
+//! Printer::stderr().print_debug(&repo, |param_ref| {
+//!     // Allows filtering output params
+//!     param_ref.canonical_path().starts_with("test.")
+//! })?;
 //! # std::io::Result::Ok(())
 //! ```
 

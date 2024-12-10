@@ -31,9 +31,9 @@ use smart_config_commands::Printer;
 let mut schema = ConfigSchema::default();
 // Add configurations to the schema...
 
-Printer::stdout().print_help(&schema, |param| {
+Printer::stdout().print_help(&schema, |param_ref| {
     // Allows filtering output params.
-    param.name.contains("test")
+    param_ref.param.name.contains("test")
 })?;
 io::Result::Ok(())
 ```
@@ -54,7 +54,7 @@ let mut schema = ConfigSchema::default();
 let mut repo = ConfigRepository::new(&schema);
 // Add sources to the repo...
 
-Printer::stdout().print_debug(&repo)?;
+Printer::stdout().print_debug(&repo, |_| true)?;
 io::Result::Ok(())
 ```
 
