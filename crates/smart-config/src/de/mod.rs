@@ -66,6 +66,7 @@ mod param;
 #[cfg(feature = "primitive-types")]
 mod primitive_types_impl;
 mod repeated;
+mod secrets;
 #[cfg(test)]
 mod tests;
 mod units;

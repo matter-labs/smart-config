@@ -97,22 +97,6 @@ pub trait WellKnown: Sized {
     const DE: Self::Deserializer;
 }
 
-impl<T: WellKnown> DeserializeParam<T> for () {
-    const EXPECTING: BasicTypes = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
-
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        T::DE.type_qualifiers()
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<T, ErrorWithOrigin> {
-        T::DE.deserialize_param(ctx, param)
-    }
-}
-
 /// Deserializer powered by `serde`. Usually created with the help of [`Serde!`](crate::Serde!) macro;
 /// see its docs for the examples of usage.
 pub struct Serde<const EXPECTING: u8>;
@@ -288,6 +272,10 @@ pub struct Optional<De>(pub De);
 
 impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
+
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        self.0.type_qualifiers()
+    }
 
     fn deserialize_param(
         &self,

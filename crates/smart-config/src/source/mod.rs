@@ -1,4 +1,4 @@
-use std::{iter, marker::PhantomData, sync::Arc};
+use std::{iter, marker::PhantomData, mem, sync::Arc};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
@@ -184,6 +184,7 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
 impl WithOrigin {
     fn preprocess_source(&mut self, schema: &ConfigSchema) {
         self.copy_aliased_values(schema);
+        self.mark_secrets(schema);
         self.nest_object_params(schema);
     }
 
@@ -292,6 +293,36 @@ impl WithOrigin {
                     origin: create_origin(at),
                 },
             );
+        }
+    }
+
+    /// Wraps secret string values into `Value::SecretString(_)`.
+    fn mark_secrets(&mut self, schema: &ConfigSchema) {
+        for (prefix, config_data) in schema.iter() {
+            let Some(Self {
+                inner: Value::Object(config_object),
+                ..
+            }) = self.get_mut(prefix)
+            else {
+                continue;
+            };
+
+            for param in config_data.metadata.params {
+                if !param.deserializer.type_qualifiers().is_secret {
+                    continue;
+                }
+                let Some(value) = config_object.get_mut(param.name) else {
+                    continue;
+                };
+
+                if matches!(&value.inner, Value::String(_)) {
+                    let Value::String(str) = mem::take(&mut value.inner) else {
+                        unreachable!(); // just checked
+                    };
+                    value.inner = Value::SecretString(str.into());
+                }
+                // TODO: log warning otherwise
+            }
         }
     }
 

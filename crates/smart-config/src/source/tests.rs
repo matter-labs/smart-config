@@ -4,6 +4,7 @@ use std::{
 };
 
 use assert_matches::assert_matches;
+use secrecy::ExposeSecret;
 
 use super::*;
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, ComposedConfig, CompoundConfig,
         ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig,
-        NestedConfig, SimpleEnum, ValueCoercingConfig,
+        NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
     },
     ByteSize,
 };
@@ -960,4 +961,39 @@ fn nesting_with_composed_deserializers_errors() {
     );
     let inner = err.inner().to_string();
     assert!(inner.contains("invalid type"), "{inner}");
+}
+
+#[test]
+fn reading_secrets() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<SecretConfig>("").unwrap();
+    let env = Environment::from_iter("APP_", [("APP_KEY", "super_secret")]);
+    let mut repo = ConfigRepository::new(&schema).with(env);
+
+    assert_matches!(
+        &repo.merged().get(Pointer("key")).unwrap().inner,
+        Value::SecretString(_)
+    );
+    let config: SecretConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.key.expose_secret(), "super_secret");
+    assert!(config.opt.is_none());
+
+    let overrides = config!("key": "override_secret", "opt": "opt_secret");
+    repo = repo.with(overrides);
+
+    assert_matches!(
+        &repo.merged().get(Pointer("key")).unwrap().inner,
+        Value::SecretString(_)
+    );
+    assert_matches!(
+        &repo.merged().get(Pointer("opt")).unwrap().inner,
+        Value::SecretString(_)
+    );
+    let config: SecretConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.key.expose_secret(), "override_secret");
+    assert_eq!(config.opt.unwrap().expose_secret(), "opt_secret");
+
+    let debug_str = format!("{:?}", repo.merged());
+    assert!(!debug_str.contains("override_secret"), "{debug_str}");
+    assert!(!debug_str.contains("opt_secret"), "{debug_str}");
 }

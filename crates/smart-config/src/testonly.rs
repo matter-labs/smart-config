@@ -11,6 +11,7 @@ use std::{
 
 use anyhow::Context as _;
 use assert_matches::assert_matches;
+use secrecy::SecretString;
 use serde::Deserialize;
 
 use crate::{
@@ -227,6 +228,13 @@ pub(crate) struct ComposedConfig {
     pub map_of_sizes: HashMap<String, ByteSize>,
     #[config(default)]
     pub map_of_ints: HashMap<u64, Duration>,
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct SecretConfig {
+    pub key: SecretString,
+    pub opt: Option<SecretString>,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
