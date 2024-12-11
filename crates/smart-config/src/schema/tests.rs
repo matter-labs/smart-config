@@ -207,6 +207,14 @@ struct BogusNestedConfig {
     str: TestConfig,
 }
 
+#[derive(Debug, DescribeConfig)]
+#[config(crate = crate)]
+struct BogusNestedConfigWithAlias {
+    #[allow(dead_code)]
+    #[config(nest, alias = "str")]
+    nested: TestConfig,
+}
+
 #[test]
 fn mountpoint_errors() {
     let mut schema = ConfigSchema::default();
@@ -311,4 +319,30 @@ fn aliasing_mountpoint_errors() {
     assert!(err.contains("Cannot insert param"), "{err}");
     assert!(err.contains("at `test.bool_value`"), "{err}");
     assert!(err.contains("expects integer"), "{err}");
+}
+
+#[test]
+fn aliasing_mountpoint_errors_via_nested_configs() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<NestingConfig>("test").unwrap();
+
+    let err = schema
+        .insert::<BogusNestedConfigWithAlias>("test")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Cannot mount config"), "{err}");
+    assert!(err.contains("at `test.str`"), "{err}");
+    assert!(err.contains("parameter(s) are already mounted"), "{err}");
+
+    // Mount a config at the location of a param of the nested config.
+    let mut schema = ConfigSchema::default();
+    schema.insert::<TestConfig>("str.optional").unwrap();
+
+    let err = schema
+        .insert::<BogusNestedConfigWithAlias>("")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Cannot insert param"), "{err}");
+    assert!(err.contains("at `str.optional`"), "{err}");
+    assert!(err.contains(" config(s) are already mounted"), "{err}");
 }

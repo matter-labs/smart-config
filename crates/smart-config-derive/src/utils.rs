@@ -198,10 +198,9 @@ impl ConfigFieldAttrs {
             let msg = "cannot make `flatten`ed config optional; did you mean to make it nested?";
             return Err(syn::Error::new(flatten_span, msg));
         }
-        if nest && !aliases.is_empty() {
-            let msg = "aliases for nested / flattened configs are not supported yet";
-            let span = flatten_span.or(nested_span).unwrap();
-            return Err(syn::Error::new(span, msg));
+        if let (Some(flatten_span), false) = (flatten_span, aliases.is_empty()) {
+            let msg = "aliases for flattened configs are not supported yet; did you mean to make a config nested?";
+            return Err(syn::Error::new(flatten_span, msg));
         }
         if let (Some(secret_span), true) = (secret_span, nest) {
             let msg = "only params can be marked as secret, sub-configs cannot";

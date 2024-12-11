@@ -88,7 +88,7 @@ pub(crate) struct ConfigWithNesting {
     pub value: u32,
     #[config(default, alias = "alias")]
     pub merged: String,
-    #[config(nest)]
+    #[config(nest, alias = "nest")]
     pub nested: NestedConfig,
 }
 

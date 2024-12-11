@@ -111,6 +111,7 @@ impl ConfigField {
     fn describe_nested_config(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
         let cr = parent.cr(self.name_span());
         let name = &self.name;
+        let aliases = self.attrs.aliases.iter();
         let ty = Self::unwrap_option(&self.ty).unwrap_or(&self.ty);
         let config_name = if self.attrs.flatten {
             String::new()
@@ -121,6 +122,7 @@ impl ConfigField {
         quote_spanned! {self.name_span()=>
             #cr::metadata::NestedConfigMetadata {
                 name: #config_name,
+                aliases: &[#(#aliases,)*],
                 rust_field_name: ::core::stringify!(#name),
                 meta: &<#ty as #cr::DescribeConfig>::DESCRIPTION,
             }
@@ -135,6 +137,7 @@ impl ConfigContainer {
         let name_str = name.to_string();
         let help = &self.help;
 
+        // FIXME: also validate names / aliases for nested configs
         let all_fields = self.fields.all_fields();
         let params = all_fields.iter().filter_map(|field| {
             if !field.attrs.nest {

@@ -18,7 +18,7 @@ mod tests;
 #[derive(Debug, Clone)]
 pub(crate) struct ConfigData {
     pub metadata: &'static ConfigMetadata,
-    pub aliases: Vec<Pointer<'static>>,
+    pub aliases: Vec<Cow<'static, str>>,
 }
 
 impl ConfigData {
@@ -49,8 +49,8 @@ impl<'a> ConfigRef<'a> {
     }
 
     /// Iterates over all aliases for this config.
-    pub fn aliases(&self) -> impl Iterator<Item = &'static str> + '_ {
-        self.data.aliases.iter().map(|ptr| ptr.0)
+    pub fn aliases(&self) -> impl Iterator<Item = &str> + '_ {
+        self.data.aliases.iter().map(Cow::as_ref)
     }
 }
 
@@ -69,9 +69,9 @@ impl ConfigMut<'_> {
     }
 
     /// Iterates over all aliases for this config.
-    pub fn aliases(&self) -> impl Iterator<Item = &'static str> + '_ {
+    pub fn aliases(&self) -> impl Iterator<Item = &str> + '_ {
         let data = &self.schema.configs[&(self.type_id, self.prefix.as_str().into())];
-        data.aliases.iter().map(|ptr| ptr.0)
+        data.aliases.iter().map(Cow::as_ref)
     }
 
     /// Pushes an additional alias for the config.
@@ -89,6 +89,7 @@ impl ConfigMut<'_> {
 }
 
 /// Schema for configuration. Can contain multiple configs bound to different paths.
+// TODO: more docs; e.g., document global aliases
 #[derive(Debug, Clone, Default)]
 pub struct ConfigSchema {
     configs: HashMap<(any::TypeId, Cow<'static, str>), ConfigData>,
@@ -180,8 +181,10 @@ impl ConfigSchema {
     ///
     /// Returns an error if the configuration is not registered or has more than one mount point.
     #[allow(clippy::missing_panics_doc)] // false positive
-    pub fn single_mut<C: DescribeConfig>(&mut self) -> anyhow::Result<ConfigMut<'_>> {
-        let metadata = &C::DESCRIPTION;
+    pub fn single_mut(
+        &mut self,
+        metadata: &'static ConfigMetadata,
+    ) -> anyhow::Result<ConfigMut<'_>> {
         let mut it = self.locate(metadata);
         let first_prefix = it.next().with_context(|| {
             format!(
@@ -220,10 +223,9 @@ impl ConfigSchema {
         C: DescribeConfig,
     {
         let metadata = &C::DESCRIPTION;
-        let config_id = any::TypeId::of::<C>();
 
         let mut patched = PatchedSchema::new(self);
-        patched.insert_config(prefix, config_id, metadata)?;
+        patched.insert_config(prefix, metadata)?;
         patched.commit();
         Ok(ConfigMut {
             schema: self,
@@ -242,7 +244,7 @@ impl ConfigSchema {
         let global_aliases = config_data
             .aliases
             .iter()
-            .flat_map(move |alias| local_names_.clone().map(move |name| (alias.0, name)));
+            .flat_map(move |alias| local_names_.clone().map(move |name| (alias.as_ref(), name)));
         let local_aliases = local_names
             .clone()
             .map(move |name| (canonical_prefix, name));
@@ -276,19 +278,17 @@ impl<'a> PatchedSchema<'a> {
     fn insert_config(
         &mut self,
         prefix: &'static str,
-        config_id: any::TypeId,
         metadata: &'static ConfigMetadata,
     ) -> anyhow::Result<()> {
-        self.insert_inner(prefix.into(), config_id, ConfigData::new(metadata))?;
+        self.insert_inner(prefix.into(), ConfigData::new(metadata))?;
 
         // Insert all nested configs recursively.
         let mut pending_configs: Vec<_> =
             Self::list_nested_configs(prefix, metadata.nested_configs).collect();
-        while let Some((prefix, metadata)) = pending_configs.pop() {
-            let new_configs = Self::list_nested_configs(&prefix, metadata.nested_configs);
+        while let Some((prefix, data)) = pending_configs.pop() {
+            let new_configs = Self::list_nested_configs(&prefix, data.metadata.nested_configs);
             pending_configs.extend(new_configs);
-
-            self.insert_inner(prefix.into(), metadata.ty.id(), ConfigData::new(metadata))?;
+            self.insert_inner(prefix.into(), data)?;
         }
         Ok(())
     }
@@ -300,34 +300,39 @@ impl<'a> PatchedSchema<'a> {
         alias: Pointer<'static>,
     ) -> anyhow::Result<()> {
         let config_data = &self.base.configs[&(config_id, prefix.as_str().into())];
-        if config_data.aliases.contains(&alias) {
+        if config_data.aliases.contains(&Cow::Borrowed(alias.0)) {
             return Ok(()); // shortcut in the no-op case
         }
 
         let new_data = ConfigData {
             metadata: config_data.metadata,
-            aliases: vec![alias],
+            aliases: vec![alias.0.into()],
         };
-        self.insert_inner(prefix.into(), config_id, new_data)
+        self.insert_inner(prefix.into(), new_data)
     }
 
     fn list_nested_configs<'i>(
         prefix: &'i str,
         nested: &'i [NestedConfigMetadata],
-    ) -> impl Iterator<Item = (String, &'static ConfigMetadata)> + 'i {
-        nested
-            .iter()
-            .map(|nested| (Pointer(prefix).join(nested.name), nested.meta))
+    ) -> impl Iterator<Item = (String, ConfigData)> + 'i {
+        nested.iter().map(|nested| {
+            let aliases = nested.aliases.iter().copied();
+            let aliases = aliases.map(|name| Pointer(prefix).join(name).into());
+            let config_data = ConfigData {
+                metadata: nested.meta,
+                aliases: aliases.collect(),
+            };
+            (Pointer(prefix).join(nested.name), config_data)
+        })
     }
 
     fn insert_inner(
         &mut self,
         prefix: Cow<'static, str>,
-        config_id: any::TypeId,
         mut data: ConfigData,
     ) -> anyhow::Result<()> {
         let config_name = data.metadata.ty.name_in_code();
-        let config_paths = data.aliases.iter().map(|ptr| ptr.0);
+        let config_paths = data.aliases.iter().map(Cow::as_ref);
         let config_paths = iter::once(prefix.as_ref()).chain(config_paths);
 
         for path in config_paths {
@@ -396,6 +401,7 @@ impl<'a> PatchedSchema<'a> {
         // `data` is the new data for the config, so we need to consult `base` for existing data.
         // Unlike with params, by design we never insert same config entries in the same patch,
         // so it's safe to *only* consult `base`.
+        let config_id = data.metadata.ty.id();
         if let Some(prev_data) = self.base.configs.get(&(config_id, prefix.as_ref().into())) {
             // Append new aliases to the end since their ordering determines alias priority
             let mut all_aliases = prev_data.aliases.clone();

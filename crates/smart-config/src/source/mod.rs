@@ -268,6 +268,7 @@ impl WithOrigin {
         self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
     }
 
+    // TODO: is it intentional that nested configs are not aliased?
     fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
             let canonical_map = match self.get(prefix).map(|val| &val.inner) {
@@ -279,8 +280,8 @@ impl WithOrigin {
             let alias_maps: Vec<_> = config_data
                 .aliases
                 .iter()
-                .filter_map(|&alias| {
-                    let val = self.get(alias)?;
+                .filter_map(|alias| {
+                    let val = self.get(Pointer(alias))?;
                     Some((val.inner.as_object()?, &val.origin))
                 })
                 .collect();

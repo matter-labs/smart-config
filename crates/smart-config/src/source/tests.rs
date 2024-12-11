@@ -15,7 +15,7 @@ use crate::{
         ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig,
         NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
     },
-    ByteSize,
+    ByteSize, DescribeConfig,
 };
 
 #[test]
@@ -309,7 +309,7 @@ fn merging_config_parts() {
         .push_alias("deprecated")
         .unwrap();
     schema
-        .single_mut::<NestedConfig>()
+        .single_mut(&NestedConfig::DESCRIPTION)
         .unwrap()
         .push_alias("deprecated")
         .unwrap();
@@ -377,7 +377,7 @@ fn merging_config_parts_with_env() {
         .push_alias("deprecated")
         .unwrap();
     schema
-        .single_mut::<NestedConfig>()
+        .single_mut(&NestedConfig::DESCRIPTION)
         .unwrap()
         .push_alias("deprecated")
         .unwrap();
