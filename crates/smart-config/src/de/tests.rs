@@ -61,7 +61,7 @@ fn parsing_param() {
     assert_eq!(path, "repeated.0");
     extract_json_name(source);
 
-    options.coerce_shouting_variant_names = true;
+    options.coerce_variant_names = true;
     let deserializer = ValueDeserializer::new(json.inner(), &options);
     let config = TestParam::deserialize(deserializer).unwrap();
     assert_eq!(config.int, 42);

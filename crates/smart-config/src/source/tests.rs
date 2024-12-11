@@ -53,7 +53,7 @@ fn parsing_enum_config_with_schema() {
     assert!(inner.contains("unknown variant"), "{inner}");
     assert_eq!(err.path(), "renamed");
 
-    repo.deserializer_options().coerce_shouting_variant_names = true;
+    repo.deserializer_options().coerce_variant_names = true;
     let config: EnumConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(
         config,

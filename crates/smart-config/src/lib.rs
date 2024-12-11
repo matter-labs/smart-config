@@ -309,6 +309,7 @@ pub mod testing;
 #[cfg(test)]
 mod testonly;
 mod types;
+mod utils;
 pub mod value;
 
 /// Describes a configuration (i.e., a group of related parameters).
