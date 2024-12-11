@@ -126,6 +126,40 @@ const fn assert_param_against_config(
     config_parent: &'static str,
     config: &NestedConfigMetadata,
 ) {
+    let mut param_i = 0;
+    while param_i <= param.aliases.len() {
+        let param_name = if param_i == 0 {
+            param.name
+        } else {
+            param.aliases[param_i - 1]
+        };
+
+        let mut config_i = 0;
+        while config_i <= config.aliases.len() {
+            let config_name = if config_i == 0 {
+                config.name
+            } else {
+                config.aliases[config_i - 1]
+            };
+
+            if const_eq(param_name.as_bytes(), config_name.as_bytes()) {
+                compile_panic!(
+                    "Name / alias `", param_name => clip(32, "…"), "` of param `",
+                    param_parent => clip(32, "…"), ".",
+                    param.rust_field_name  => clip(32, "…"),
+                    "` coincides with a name / alias of a nested config `",
+                    config_parent => clip(32, "…"), ".",
+                    config.rust_field_name  => clip(32, "…"),
+                    "`. This is an unconditional error; \
+                    config deserialization relies on the fact that configs never coincide with params"
+                );
+            }
+
+            config_i += 1;
+        }
+        param_i += 1;
+    }
+
     if const_eq(param.name.as_bytes(), config.name.as_bytes()) {
         compile_panic!(
             "Name `", param.name => clip(32, "…"), "` of param `",
