@@ -252,6 +252,50 @@ fn nesting_json() {
 }
 
 #[test]
+fn nesting_inside_child_config() {
+    let json = config!(
+        "value": 123,
+        "nested_renamed": "first",
+        "nested_other_int": 321,
+    );
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ConfigWithNesting>("").unwrap();
+    let map = ConfigRepository::new(&schema).with(json).merged;
+
+    assert_matches!(
+        &map.get(Pointer("value")).unwrap().inner,
+        Value::Number(num) if *num == 123.into()
+    );
+    assert_matches!(
+        &map.get(Pointer("nested.renamed")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "first"
+    );
+    assert_matches!(
+        &map.get(Pointer("nested.other_int")).unwrap().inner,
+        Value::Number(num) if *num == 321.into()
+    );
+
+    let json = config!(
+        "value": 123,
+        "nested_renamed": "first",
+        "nested_other_int": 321,
+        "nested.other_int": 777, // has priority
+    );
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ConfigWithNesting>("").unwrap();
+    let map = ConfigRepository::new(&schema).with(json).merged;
+
+    assert_matches!(
+        &map.get(Pointer("nested.renamed")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "first"
+    );
+    assert_matches!(
+        &map.get(Pointer("nested.other_int")).unwrap().inner,
+        Value::Number(num) if *num == 777.into()
+    );
+}
+
+#[test]
 fn merging_config_parts() {
     let json = config!(
         "deprecated.value": 4,
