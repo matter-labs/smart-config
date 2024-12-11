@@ -367,6 +367,38 @@ fn merging_config_parts() {
 }
 
 #[test]
+fn using_nested_config_aliases() {
+    let json = config!(
+        "value": 10,
+        "nest.renamed": "first",
+        "nest.other_int": 50,
+    );
+    let config: ConfigWithNesting = testing::test(json).unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 50);
+
+    // Mixing canonical path and aliases
+    let json = config!(
+        "value": 10,
+        "nested.renamed": "first",
+        "nest.other_int": 50,
+    );
+    let config: ConfigWithNesting = testing::test(json).unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 50);
+
+    let json = config!(
+        "value": 10,
+        "nest.renamed": "first",
+        "nested.other_int": 777,
+        "nest.other_int": 50, // shouldn't be used since there's a canonical param
+    );
+    let config: ConfigWithNesting = testing::test(json).unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 777);
+}
+
+#[test]
 fn merging_config_parts_with_env() {
     let env = Environment::from_iter("", [("deprecated_value", "4"), ("nested_renamed", "first")]);
 

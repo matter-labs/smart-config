@@ -98,7 +98,7 @@ const fn validate_name(name: &str) -> Result<(), ValidationError> {
 pub const fn assert_param_name(name: &str) {
     if let Err(err) = validate_name(name) {
         compile_panic!(
-            "Param name `", name => clip(32, "…"), "` is invalid: ",
+            "Param / config name `", name => clip(32, "…"), "` is invalid: ",
             &err.fmt() => fmt::<&ErrorArgs>()
         );
     }

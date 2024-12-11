@@ -1,4 +1,4 @@
-error: aliases for nested / flattened configs are not supported yet
+error: aliases for flattened configs are not supported yet; did you mean to make a config nested?
   --> tests/ui/derives/flattened_config_with_alias.rs:10:30
    |
 10 |     #[config(alias = "flat", flatten)]
