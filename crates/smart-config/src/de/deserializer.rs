@@ -13,9 +13,9 @@ use serde::{
 
 use crate::{
     error::ErrorWithOrigin,
+    utils::EnumVariant,
     value::{Map, StrValue, Value, ValueOrigin, WithOrigin},
 };
-use crate::utils::EnumVariant;
 
 /// Available deserialization options.
 #[derive(Debug, Clone, Default)]

@@ -41,28 +41,40 @@ fn parsing_enum_config_with_schema() {
     );
 
     // Test coercing config variants for an enum used directly as a param
-    let json = config!(
-        "type": "Nested",
-        "renamed": "FIRST",
-        "map.first": 1,
-    );
-    let mut repo = ConfigRepository::new(&schema).with(json);
-    let errors = repo.single::<EnumConfig>().unwrap().parse().unwrap_err();
-    let err = errors.first();
-    let inner = err.inner().to_string();
-    assert!(inner.contains("unknown variant"), "{inner}");
-    assert_eq!(err.path(), "renamed");
+    let enum_values = [
+        "FIRST",
+        "First",
+        "FIRST_CHOICE",
+        "FirstChoice",
+        "firstChoice",
+        "first-choice",
+    ];
+    for enum_value in enum_values {
+        println!("testing enum value: {enum_value}");
 
-    repo.deserializer_options().coerce_variant_names = true;
-    let config: EnumConfig = repo.single().unwrap().parse().unwrap();
-    assert_eq!(
-        config,
-        EnumConfig::Nested(NestedConfig {
-            simple_enum: SimpleEnum::First,
-            other_int: 42,
-            map: HashMap::from([("first".to_owned(), 1)]),
-        })
-    );
+        let json = config!(
+            "type": "Nested",
+            "renamed": enum_value,
+            "map.first": 1,
+        );
+        let mut repo = ConfigRepository::new(&schema).with(json);
+        let errors = repo.single::<EnumConfig>().unwrap().parse().unwrap_err();
+        let err = errors.first();
+        let inner = err.inner().to_string();
+        assert!(inner.contains("unknown variant"), "{inner}");
+        assert_eq!(err.path(), "renamed");
+
+        repo.deserializer_options().coerce_variant_names = true;
+        let config: EnumConfig = repo.single().unwrap().parse().unwrap();
+        assert_eq!(
+            config,
+            EnumConfig::Nested(NestedConfig {
+                simple_enum: SimpleEnum::First,
+                other_int: 42,
+                map: HashMap::from([("first".to_owned(), 1)]),
+            })
+        );
+    }
 
     let json = config!(
         "type": "Fields",

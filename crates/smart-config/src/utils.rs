@@ -127,16 +127,16 @@ impl<'a> EnumVariant<'a> {
         let sep = match to_case {
             TargetCase::LowerCase | TargetCase::UpperCase | TargetCase::CamelCase => None,
             TargetCase::SnakeCase | TargetCase::ScreamingSnakeCase => Some('_'),
-            TargetCase::KebabCase | TargetCase::ScreamingKebabCase => Some('-')
+            TargetCase::KebabCase | TargetCase::ScreamingKebabCase => Some('-'),
         };
         for (i, &word) in self.words.iter().enumerate() {
             dest.push_str(&match to_case {
                 TargetCase::LowerCase | TargetCase::SnakeCase | TargetCase::KebabCase => {
                     word.to_ascii_lowercase()
                 }
-                TargetCase::UpperCase | TargetCase::ScreamingSnakeCase | TargetCase::ScreamingKebabCase => {
-                    word.to_ascii_uppercase()
-                }
+                TargetCase::UpperCase
+                | TargetCase::ScreamingSnakeCase
+                | TargetCase::ScreamingKebabCase => word.to_ascii_uppercase(),
                 TargetCase::CamelCase => {
                     word[..1].to_ascii_uppercase() + &word[1..].to_ascii_lowercase()
                 }
@@ -243,10 +243,22 @@ mod tests {
         assert_eq!(variant.transform(TargetCase::LowerCase), "snakecase10u12i");
         assert_eq!(variant.transform(TargetCase::UpperCase), "SNAKECASE10U12I");
         assert_eq!(variant.transform(TargetCase::CamelCase), "SnakeCase10U12i");
-        assert_eq!(variant.transform(TargetCase::SnakeCase), "snake_case10_u12i");
-        assert_eq!(variant.transform(TargetCase::ScreamingSnakeCase), "SNAKE_CASE10_U12I");
-        assert_eq!(variant.transform(TargetCase::KebabCase), "snake-case10-u12i");
-        assert_eq!(variant.transform(TargetCase::ScreamingKebabCase), "SNAKE-CASE10-U12I");
+        assert_eq!(
+            variant.transform(TargetCase::SnakeCase),
+            "snake_case10_u12i"
+        );
+        assert_eq!(
+            variant.transform(TargetCase::ScreamingSnakeCase),
+            "SNAKE_CASE10_U12I"
+        );
+        assert_eq!(
+            variant.transform(TargetCase::KebabCase),
+            "snake-case10-u12i"
+        );
+        assert_eq!(
+            variant.transform(TargetCase::ScreamingKebabCase),
+            "SNAKE-CASE10-U12I"
+        );
     }
 
     #[test]

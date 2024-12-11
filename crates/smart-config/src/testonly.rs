@@ -25,6 +25,7 @@ use crate::{
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SimpleEnum {
+    #[serde(alias = "first_choice")]
     First,
     Second,
 }
