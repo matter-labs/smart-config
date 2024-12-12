@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["Serde"],"struct":["Delimited","DeserializeContext","DeserializerOptions","Optional","OrString","Qualified","Repeated","Secret","Serde","WithDefault","WithUnit"],"trait":["DeserializeConfig","DeserializeParam","WellKnown"]};

@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"smart_config":[["impl <a class=\"trait\" href=\"https://docs.rs/serde/1.0.215/serde/de/trait.Error.html\" title=\"trait serde::de::Error\">Error</a> for <a class=\"struct\" href=\"smart_config/value/struct.WithOrigin.html\" title=\"struct smart_config::value::WithOrigin\">WithOrigin</a>&lt;LowLevelError&gt;"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
