@@ -382,13 +382,16 @@ impl<'a> PatchedSchema<'a> {
 
             for (name_i, (prefix, name)) in all_names.enumerate() {
                 let full_name = Pointer(prefix).join(name);
-                let (prev_expecting, was_canonical) = if let Some(mount) = self.mount(&full_name) {
-                    match mount {
-                        &MountingPoint::Param {
+                let mut was_canonical = false;
+                if let Some(mount) = self.mount(&full_name) {
+                    let prev_expecting = match mount {
+                        MountingPoint::Param {
                             expecting,
                             is_canonical,
-                        } => (expecting, is_canonical),
-
+                        } => {
+                            was_canonical = *is_canonical;
+                            *expecting
+                        }
                         MountingPoint::Config => {
                             anyhow::bail!(
                                 "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
@@ -397,26 +400,23 @@ impl<'a> PatchedSchema<'a> {
                                 field = param.rust_field_name
                             );
                         }
+                    };
+
+                    if prev_expecting != param.expecting {
+                        anyhow::bail!(
+                            "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
+                             it expects {expecting}, while the existing param(s) mounted at this path expect {prev_expecting}",
+                            name = param.name,
+                            field = param.rust_field_name,
+                            expecting = param.expecting
+                        );
                     }
-                } else {
-                    (BasicTypes::ANY, false)
-                };
-
-                let Some(expecting) = prev_expecting.and(param.expecting) else {
-                    anyhow::bail!(
-                        "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
-                         it expects {expecting}, while the existing param(s) mounted at this path expect {prev_expecting}",
-                        name = param.name,
-                        field = param.rust_field_name,
-                        expecting = param.expecting
-                    );
-                };
+                }
                 let is_canonical = was_canonical || name_i == 0;
-
                 self.patch.mounting_points.insert(
                     full_name,
                     MountingPoint::Param {
-                        expecting,
+                        expecting: param.expecting,
                         is_canonical,
                     },
                 );

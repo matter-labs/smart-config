@@ -374,4 +374,18 @@ fn aliasing_info_for_nested_configs() {
         .aliases()
         .collect();
     assert_eq!(aliases, ["test.nest", "alias.nested", "alias.nest"]);
+
+    let param_paths = [
+        "test_nested_str",
+        "test_nested_string",
+        "alias_nested_str",
+        "alias_nest_string",
+    ];
+    for path in param_paths {
+        println!("Testing path: {path}");
+        let mut data: Vec<_> = schema.params_with_kv_path(path).collect();
+        assert_eq!(data.len(), 1);
+        let (_, expecting) = data.pop().unwrap();
+        assert_eq!(expecting, BasicTypes::STRING);
+    }
 }
