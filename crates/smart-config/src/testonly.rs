@@ -247,6 +247,23 @@ pub(crate) struct SecretConfig {
     pub seq: Vec<u64>,
 }
 
+#[derive(DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct NestedAliasedConfig {
+    #[config(default, alias = "string")]
+    pub str: String,
+}
+
+#[derive(DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct AliasedConfig {
+    pub int: u32,
+    #[config(nest, alias = "nest")]
+    pub nested: NestedAliasedConfig,
+    #[config(flatten)]
+    pub flat: NestedAliasedConfig,
+}
+
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
     let ConfigContents::KeyValue(map) = env.into_contents() else {
         unreachable!();

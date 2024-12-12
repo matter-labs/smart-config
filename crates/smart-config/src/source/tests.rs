@@ -11,9 +11,9 @@ use crate::{
     metadata::SizeUnit,
     testing,
     testonly::{
-        extract_env_var_name, extract_json_name, test_deserialize, ComposedConfig, CompoundConfig,
-        ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig,
-        NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
+        extract_env_var_name, extract_json_name, test_deserialize, AliasedConfig, ComposedConfig,
+        CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig,
+        KvTestConfig, NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
     },
     ByteSize, DescribeConfig,
 };
@@ -1163,4 +1163,60 @@ fn reading_secrets() {
     let debug_str = format!("{:?}", repo.merged());
     assert!(!debug_str.contains("override_secret"), "{debug_str}");
     assert!(!debug_str.contains("opt_secret"), "{debug_str}");
+}
+
+#[test]
+fn aliasing_for_flattened_config() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert::<AliasedConfig>("test")
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+
+    let json = config!("alias.int": 123, "alias.str": "!!");
+    let mut repo = ConfigRepository::new(&schema).with(json);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 123);
+    assert_eq!(config.flat.str, "!!");
+
+    let mixed_json = config!("test.int": 321, "alias.str": "??");
+    repo = repo.with(mixed_json);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 321);
+    assert_eq!(config.flat.str, "??");
+
+    let env = Environment::from_iter("", [("ALIAS_INT", "777"), ("ALIAS_STR", "!")]);
+    repo = repo.with(env);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 777);
+    assert_eq!(config.flat.str, "!");
+}
+
+#[test]
+fn aliasing_for_nested_config() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert::<AliasedConfig>("test")
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+
+    let json = config!("alias.int": 123, "alias.nested.str": "!!");
+    let mut repo = ConfigRepository::new(&schema).with(json);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 123);
+    assert_eq!(config.nested.str, "!!");
+
+    let mixed_json = config!("test.int": 321, "alias.nest.str": "??");
+    repo = repo.with(mixed_json);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 321);
+    assert_eq!(config.nested.str, "??");
+
+    let env = Environment::from_iter("", [("ALIAS_INT", "777"), ("ALIAS_NEST_STRING", "!")]);
+    repo = repo.with(env);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 777);
+    assert_eq!(config.nested.str, "!");
 }

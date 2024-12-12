@@ -5,6 +5,7 @@ use assert_matches::assert_matches;
 use super::*;
 use crate::{
     metadata::BasicTypes,
+    testonly::{AliasedConfig, NestedAliasedConfig},
     value::{StrValue, Value},
     ConfigRepository, DescribeConfig, DeserializeConfig, Environment,
 };
@@ -345,4 +346,32 @@ fn aliasing_mountpoint_errors_via_nested_configs() {
     assert!(err.contains("Cannot insert param"), "{err}");
     assert!(err.contains("at `str.optional`"), "{err}");
     assert!(err.contains(" config(s) are already mounted"), "{err}");
+}
+
+#[test]
+fn aliasing_info_for_nested_configs() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert::<AliasedConfig>("test")
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+    let aliases: Vec<_> = schema
+        .single(&AliasedConfig::DESCRIPTION)
+        .unwrap()
+        .aliases()
+        .collect();
+    assert_eq!(aliases, ["alias"]);
+    let aliases: Vec<_> = schema
+        .get(&NestedAliasedConfig::DESCRIPTION, "test")
+        .unwrap()
+        .aliases()
+        .collect();
+    assert_eq!(aliases, ["alias"]);
+    let aliases: Vec<_> = schema
+        .get(&NestedAliasedConfig::DESCRIPTION, "test.nested")
+        .unwrap()
+        .aliases()
+        .collect();
+    assert_eq!(aliases, ["test.nest", "alias.nested", "alias.nest"]);
 }
