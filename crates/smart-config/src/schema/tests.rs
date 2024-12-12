@@ -4,8 +4,9 @@ use assert_matches::assert_matches;
 
 use super::*;
 use crate::{
-    metadata::BasicTypes, value::Value, ConfigRepository, DescribeConfig, DeserializeConfig,
-    Environment,
+    metadata::BasicTypes,
+    value::{StrValue, Value},
+    ConfigRepository, DescribeConfig, DeserializeConfig, Environment,
 };
 
 /// # Test configuration
@@ -108,13 +109,13 @@ fn using_alias() {
     let env = Environment::from_iter("APP_", [("APP_TEST_STR", "test"), ("APP_OPTIONAL", "123")]);
 
     let parser = ConfigRepository::new(&schema).with(env);
-    assert_eq!(
-        parser.merged().get(Pointer("test.str")).unwrap().inner,
-        Value::String("test".into())
+    assert_matches!(
+        &parser.merged().get(Pointer("test.str")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "test"
     );
-    assert_eq!(
-        parser.merged().get(Pointer("test.optional")).unwrap().inner,
-        Value::String("123".into())
+    assert_matches!(
+        &parser.merged().get(Pointer("test.optional")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "123"
     );
 
     let config: TestConfig = parser.single().unwrap().parse().unwrap();
@@ -184,20 +185,20 @@ fn using_nesting() {
         ],
     );
     let repo = ConfigRepository::new(&schema).with(env);
-    assert_eq!(
-        repo.merged().get(Pointer("bool_value")).unwrap().inner,
-        Value::String("true".into())
+    assert_matches!(
+        &repo.merged().get(Pointer("bool_value")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "true"
     );
-    assert_eq!(
-        repo.merged()
+    assert_matches!(
+        &repo.merged()
             .get(Pointer("hierarchical.str"))
             .unwrap()
             .inner,
-        Value::String("???".into())
+        Value::String(StrValue::Plain(s)) if s == "???"
     );
-    assert_eq!(
-        repo.merged().get(Pointer("optional")).unwrap().inner,
-        Value::String("777".into())
+    assert_matches!(
+        &repo.merged().get(Pointer("optional")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "777"
     );
 
     let config: NestingConfig = repo.single().unwrap().parse().unwrap();

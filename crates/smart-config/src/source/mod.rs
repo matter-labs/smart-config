@@ -5,7 +5,7 @@ use crate::{
     de::{DeserializeContext, DeserializerOptions},
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
-    value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
+    value::{Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, ParseError, ParseErrors,
 };
 
@@ -82,6 +82,15 @@ pub trait ConfigSource {
 /// assert_eq!(config.map, HashMap::from([("value".into(), 5)]));
 /// # anyhow::Ok(())
 /// ```
+///
+/// # Other preprocessing
+///
+/// Besides type coercion, sources undergo a couple of additional transforms:
+///
+/// - **Garbage collection:** All values not corresponding to params or their ancestor objects
+///   are removed.
+/// - **Hiding secrets:** Values corresponding to [secret params](crate::de#secrets) are wrapped in
+///   opaque, zero-on-drop wrappers.
 #[derive(Debug, Clone)]
 pub struct ConfigRepository<'a> {
     schema: &'a ConfigSchema,
@@ -172,7 +181,7 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
             &mut errors,
         );
 
-        C::deserialize_config(context).ok_or_else(|| {
+        context.preprocess_and_deserialize::<C>().map_err(|_| {
             if errors.len() == 0 {
                 errors.push(ParseError::generic(prefix.to_owned(), metadata));
             }
@@ -184,6 +193,7 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
 impl WithOrigin {
     fn preprocess_source(&mut self, schema: &ConfigSchema) {
         self.copy_aliased_values(schema);
+        self.mark_secrets(schema);
         self.nest_object_params(schema);
     }
 
@@ -295,6 +305,33 @@ impl WithOrigin {
         }
     }
 
+    /// Wraps secret string values into `Value::SecretString(_)`.
+    fn mark_secrets(&mut self, schema: &ConfigSchema) {
+        for (prefix, config_data) in schema.iter() {
+            let Some(Self {
+                inner: Value::Object(config_object),
+                ..
+            }) = self.get_mut(prefix)
+            else {
+                continue;
+            };
+
+            for param in config_data.metadata.params {
+                if !param.deserializer.type_qualifiers().is_secret {
+                    continue;
+                }
+                let Some(value) = config_object.get_mut(param.name) else {
+                    continue;
+                };
+
+                if let Value::String(str) = &mut value.inner {
+                    str.make_secret();
+                }
+                // TODO: log warning otherwise
+            }
+        }
+    }
+
     /// Nests values inside matching object params.
     ///
     /// For example, we have an object param at `test.param` and a source with a value at `test.param_ms`.
@@ -370,7 +407,7 @@ impl WithOrigin {
         };
 
         for (key, value) in kvs {
-            let value = Self::new(Value::String(value.inner.clone()), value.origin);
+            let value = Self::new(Value::String(StrValue::Plain(value.inner)), value.origin);
 
             // Get all params with full paths matching a prefix of `key` split on one of `_`s. E.g.,
             // for `key = "very_long_prefix_value"`, we'll try "very_long_prefix_value", "very_long_prefix", ..., "very".

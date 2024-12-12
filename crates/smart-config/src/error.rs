@@ -9,6 +9,17 @@ use crate::{
     value::{ValueOrigin, WithOrigin},
 };
 
+/// Marker error for [`DeserializeConfig`](crate::DeserializeConfig) operations. The error info os stored
+/// in [`DeserializeContext`](crate::de::DeserializeContext) as [`ParseErrors`].
+#[derive(Debug)]
+pub struct DeserializeConfigError(());
+
+impl DeserializeConfigError {
+    pub(crate) fn new() -> Self {
+        Self(())
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum LocationInConfig {
     Param(usize),

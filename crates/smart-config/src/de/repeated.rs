@@ -14,7 +14,7 @@ use crate::{
     de::{DeserializeContext, DeserializeParam, WellKnown},
     error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
-    value::{Value, ValueOrigin, WithOrigin},
+    value::{StrValue, Value, ValueOrigin, WithOrigin},
 };
 
 /// Deserializer from JSON arrays and objects.
@@ -380,12 +380,17 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
             source: origin.clone(),
             transform: format!("{:?}-delimited string", self.0),
         });
-        let array_items = s.split(self.0).enumerate().map(|(i, part)| {
+        let array_items = s.expose().split(self.0).enumerate().map(|(i, part)| {
             let item_origin = ValueOrigin::Path {
                 source: array_origin.clone(),
                 path: i.to_string(),
             };
-            WithOrigin::new(Value::String(part.to_owned()), Arc::new(item_origin))
+            let part = if s.is_secret() {
+                StrValue::Secret(part.into())
+            } else {
+                StrValue::Plain(part.into())
+            };
+            WithOrigin::new(Value::String(part), Arc::new(item_origin))
         });
         let array = WithOrigin::new(Value::Array(array_items.collect()), array_origin);
         T::DE.deserialize_param(ctx.patched(&array), param)

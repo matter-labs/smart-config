@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Context;
 
 use super::{ConfigContents, ConfigSource};
-use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
+use crate::value::{FileFormat, Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin};
 
 /// YAML-based configuration source.
 #[derive(Debug)]
@@ -64,7 +64,7 @@ impl Yaml {
             serde_yaml::Value::Null => Value::Null,
             serde_yaml::Value::Bool(value) => Value::Bool(value),
             serde_yaml::Value::Number(value) => Value::Number(Self::map_number(&value, &path)?),
-            serde_yaml::Value::String(value) => Value::String(value),
+            serde_yaml::Value::String(value) => Value::String(StrValue::Plain(value)),
             serde_yaml::Value::Sequence(items) => Value::Array(
                 items
                     .into_iter()
@@ -145,21 +145,21 @@ array:
         };
         let yaml = Yaml::new("test.yml", yaml).unwrap();
 
-        assert_eq!(yaml.inner["bool"].inner, Value::Bool(true));
+        assert_matches!(yaml.inner["bool"].inner, Value::Bool(true));
         assert_matches!(
             yaml.inner["bool"].origin.as_ref(),
             ValueOrigin::Path { path, source } if filename(source) == "test.yml" && path == "bool"
         );
 
         let str = yaml.inner["nested"].get(Pointer("string")).unwrap();
-        assert_eq!(str.inner, Value::String("what?".into()));
+        assert_matches!(&str.inner, Value::String(StrValue::Plain(s)) if s == "what?");
         assert_matches!(
             str.origin.as_ref(),
             ValueOrigin::Path { path, source } if filename(source) == "test.yml" && path == "nested.string"
         );
 
         let inner_int = yaml.inner["array"].get(Pointer("0.test")).unwrap();
-        assert_eq!(inner_int.inner, Value::Number(23_u64.into()));
+        assert_matches!(&inner_int.inner, Value::Number(num) if *num == 23_u64.into());
     }
 
     #[test]

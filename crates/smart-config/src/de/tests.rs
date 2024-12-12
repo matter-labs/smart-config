@@ -215,6 +215,7 @@ fn parsing_compound_config() {
             map: HashMap::new(),
         }
     );
+    assert_eq!(config.nested_opt, None);
 
     let json = config!(
         "nested.renamed": "first",
@@ -222,6 +223,7 @@ fn parsing_compound_config() {
         "default.renamed": "second",
         "default.map": HashMap::from([("foo", 3)]),
         "renamed": "second",
+        "nested_opt.renamed": "second",
     );
     let config: CompoundConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -238,6 +240,14 @@ fn parsing_compound_config() {
             simple_enum: SimpleEnum::Second,
             other_int: 42,
             map: HashMap::from([("foo".to_owned(), 3)]),
+        }
+    );
+    assert_eq!(
+        config.nested_opt.unwrap(),
+        NestedConfig {
+            simple_enum: SimpleEnum::Second,
+            other_int: 42,
+            map: HashMap::new(),
         }
     );
 }
@@ -289,7 +299,7 @@ fn parsing_defaulting_config_from_missing_value() {
 #[test]
 fn parsing_defaulting_config_with_null_override() {
     let json = config!("url": ());
-    assert_eq!(json.inner().get(Pointer("url")).unwrap().inner, Value::Null);
+    assert_matches!(json.inner().get(Pointer("url")).unwrap().inner, Value::Null);
     let config: DefaultingConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config,
@@ -330,7 +340,7 @@ fn type_mismatch_parsing_error() {
     let errors = test_deserialize::<NestedConfig>(&env).unwrap_err();
     let err = errors.first();
 
-    assert!(err.inner().to_string().contains("invalid type"), "{err}");
+    assert!(err.inner().to_string().contains("invalid digit"), "{err}");
     assert_eq!(extract_env_var_name(err.origin()), "other_int");
     assert_eq!(err.config().ty, NestedConfig::DESCRIPTION.ty);
     assert_eq!(err.param().unwrap().name, "other_int");
@@ -573,7 +583,7 @@ fn multiple_errors_for_composed_deserializers() {
     assert!(inner.contains("invalid value"), "{inner}");
     let err = errors.iter().find(|err| err.path() == "array.1").unwrap();
     let inner = err.inner().to_string();
-    assert!(inner.contains("invalid type"), "{inner}");
+    assert!(inner.contains("invalid digit"), "{inner}");
 
     let json = config!("durations": r#"[5, "30us"]"#);
     let errors = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();

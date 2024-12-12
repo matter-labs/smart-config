@@ -11,13 +11,14 @@ use std::{
 
 use anyhow::Context as _;
 use assert_matches::assert_matches;
+use secrecy::SecretString;
 use serde::Deserialize;
 
 use crate::{
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
     metadata::{SizeUnit, TimeUnit},
     source::ConfigContents,
-    value::{FileFormat, Value, ValueOrigin, WithOrigin},
+    value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
 
@@ -126,6 +127,8 @@ pub(crate) enum RenamedEnumConfig {
 pub(crate) struct CompoundConfig {
     #[config(nest)]
     pub nested: NestedConfig,
+    #[config(nest)]
+    pub nested_opt: Option<NestedConfig>,
     #[config(rename = "default", nest, default = NestedConfig::default_nested)]
     pub nested_default: NestedConfig,
     #[config(flatten)]
@@ -227,6 +230,20 @@ pub(crate) struct ComposedConfig {
     pub map_of_ints: HashMap<u64, Duration>,
 }
 
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct SecretConfig {
+    pub key: SecretString,
+    pub opt: Option<SecretString>,
+    #[config(secret)]
+    pub path: Option<PathBuf>,
+    /// We need to override the default deserializer to be able to read from string.
+    #[config(default, secret, with = de::OrString(()))]
+    pub int: u64,
+    #[config(default_t = vec![1], secret, with = de::Delimited(","))]
+    pub seq: Vec<u64>,
+}
+
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
     let ConfigContents::KeyValue(map) = env.into_contents() else {
         unreachable!();
@@ -235,7 +252,7 @@ pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
         (
             key,
             WithOrigin {
-                inner: Value::String(value.inner),
+                inner: Value::String(StrValue::Plain(value.inner)),
                 origin: value.origin,
             },
         )
@@ -257,10 +274,7 @@ pub(crate) fn test_deserialize<C: DeserializeConfig>(val: &WithOrigin) -> Result
         &C::DESCRIPTION,
         &mut errors,
     );
-    match C::deserialize_config(ctx) {
-        Some(config) => Ok(config),
-        None => Err(errors),
-    }
+    C::deserialize_config(ctx).map_err(|_| errors)
 }
 
 pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, ParseErrors> {
@@ -274,10 +288,7 @@ pub(crate) fn test_deserialize_missing<C: DeserializeConfig>() -> Result<C, Pars
         &C::DESCRIPTION,
         &mut errors,
     );
-    match C::deserialize_config(ctx) {
-        Some(config) => Ok(config),
-        None => Err(errors),
-    }
+    C::deserialize_config(ctx).map_err(|_| errors)
 }
 
 pub(crate) fn extract_json_name(source: &ValueOrigin) -> &str {

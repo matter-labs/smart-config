@@ -45,7 +45,7 @@ impl<T: DeserializeOwned> DeserializeParam<T> for HexUintDeserializer {
     ) -> Result<T, ErrorWithOrigin> {
         let deserializer = ctx.current_value_deserializer(param.name)?;
         if let Value::String(s) = deserializer.value() {
-            if !s.starts_with("0x") {
+            if !s.expose().starts_with("0x") {
                 return Err(deserializer.invalid_type("0x-prefixed hex number"));
             }
         }
