@@ -46,17 +46,17 @@ impl KvPath {
 
     fn cmp_with_substitutions(this: &str, other: &str, total_ordering: &mut Ordering) -> Ordering {
         for (&this_byte, &other_byte) in this.as_bytes().iter().zip(other.as_bytes()) {
-            let this_byte = if this_byte == b'.' {
-                *total_ordering = total_ordering.then(Ordering::Less); // because '.' < '_' and we substitute it in `self`
-                b'_'
-            } else {
-                this_byte
-            };
-            let other_byte = if other_byte == b'.' {
-                *total_ordering = total_ordering.then(Ordering::Greater);
-                b'_'
-            } else {
-                other_byte
+            let (this_byte, other_byte) = match (this_byte, other_byte) {
+                (b'.', b'.') => (b'_', b'_'),
+                (b'.', other) => {
+                    *total_ordering = total_ordering.then(Ordering::Less); // because '.' < '_' and we substitute it in `self`
+                    (b'_', other)
+                }
+                (other, b'.') => {
+                    *total_ordering = total_ordering.then(Ordering::Greater);
+                    (other, b'_')
+                }
+                _ => (this_byte, other_byte),
             };
             let compared = this_byte.cmp(&other_byte);
             if compared != Ordering::Equal {
@@ -131,6 +131,10 @@ mod tests {
     fn kv_path_ordering() {
         assert_eq!(
             KvPath::from("test").cmp(&KvPath::from("test")),
+            Ordering::Equal
+        );
+        assert_eq!(
+            KvPath::from("test.value").cmp(&KvPath::from("test.value")),
             Ordering::Equal
         );
         assert!(KvPath::from("test") < KvPath::from("test0"));
