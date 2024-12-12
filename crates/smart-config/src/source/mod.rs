@@ -412,25 +412,26 @@ impl WithOrigin {
     ) -> usize {
         if schema.contains_canonical_param(at) {
             1
-        } else if let Value::Object(map) = &mut self.inner {
-            if !prefixes_for_canonical_configs.contains(&at) {
-                // The object is neither a param nor a config or a config ancestor; remove it.
-                return 0;
+        } else if prefixes_for_canonical_configs.contains(&at) {
+            if let Value::Object(map) = &mut self.inner {
+                let mut count = 0;
+                map.retain(|key, value| {
+                    let child_path = at.join(key);
+                    let descendant_count = value.collect_garbage(
+                        schema,
+                        prefixes_for_canonical_configs,
+                        Pointer(&child_path),
+                    );
+                    count += descendant_count;
+                    descendant_count > 0
+                });
+                count
+            } else {
+                // Retain a (probably erroneous) non-object value at config location to provide more intelligent errors.
+                1
             }
-
-            let mut count = 0;
-            map.retain(|key, value| {
-                let child_path = at.join(key);
-                let descendant_count = value.collect_garbage(
-                    schema,
-                    prefixes_for_canonical_configs,
-                    Pointer(&child_path),
-                );
-                count += descendant_count;
-                descendant_count > 0
-            });
-            count
         } else {
+            // The object is neither a param nor a config or a config ancestor; remove it.
             0
         }
     }
