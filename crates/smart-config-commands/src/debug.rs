@@ -3,7 +3,7 @@ use std::io::{self, Write as _};
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
-    value::{FileFormat, Value, ValueOrigin, WithOrigin},
+    value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
     ConfigRepository, ParseError, ParseErrors,
 };
 
@@ -123,13 +123,17 @@ fn write_value(writer: &mut impl io::Write, value: &WithOrigin, ident: usize) ->
     const BOOL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
     const NUMBER: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
     const STRING: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
+    const SECRET: Style = Style::new()
+        .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
+        .fg_color(None);
     const OBJECT_KEY: Style = Style::new().bold();
 
     match &value.inner {
         Value::Null => write!(writer, "{NULL}null{NULL:#}"),
         Value::Bool(val) => write!(writer, "{BOOL}{val:?}{BOOL:#}"),
         Value::Number(val) => write!(writer, "{NUMBER}{val}{NUMBER:#}"),
-        Value::String(val) => write!(writer, "{STRING}{val:?}{STRING:#}"),
+        Value::String(StrValue::Plain(val)) => write!(writer, "{STRING}{val:?}{STRING:#}"),
+        Value::String(StrValue::Secret(_)) => write!(writer, "{SECRET}[REDACTED]{SECRET:#}"),
         Value::Array(val) => {
             writeln!(writer, "[")?;
             for item in val {

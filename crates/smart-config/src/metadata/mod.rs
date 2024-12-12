@@ -238,6 +238,11 @@ impl TypeQualifiers {
     pub fn unit(&self) -> Option<UnitOfMeasurement> {
         self.unit
     }
+
+    /// Checks whether this value is secret.
+    pub fn is_secret(&self) -> bool {
+        self.is_secret
+    }
 }
 
 impl fmt::Display for TypeQualifiers {

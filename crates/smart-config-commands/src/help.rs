@@ -12,6 +12,9 @@ const MAIN_NAME: Style = Style::new().bold();
 const FIELD: Style = Style::new().underline();
 const DEFAULT_VAL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
 const UNIT: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
+const SECRET: Style = Style::new()
+    .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
+    .fg_color(None);
 
 impl<W: RawStream + AsLockedWrite> Printer<W> {
     /// Prints help on config params in the provided `schema`. Params can be filtered by the supplied predicate.
@@ -60,12 +63,18 @@ impl ParamRef<'_> {
             )?;
         }
 
+        let qualifiers = self.param.deserializer.type_qualifiers();
+        let maybe_secret = if qualifiers.is_secret() {
+            format!("{SECRET}secret{SECRET:#} ")
+        } else {
+            String::new()
+        };
         let kind = self.param.expecting;
         let ty = format!(
-            "{kind} {DIMMED}[Rust: {}]{DIMMED:#}",
+            "{maybe_secret}{kind} {DIMMED}[Rust: {}]{DIMMED:#}",
             self.param.rust_type.name_in_code()
         );
-        let qualifiers = self.param.deserializer.type_qualifiers();
+
         let description = if let Some(description) = qualifiers.description() {
             format!("; {description}")
         } else {

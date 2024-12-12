@@ -741,6 +741,7 @@ dependencies = [
  "anstyle",
  "clap",
  "doc-comment",
+ "primitive-types",
  "serde",
  "serde_json",
  "serde_yaml",

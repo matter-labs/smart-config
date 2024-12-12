@@ -5,10 +5,12 @@ use std::{
 };
 
 use clap::Parser;
+use primitive_types::{H160 as Address, U256};
 use serde::Deserialize;
 use smart_config::{
     de,
     metadata::{SizeUnit, TimeUnit},
+    value::SecretString,
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
     Yaml,
 };
@@ -40,6 +42,8 @@ pub struct TestConfig {
     pub cache_size: ByteSize,
     #[config(nest)]
     pub nested: NestedConfig,
+    #[config(nest)]
+    pub funding: Option<FundingConfig>,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -68,6 +72,17 @@ impl de::WellKnown for ComplexParam {
     const DE: Self::Deserializer = de::Serde![object];
 }
 
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+pub struct FundingConfig {
+    /// Ethereum-like address to fund.
+    pub address: Address,
+    /// Initial balance for the address.
+    pub balance: U256,
+    /// Secret string value.
+    pub api_key: Option<SecretString>,
+    // FIXME: also test a secret key (H256)
+}
+
 const JSON: &str = r#"
 {
   "test": {
@@ -75,12 +90,15 @@ const JSON: &str = r#"
     "cache_size": { "kb": 256 },
     "nested": {
       "exit_on_error": false
+    },
+    "funding": {
+      "api_key": "correct horse"
     }
   }
 }
 "#;
 
-const YAML: &str = r"
+const YAML: &str = r#"
 test:
   port: 3000
   poll_latency_ms: 300
@@ -92,7 +110,10 @@ test:
       array: [1, 2]
       map:
         value: 25
-";
+  funding:
+    address: "0x0000000000000000000000000000000000001234"
+    balance: "0x123456"
+"#;
 
 fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> {
     let json = serde_json::from_str(JSON).unwrap();
@@ -105,6 +126,7 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
             ("APP_TEST_APP_NAME", "test"),
             ("APP_TEST_DIRS", "/usr/bin:usr/local/bin"),
             ("APP_TEST_CACHE_SIZE", "128 MiB"),
+            ("APP_TEST_FUNDING_API_KEY", "correct horse battery staple"),
         ],
     );
     let mut repo = ConfigRepository::new(schema)
