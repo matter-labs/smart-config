@@ -11,12 +11,16 @@ readme = "README.md"
 description = "Schema-driven layered configuration system with support of multiple configuration formats"
 
 [dependencies]
+# Public dependencies (exposed in public crate APIs).
 anyhow.workspace = true
-compile-fmt.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_yaml.workspace = true # TODO: optional?
 smart-config-derive.workspace = true
+
+# Private dependencies (not exposed in public crate APIs).
+compile-fmt.workspace = true
+secrecy.workspace = true
 
 # As a feature: recognizes types from `primitive-types` as well-known
 primitive-types = { workspace = true, features = ["serde"], optional = true }

@@ -13,9 +13,15 @@ impl ConfigField {
     fn deserialize_param(&self, index: usize) -> proc_macro2::TokenStream {
         let name_span = self.name.span();
         if self.attrs.nest {
-            let default_fn = wrap_in_option(self.default_fn());
-            quote_spanned! {name_span=>
-                ctx.deserialize_nested_config(#index, #default_fn)
+            if Self::is_option(&self.ty) {
+                quote_spanned! {name_span=>
+                    ctx.deserialize_nested_config_opt(#index)
+                }
+            } else {
+                let default_fn = wrap_in_option(self.default_fn());
+                quote_spanned! {name_span=>
+                    ctx.deserialize_nested_config(#index, #default_fn)
+                }
             }
         } else {
             quote_spanned! {name_span=>
@@ -108,8 +114,8 @@ impl ConfigContainer {
                 #[allow(unused_mut)]
                 fn deserialize_config(
                     mut ctx: #cr::de::DeserializeContext<'_>,
-                ) -> ::core::option::Option<Self> {
-                    ::core::option::Option::Some(#instance)
+                ) -> ::core::result::Result<Self, #cr::DeserializeConfigError> {
+                    ::core::result::Result::Ok(#instance)
                 }
             }
         }

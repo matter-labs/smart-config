@@ -36,6 +36,16 @@
 //! - Alternatively, [`TimeUnit`](crate::metadata::TimeUnit) and [`SizeUnit`](crate::metadata::SizeUnit) can be used
 //!   on `Duration`s and `ByteSize`s, respectively.
 //!
+//! ## Secrets
+//!
+//! A param is secret iff it uses a [`Secret`] deserializer (perhaps, with decorators on top, like
+//! [`Optional`] / [`WithDefault`]). Secret params must be deserializable from a string; this is because
+//! strings are the only type of secret values currently supported.
+//!
+//! Secret values are wrapped in opaque, zero-on-drop wrappers during source preprocessing so that
+//! they do not get accidentally exposed via debug logs etc. See [`ConfigRepository`](crate::ConfigRepository)
+//! for details.
+//!
 //! [`Duration`]: std::time::Duration
 //! [`ByteSize`]: crate::ByteSize
 
@@ -49,13 +59,14 @@ pub use self::{
     macros::Serde,
     param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
     repeated::{Delimited, Repeated},
+    secret::Secret,
     units::WithUnit,
 };
 use crate::{
     error::{ErrorWithOrigin, LocationInConfig, LowLevelError},
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
-    value::{Pointer, Value, ValueOrigin, WithOrigin},
-    DescribeConfig, Json, ParseError, ParseErrors,
+    value::{Pointer, StrValue, Value, ValueOrigin, WithOrigin},
+    DescribeConfig, DeserializeConfigError, Json, ParseError, ParseErrors,
 };
 
 #[doc(hidden)]
@@ -66,6 +77,7 @@ mod param;
 #[cfg(feature = "primitive-types")]
 mod primitive_types_impl;
 mod repeated;
+mod secret;
 #[cfg(test)]
 mod tests;
 mod units;
@@ -110,7 +122,15 @@ impl<'a> DeserializeContext<'a> {
             de_options: self.de_options,
             root_value: self.root_value,
             path: Pointer(&self.path).join(path),
-            patched_current_value: None,
+            patched_current_value: self.patched_current_value.and_then(|val| {
+                if path.is_empty() {
+                    Some(val)
+                } else if let Value::Object(object) = &val.inner {
+                    object.get(path)
+                } else {
+                    None
+                }
+            }),
             current_config: self.current_config,
             location_in_config,
             errors: self.errors,
@@ -202,6 +222,22 @@ impl<'a> DeserializeContext<'a> {
             location_in_config: self.location_in_config,
         });
     }
+
+    pub(crate) fn preprocess_and_deserialize<T: DeserializeConfig>(
+        mut self,
+    ) -> Result<T, DeserializeConfigError> {
+        // It is technically possible to coerce a value to an object here, but this would make merging sources not obvious:
+        // should a config specified as a string override / be overridden atomically? (Probably not, but if so, it needs to be coerced to an object
+        // before the merge, potentially recursively.)
+
+        if let Some(val) = self.current_value() {
+            if !matches!(&val.inner, Value::Object(_)) {
+                self.push_error(val.invalid_type("config object"));
+                return Err(DeserializeConfigError::new());
+            }
+        }
+        T::deserialize_config(self)
+    }
 }
 
 /// Methods used in proc macros. Not a part of public API.
@@ -211,17 +247,31 @@ impl DeserializeContext<'_> {
         &mut self,
         index: usize,
         default_fn: Option<fn() -> T>,
-    ) -> Option<T> {
+    ) -> Result<T, DeserializeConfigError> {
         let child_ctx = self.for_nested_config(index);
         if child_ctx.current_value().is_none() {
             if let Some(default) = default_fn {
-                return Some(default());
+                return Ok(default());
             }
         }
-        T::deserialize_config(child_ctx)
+        child_ctx.preprocess_and_deserialize()
     }
 
-    pub(crate) fn deserialize_any_param(&mut self, index: usize) -> Option<Box<dyn any::Any>> {
+    pub fn deserialize_nested_config_opt<T: DeserializeConfig>(
+        &mut self,
+        index: usize,
+    ) -> Result<Option<T>, DeserializeConfigError> {
+        let child_ctx = self.for_nested_config(index);
+        if child_ctx.current_value().is_none() {
+            return Ok(None);
+        }
+        child_ctx.preprocess_and_deserialize().map(Some)
+    }
+
+    pub(crate) fn deserialize_any_param(
+        &mut self,
+        index: usize,
+    ) -> Result<Box<dyn any::Any>, DeserializeConfigError> {
         let (mut child_ctx, param) = self.for_param(index);
 
         // Coerce value to the expected type.
@@ -238,15 +288,18 @@ impl DeserializeContext<'_> {
             .deserializer
             .deserialize_param(child_ctx.borrow(), param)
         {
-            Ok(param) => Some(param),
+            Ok(param) => Ok(param),
             Err(err) => {
                 child_ctx.push_error(err);
-                None
+                Err(DeserializeConfigError::new())
             }
         }
     }
 
-    pub fn deserialize_param<T: 'static>(&mut self, index: usize) -> Option<T> {
+    pub fn deserialize_param<T: 'static>(
+        &mut self,
+        index: usize,
+    ) -> Result<T, DeserializeConfigError> {
         self.deserialize_any_param(index).map(|val| {
             *val.downcast()
                 .expect("Internal error: deserializer output has wrong type")
@@ -259,7 +312,7 @@ impl WithOrigin {
     fn coerce_value_type(&self, expecting: BasicTypes) -> Option<Self> {
         const STRUCTURED: BasicTypes = BasicTypes::ARRAY.or(BasicTypes::OBJECT);
 
-        let Value::String(str) = &self.inner else {
+        let Value::String(StrValue::Plain(str)) = &self.inner else {
             return None; // we only know how to coerce strings so far
         };
 
@@ -300,7 +353,11 @@ impl WithOrigin {
 
 /// Deserializes this configuration from the provided context.
 pub trait DeserializeConfig: DescribeConfig + Sized {
-    /// Performs deserialization. If it fails, the method should return `None` and maybe add
-    /// errors to the context.
-    fn deserialize_config(ctx: DeserializeContext<'_>) -> Option<Self>;
+    /// Performs deserialization.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error marker if deserialization fails for at least one of recursively contained params.
+    /// Error info should is contained in the context.
+    fn deserialize_config(ctx: DeserializeContext<'_>) -> Result<Self, DeserializeConfigError>;
 }

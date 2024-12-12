@@ -5,8 +5,8 @@ use crate::{
     de::{DeserializeContext, DeserializerOptions},
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
-    value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
-    DeserializeConfig, ParseError, ParseErrors,
+    value::{Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin},
+    DeserializeConfig, DeserializeConfigError, ParseError, ParseErrors,
 };
 
 #[macro_use]
@@ -92,6 +92,15 @@ pub struct SourceInfo {
 /// assert_eq!(config.map, HashMap::from([("value".into(), 5)]));
 /// # anyhow::Ok(())
 /// ```
+///
+/// # Other preprocessing
+///
+/// Besides type coercion, sources undergo a couple of additional transforms:
+///
+/// - **Garbage collection:** All values not corresponding to params or their ancestor objects
+///   are removed.
+/// - **Hiding secrets:** Values corresponding to [secret params](crate::de#secrets) are wrapped in
+///   opaque, zero-on-drop wrappers.
 #[derive(Debug, Clone)]
 pub struct ConfigRepository<'a> {
     schema: &'a ConfigSchema,
@@ -213,7 +222,7 @@ impl<'a, C> ConfigParser<'a, C> {
 
     fn with_context<R>(
         &self,
-        action: impl FnOnce(DeserializeContext<'_>) -> Option<R>,
+        action: impl FnOnce(DeserializeContext<'_>) -> Result<R, DeserializeConfigError>,
     ) -> Result<R, ParseErrors> {
         let mut errors = ParseErrors::default();
         let prefix = self.config_ref.prefix();
@@ -225,7 +234,7 @@ impl<'a, C> ConfigParser<'a, C> {
             metadata,
             &mut errors,
         );
-        action(ctx).ok_or_else(|| {
+        action(ctx).map_err(|_| {
             if errors.len() == 0 {
                 errors.push(ParseError::generic(prefix.to_owned(), metadata));
             }
@@ -241,8 +250,9 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
     ///
     /// Returns errors encountered during parsing. This list of errors is as full as possible (i.e.,
     /// there is no short-circuiting on encountering an error).
+    #[allow(clippy::redundant_closure_for_method_calls)] // doesn't work as an fn pointer because of the context lifetime
     pub fn parse(self) -> Result<C, ParseErrors> {
-        self.with_context(C::deserialize_config)
+        self.with_context(|ctx| ctx.preprocess_and_deserialize::<C>())
     }
 }
 
@@ -253,6 +263,7 @@ impl WithOrigin {
         prefixes_for_canonical_configs: &HashSet<Pointer<'_>>,
     ) -> usize {
         self.copy_aliased_values(schema);
+        self.mark_secrets(schema);
         self.nest_object_params(schema);
         self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
     }
@@ -365,6 +376,33 @@ impl WithOrigin {
         }
     }
 
+    /// Wraps secret string values into `Value::SecretString(_)`.
+    fn mark_secrets(&mut self, schema: &ConfigSchema) {
+        for (prefix, config_data) in schema.iter_ll() {
+            let Some(Self {
+                inner: Value::Object(config_object),
+                ..
+            }) = self.get_mut(prefix)
+            else {
+                continue;
+            };
+
+            for param in config_data.metadata.params {
+                if !param.deserializer.type_qualifiers().is_secret {
+                    continue;
+                }
+                let Some(value) = config_object.get_mut(param.name) else {
+                    continue;
+                };
+
+                if let Value::String(str) = &mut value.inner {
+                    str.make_secret();
+                }
+                // TODO: log warning otherwise
+            }
+        }
+    }
+
     /// Removes all values that do not correspond to canonical params or their ancestors.
     fn collect_garbage(
         &mut self,
@@ -472,7 +510,7 @@ impl WithOrigin {
         };
 
         for (key, value) in kvs {
-            let value = Self::new(Value::String(value.inner.clone()), value.origin);
+            let value = Self::new(Value::String(StrValue::Plain(value.inner)), value.origin);
 
             // Get all params with full paths matching a prefix of `key` split on one of `_`s. E.g.,
             // for `key = "very_long_prefix_value"`, we'll try "very_long_prefix_value", "very_long_prefix", ..., "very".

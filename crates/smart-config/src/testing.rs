@@ -53,7 +53,10 @@ use crate::{
 /// let err = testing::test::<TestConfig>(sample).unwrap_err();
 /// let err = err.first();
 /// assert_eq!(err.path(), "boolean");
-/// assert!(err.inner().to_string().contains("invalid type"));
+/// assert!(err
+///     .inner()
+///     .to_string()
+///     .contains("provided string was not `true` or `false`"));
 /// ```
 #[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible
 pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {
@@ -209,6 +212,9 @@ mod tests {
             "nested.other_int": 42,
             "nested.renamed": "second",
             "nested.map": HashMap::from([("test", 2)]),
+            "nested_opt.other_int": 777,
+            "nested_opt.renamed": "first",
+            "nested_opt.map": HashMap::<&str, u32>::new(),
             "default.other_int": 11,
             "default.renamed": "second",
             "default.map": HashMap::from([("test", 1)]),
@@ -217,6 +223,10 @@ mod tests {
         assert_eq!(config.flat.other_int, 123);
         assert_eq!(config.nested.other_int, 42);
         assert_eq!(config.nested_default.other_int, 11);
+        let opt = config.nested_opt.unwrap();
+        assert_eq!(opt.other_int, 777);
+        assert_eq!(opt.simple_enum, SimpleEnum::First);
+        assert_eq!(opt.map, HashMap::new());
     }
 
     #[test]

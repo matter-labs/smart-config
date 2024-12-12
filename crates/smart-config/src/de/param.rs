@@ -289,6 +289,10 @@ pub struct Optional<De>(pub De);
 impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
 
+    fn type_qualifiers(&self) -> TypeQualifiers {
+        self.0.type_qualifiers()
+    }
+
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
@@ -368,7 +372,7 @@ where
             return self.0.deserialize_param(ctx, param);
         };
 
-        T::from_str(s).map_err(|err| {
+        T::from_str(s.expose()).map_err(|err| {
             let err = serde_json::Error::custom(err);
             ErrorWithOrigin::json(err, origin.clone())
         })

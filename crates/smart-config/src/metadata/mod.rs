@@ -187,6 +187,7 @@ impl fmt::Debug for BasicTypes {
 pub struct TypeQualifiers {
     description: Option<Cow<'static, str>>,
     unit: Option<UnitOfMeasurement>,
+    pub(crate) is_secret: bool,
 }
 
 impl TypeQualifiers {
@@ -194,6 +195,15 @@ impl TypeQualifiers {
         Self {
             description: Some(Cow::Borrowed(description)),
             unit: None,
+            is_secret: false,
+        }
+    }
+
+    pub(crate) const fn secret() -> Self {
+        Self {
+            description: None,
+            unit: None,
+            is_secret: true,
         }
     }
 
@@ -201,6 +211,7 @@ impl TypeQualifiers {
         Self {
             description: Some(description.into()),
             unit: None,
+            is_secret: false,
         }
     }
 
@@ -208,6 +219,13 @@ impl TypeQualifiers {
     #[must_use]
     pub const fn with_unit(mut self, unit: UnitOfMeasurement) -> Self {
         self.unit = Some(unit);
+        self
+    }
+
+    /// Marks the value as secret.
+    #[must_use]
+    pub const fn with_secret(mut self) -> Self {
+        self.is_secret = true;
         self
     }
 

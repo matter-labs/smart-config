@@ -40,6 +40,7 @@
 //! - Supports multiple configuration formats and programmable source priorities (e.g., `base.yml` + overrides from the
 //!   `overrides/` dir in the alphabetic order + env vars).
 //! - Rich and complete deserialization errors including locations and value origins.
+//! - [Built-in support for secret params](de#secrets).
 //!
 //! # Crate features
 //!
@@ -217,7 +218,7 @@
 /// ## `nest`
 ///
 /// If specified, the field is treated as a nested sub-config rather than a param. Correspondingly, its type must
-/// implement `DescribeConfig`.
+/// implement `DescribeConfig`, or wrap such a type in an `Option`.
 ///
 /// ## `flatten`
 ///
@@ -293,7 +294,7 @@ pub use smart_config_derive::DeserializeConfig;
 use self::metadata::ConfigMetadata;
 pub use self::{
     de::DeserializeConfig,
-    error::{ParseError, ParseErrors},
+    error::{DeserializeConfigError, ParseError, ParseErrors},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
     source::{ConfigParser, ConfigRepository, ConfigSource, Environment, Json, SourceInfo, Yaml},
     types::ByteSize,
