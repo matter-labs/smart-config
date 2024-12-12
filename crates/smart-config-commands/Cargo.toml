@@ -1,0 +1,30 @@
+[package]
+name = "smart-config-commands"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "README.md"
+description = "Command-line extensions for `smart-config` library"
+
+[dependencies]
+anstream.workspace = true
+anstyle.workspace = true
+smart-config.workspace = true
+
+[dev-dependencies]
+smart-config = { workspace = true, features = ["primitive-types"] }
+
+clap = { workspace = true, features = ["derive"] }
+doc-comment.workspace = true
+primitive-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+version-sync.workspace = true
+
+[lints]
+workspace = true

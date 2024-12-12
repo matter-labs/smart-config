@@ -1,4 +1,4 @@
-use std::{iter, marker::PhantomData, sync::Arc};
+use std::{collections::HashSet, iter, marker::PhantomData, sync::Arc};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
@@ -6,7 +6,7 @@ use crate::{
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
     value::{Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin},
-    DeserializeConfig, ParseError, ParseErrors,
+    DeserializeConfig, DeserializeConfigError, ParseError, ParseErrors,
 };
 
 #[macro_use]
@@ -33,6 +33,16 @@ pub trait ConfigSource {
     fn origin(&self) -> Arc<ValueOrigin>;
     /// Converts this source into config contents.
     fn into_contents(self) -> ConfigContents;
+}
+
+/// Information about a source returned from [].
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct SourceInfo {
+    /// Origin of the source.
+    pub origin: Arc<ValueOrigin>,
+    /// Number of params in the source after it has undergone preprocessing (i.e., merging aliases etc.).
+    pub param_count: usize,
 }
 
 /// Configuration repository containing zero or more [configuration sources](ConfigSource).
@@ -94,21 +104,36 @@ pub trait ConfigSource {
 #[derive(Debug, Clone)]
 pub struct ConfigRepository<'a> {
     schema: &'a ConfigSchema,
+    prefixes_for_canonical_configs: HashSet<Pointer<'a>>,
     de_options: DeserializerOptions,
+    sources: Vec<SourceInfo>,
     merged: WithOrigin,
 }
 
 impl<'a> ConfigRepository<'a> {
     /// Creates an empty config repo based on the provided schema.
     pub fn new(schema: &'a ConfigSchema) -> Self {
+        let prefixes_for_canonical_configs: HashSet<_> = schema
+            .iter_ll()
+            .flat_map(|(path, _)| path.with_ancestors())
+            .chain([Pointer("")])
+            .collect();
+
         Self {
             schema,
+            prefixes_for_canonical_configs,
             de_options: DeserializerOptions::default(),
+            sources: vec![],
             merged: WithOrigin {
                 inner: Value::Object(Map::default()),
                 origin: Arc::default(),
             },
         }
+    }
+
+    /// Returns the wrapped configuration schema.
+    pub fn schema(&self) -> &'a ConfigSchema {
+        self.schema
     }
 
     /// Accesses options used during `serde`-powered deserialization.
@@ -124,19 +149,38 @@ impl<'a> ConfigRepository<'a> {
             ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &source_origin),
             ConfigContents::Hierarchical(map) => WithOrigin {
                 inner: Value::Object(map),
-                origin: source_origin,
+                origin: source_origin.clone(),
             },
         };
 
-        source_value.preprocess_source(self.schema);
+        let param_count =
+            source_value.preprocess_source(self.schema, &self.prefixes_for_canonical_configs);
         self.merged
             .guided_merge(source_value, self.schema, Pointer(""));
+        self.sources.push(SourceInfo {
+            origin: source_origin,
+            param_count,
+        });
         self
     }
 
-    // TODO: probably makes sense to make public
-    pub(crate) fn merged(&self) -> &WithOrigin {
+    /// Provides information about sources merged in this repository.
+    pub fn sources(&self) -> &[SourceInfo] {
+        &self.sources
+    }
+
+    #[doc(hidden)] // not stable yet
+    pub fn merged(&self) -> &WithOrigin {
         &self.merged
+    }
+
+    /// Iterates over parsers for all configs in the schema.
+    pub fn iter(&self) -> impl Iterator<Item = ConfigParser<'_, ()>> + '_ {
+        self.schema.iter().map(|config_ref| ConfigParser {
+            repo: self,
+            config_ref,
+            _config: PhantomData,
+        })
     }
 
     /// Returns a parser for the single configuration of the specified type.
@@ -162,26 +206,35 @@ pub struct ConfigParser<'a, C> {
     _config: PhantomData<C>,
 }
 
-impl<C: DeserializeConfig> ConfigParser<'_, C> {
-    /// Performs parsing.
-    ///
-    /// # Errors
-    ///
-    /// Returns errors encountered during parsing. This list of errors is as full as possible (i.e.,
-    /// there is no short-circuiting on encountering an error).
-    pub fn parse(self) -> Result<C, ParseErrors> {
+impl ConfigParser<'_, ()> {
+    #[doc(hidden)] // Not stable yet
+    pub fn parse_param(&self, index: usize) -> Result<(), ParseErrors> {
+        self.with_context(|mut ctx| ctx.deserialize_any_param(index))
+            .map(drop)
+    }
+}
+
+impl<'a, C> ConfigParser<'a, C> {
+    /// Returns a reference to the configuration.
+    pub fn config(&self) -> ConfigRef<'a> {
+        self.config_ref
+    }
+
+    fn with_context<R>(
+        &self,
+        action: impl FnOnce(DeserializeContext<'_>) -> Result<R, DeserializeConfigError>,
+    ) -> Result<R, ParseErrors> {
+        let mut errors = ParseErrors::default();
         let prefix = self.config_ref.prefix();
         let metadata = self.config_ref.data.metadata;
-        let mut errors = ParseErrors::default();
-        let context = DeserializeContext::new(
+        let ctx = DeserializeContext::new(
             &self.repo.de_options,
             &self.repo.merged,
             prefix.to_owned(),
             metadata,
             &mut errors,
         );
-
-        context.preprocess_and_deserialize::<C>().map_err(|_| {
+        action(ctx).map_err(|_| {
             if errors.len() == 0 {
                 errors.push(ParseError::generic(prefix.to_owned(), metadata));
             }
@@ -190,15 +243,33 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
     }
 }
 
+impl<C: DeserializeConfig> ConfigParser<'_, C> {
+    /// Performs parsing.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors encountered during parsing. This list of errors is as full as possible (i.e.,
+    /// there is no short-circuiting on encountering an error).
+    #[allow(clippy::redundant_closure_for_method_calls)] // doesn't work as an fn pointer because of the context lifetime
+    pub fn parse(self) -> Result<C, ParseErrors> {
+        self.with_context(|ctx| ctx.preprocess_and_deserialize::<C>())
+    }
+}
+
 impl WithOrigin {
-    fn preprocess_source(&mut self, schema: &ConfigSchema) {
+    fn preprocess_source(
+        &mut self,
+        schema: &ConfigSchema,
+        prefixes_for_canonical_configs: &HashSet<Pointer<'_>>,
+    ) -> usize {
         self.copy_aliased_values(schema);
         self.mark_secrets(schema);
         self.nest_object_params(schema);
+        self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
     }
 
     fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
-        for (prefix, config_data) in schema.iter() {
+        for (prefix, config_data) in schema.iter_ll() {
             let canonical_map = match self.get(prefix).map(|val| &val.inner) {
                 Some(Value::Object(map)) => Some(map),
                 Some(_) => continue, // TODO: log warning
@@ -307,7 +378,7 @@ impl WithOrigin {
 
     /// Wraps secret string values into `Value::SecretString(_)`.
     fn mark_secrets(&mut self, schema: &ConfigSchema) {
-        for (prefix, config_data) in schema.iter() {
+        for (prefix, config_data) in schema.iter_ll() {
             let Some(Self {
                 inner: Value::Object(config_object),
                 ..
@@ -332,13 +403,46 @@ impl WithOrigin {
         }
     }
 
+    /// Removes all values that do not correspond to canonical params or their ancestors.
+    fn collect_garbage(
+        &mut self,
+        schema: &ConfigSchema,
+        prefixes_for_canonical_configs: &HashSet<Pointer<'_>>,
+        at: Pointer<'_>,
+    ) -> usize {
+        if schema.contains_canonical_param(at) {
+            1
+        } else if prefixes_for_canonical_configs.contains(&at) {
+            if let Value::Object(map) = &mut self.inner {
+                let mut count = 0;
+                map.retain(|key, value| {
+                    let child_path = at.join(key);
+                    let descendant_count = value.collect_garbage(
+                        schema,
+                        prefixes_for_canonical_configs,
+                        Pointer(&child_path),
+                    );
+                    count += descendant_count;
+                    descendant_count > 0
+                });
+                count
+            } else {
+                // Retain a (probably erroneous) non-object value at config location to provide more intelligent errors.
+                1
+            }
+        } else {
+            // The object is neither a param nor a config or a config ancestor; remove it.
+            0
+        }
+    }
+
     /// Nests values inside matching object params.
     ///
     /// For example, we have an object param at `test.param` and a source with a value at `test.param_ms`.
     /// This transform will copy this value to `test.param.ms` (i.e., inside the param object), provided that
     /// the source doesn't contain `test.param` or contains an object at this path.
     fn nest_object_params(&mut self, schema: &ConfigSchema) {
-        for (prefix, config_data) in schema.iter() {
+        for (prefix, config_data) in schema.iter_ll() {
             let Some(config_object) = self.get_mut(prefix) else {
                 continue;
             };
@@ -452,7 +556,9 @@ impl WithOrigin {
     /// Deep merge stopped at params (i.e., params are always merged atomically).
     fn guided_merge(&mut self, overrides: Self, schema: &ConfigSchema, current_path: Pointer<'_>) {
         match (&mut self.inner, overrides.inner) {
-            (Value::Object(this), Value::Object(other)) if !schema.contains_param(current_path) => {
+            (Value::Object(this), Value::Object(other))
+                if !schema.contains_canonical_param(current_path) =>
+            {
                 for (key, value) in other {
                     if let Some(existing_value) = this.get_mut(&key) {
                         let child_path = current_path.join(&key);

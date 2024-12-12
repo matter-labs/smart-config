@@ -228,6 +228,21 @@ impl TypeQualifiers {
         self.is_secret = true;
         self
     }
+
+    /// Gets the description.
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+
+    /// Gets the unit of measurement.
+    pub fn unit(&self) -> Option<UnitOfMeasurement> {
+        self.unit
+    }
+
+    /// Checks whether this value is secret.
+    pub fn is_secret(&self) -> bool {
+        self.is_secret
+    }
 }
 
 impl fmt::Display for TypeQualifiers {

@@ -12,6 +12,7 @@ The following crates are included:
 
 - [`smart-config`](crates/smart-config): the main library
 - [`smart-config-derive`](crates/smart-config-derive): procedural macros for the library
+- [`smart-config-commands`](crates/smart-config-commands): command-line extensions for the library
 
 ## License
 

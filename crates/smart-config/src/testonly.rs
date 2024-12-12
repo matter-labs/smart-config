@@ -63,7 +63,7 @@ pub(crate) struct ValueCoercingConfig {
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct NestedConfig {
-    #[config(rename = "renamed")]
+    #[config(rename = "renamed", alias = "enum")]
     pub simple_enum: SimpleEnum,
     #[config(default_t = 42)]
     pub other_int: u32,

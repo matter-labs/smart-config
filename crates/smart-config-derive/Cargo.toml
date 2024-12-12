@@ -8,6 +8,7 @@ license.workspace = true
 keywords.workspace = true
 categories.workspace = true
 readme = "README.md"
+description = "Derive macros for `smart-config` library"
 
 [lib]
 proc-macro = true

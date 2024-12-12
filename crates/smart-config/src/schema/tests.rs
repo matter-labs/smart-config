@@ -67,30 +67,6 @@ fn getting_config_metadata() {
     assert_eq!(optional_metadata.expecting, BasicTypes::INTEGER);
 }
 
-const EXPECTED_HELP: &str = r#"
-# Test configuration
-Extended description.
-
-str
-string
-    Type: string [Rust: String], default: "default"
-    String value.
-
-optional
-    Type: integer [Rust: Option], default: None
-    Optional value.
-"#;
-
-#[test]
-fn printing_schema_help() {
-    let mut schema = ConfigSchema::default();
-    schema.insert::<TestConfig>("").unwrap();
-    let mut buffer = vec![];
-    schema.write_help(&mut buffer, |_| true).unwrap();
-    let buffer = String::from_utf8(buffer).unwrap();
-    assert_eq!(buffer.trim(), EXPECTED_HELP.trim(), "{buffer}");
-}
-
 #[test]
 fn using_alias() {
     let mut schema = ConfigSchema::default();
@@ -243,24 +219,28 @@ fn mountpoint_errors() {
         schema.mounting_points["test.bool_value"],
         MountingPoint::Param {
             expecting: BasicTypes::BOOL,
+            is_canonical: true,
         }
     );
     assert_matches!(
         schema.mounting_points["test.str"],
         MountingPoint::Param {
             expecting: BasicTypes::STRING,
+            is_canonical: true,
         }
     );
     assert_matches!(
         schema.mounting_points["test.string"],
         MountingPoint::Param {
             expecting: BasicTypes::STRING,
+            is_canonical: false,
         }
     );
     assert_matches!(
         schema.mounting_points["test.hierarchical.str"],
         MountingPoint::Param {
             expecting: BasicTypes::STRING,
+            is_canonical: true,
         }
     );
 
@@ -314,6 +294,7 @@ fn aliasing_mountpoint_errors() {
         schema.mounting_points["bogus.hierarchical"],
         MountingPoint::Param {
             expecting: BasicTypes::INTEGER,
+            is_canonical: true,
         }
     );
     assert_matches!(

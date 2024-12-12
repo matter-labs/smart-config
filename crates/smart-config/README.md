@@ -68,7 +68,7 @@ enum CustomEnum {
     Second,
 }
 
-/// Configuration with type params of serveral types.
+/// Configuration with type params of several types.
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(derive(Default))] // derive according to default values for params
 pub struct TestConfig {

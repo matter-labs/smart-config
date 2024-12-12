@@ -2,7 +2,8 @@
 
 use std::{collections::HashMap, fmt, iter, mem, sync::Arc};
 
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::ExposeSecret;
+pub use secrecy::SecretString;
 
 use crate::metadata::BasicTypes;
 
@@ -206,7 +207,7 @@ impl<T> WithOrigin<T> {
 }
 
 impl WithOrigin {
-    pub(crate) fn get(&self, pointer: Pointer) -> Option<&Self> {
+    pub(crate) fn get(&self, pointer: Pointer<'_>) -> Option<&Self> {
         pointer
             .segments()
             .try_fold(self, |ptr, segment| match &ptr.inner {
@@ -214,6 +215,11 @@ impl WithOrigin {
                 Value::Array(array) => array.get(segment.parse::<usize>().ok()?),
                 _ => None,
             })
+    }
+
+    /// Returns value at the specified pointer.
+    pub fn pointer(&self, pointer: &str) -> Option<&Self> {
+        self.get(Pointer(pointer))
     }
 
     pub(crate) fn get_mut(&mut self, pointer: Pointer) -> Option<&mut Self> {

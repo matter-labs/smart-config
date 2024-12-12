@@ -354,12 +354,11 @@ fn merging_config_parts_with_env() {
 #[test]
 fn merging_configs() {
     let json = serde_json::json!({
-        "int": 123,
-        "bool": true,
-        "array": [42, 23],
+        "value": 123,
+        "merged": "!!",
         "nested": {
-            "int": 321,
-            "string": "???",
+            "other_int": 321,
+            "renamed": "first",
         },
     });
     let serde_json::Value::Object(json) = json else {
@@ -368,11 +367,10 @@ fn merging_configs() {
     let base = Json::new("base.json", json);
 
     let json = serde_json::json!({
-        "bool": false,
-        "array": [23],
+        "merged": "??",
         "nested": {
-            "int": 123,
-            "bool": true,
+            "enum": "second",
+            "map": HashMap::from([("first", 5)]),
         },
     });
     let serde_json::Value::Object(json) = json else {
@@ -380,30 +378,21 @@ fn merging_configs() {
     };
     let overrides = Json::new("overrides.json", json);
 
-    let empty_schema = ConfigSchema::default();
-    let repo = ConfigRepository::new(&empty_schema)
-        .with(base)
-        .with(overrides);
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ConfigWithNesting>("").unwrap();
+    let repo = ConfigRepository::new(&schema).with(base).with(overrides);
     let Value::Object(merged) = &repo.merged().inner else {
         panic!("unexpected merged value");
     };
 
-    assert_matches!(&merged["int"].inner, Value::Number(num) if *num == 123_u64.into());
+    assert_matches!(&merged["value"].inner, Value::Number(num) if *num == 123_u64.into());
     assert_matches!(
-        merged["int"].origin.as_ref(),
+        merged["value"].origin.as_ref(),
         ValueOrigin::Path { source, .. } if extract_json_name(source) == "base.json"
     );
-    assert_matches!(merged["bool"].inner, Value::Bool(false));
+    assert_matches!(&merged["merged"].inner, Value::String(StrValue::Plain(s)) if s == "??");
     assert_matches!(
-        merged["bool"].origin.as_ref(),
-        ValueOrigin::Path { source, .. } if extract_json_name(source) == "overrides.json"
-    );
-    assert_matches!(
-        &merged["array"].inner,
-        Value::Array(items) if items.len() == 1
-    );
-    assert_matches!(
-        merged["array"].origin.as_ref(),
+        merged["merged"].origin.as_ref(),
         ValueOrigin::Path { source, .. } if extract_json_name(source) == "overrides.json"
     );
 
@@ -411,19 +400,26 @@ fn merging_configs() {
         &merged["nested"].inner,
         Value::Object(items) if items.len() == 3
     );
-    let nested_int = merged["nested"].get(Pointer("int")).unwrap();
-    assert_matches!(&nested_int.inner, Value::Number(num) if *num == 123_u64.into());
+    let nested_int = merged["nested"].get(Pointer("other_int")).unwrap();
+    assert_matches!(&nested_int.inner, Value::Number(num) if *num == 321_u64.into());
     assert_matches!(
         nested_int.origin.as_ref(),
+        ValueOrigin::Path { source, .. } if extract_json_name(source) == "base.json"
+    );
+
+    let nested_str = merged["nested"].get(Pointer("renamed")).unwrap();
+    assert_matches!(&nested_str.inner, Value::String(StrValue::Plain(s)) if s == "second");
+    assert_matches!(
+        nested_str.origin.as_ref(),
         ValueOrigin::Path { source, .. } if extract_json_name(source) == "overrides.json"
     );
 
-    let nested_str = merged["nested"].get(Pointer("string")).unwrap();
-    assert_matches!(&nested_str.inner, Value::String(StrValue::Plain(s)) if s == "???");
-    assert_matches!(
-        nested_str.origin.as_ref(),
-        ValueOrigin::Path { source, .. } if extract_json_name(source) == "base.json"
-    );
+    let sources = repo.sources();
+    assert_eq!(sources.len(), 2);
+    assert_eq!(extract_json_name(&sources[0].origin), "base.json");
+    assert_eq!(extract_json_name(&sources[1].origin), "overrides.json");
+    assert_eq!(sources[0].param_count, 4);
+    assert_eq!(sources[1].param_count, 3);
 }
 
 #[test]
@@ -654,11 +650,6 @@ fn nesting_for_object_param() {
     let env = Environment::from_iter("", [("TEST_PARAM_INT", "123"), ("TEST_PARAM_STRING", "??")]);
     let repo = ConfigRepository::new(&schema).with(env);
 
-    assert_matches!(
-        &repo.merged().get(Pointer("test.param_int")).unwrap().inner,
-        Value::String(StrValue::Plain(s)) if s == "123"
-    );
-
     let object = repo.merged().get(Pointer("test.param")).unwrap();
     assert_matches!(
         object.origin.as_ref(),
@@ -709,11 +700,6 @@ fn nesting_not_applied_if_original_param_is_defined() {
         ],
     );
     let repo = ConfigRepository::new(&schema).with(env);
-
-    assert_matches!(
-        &repo.merged().get(Pointer("test.param_int")).unwrap().inner,
-        Value::String(StrValue::Plain(s)) if s == "123"
-    );
     let val = &repo.merged().get(Pointer("test.param")).unwrap().inner;
     assert_matches!(val, Value::String(StrValue::Plain(s)) if s == r#"{ "int": 42 }"#);
 }
