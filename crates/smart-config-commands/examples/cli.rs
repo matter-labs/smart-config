@@ -1,12 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     path::PathBuf,
     time::Duration,
 };
 
 use clap::Parser;
-use primitive_types::{H160 as Address, U256};
-use serde::Deserialize;
+use primitive_types::{H160 as Address, H256, U256};
+use serde::{Deserialize, Deserializer};
 use smart_config::{
     de,
     metadata::{SizeUnit, TimeUnit},
@@ -72,6 +73,20 @@ impl de::WellKnown for ComplexParam {
     const DE: Self::Deserializer = de::Serde![object];
 }
 
+pub struct SecretKey(pub H256);
+
+impl fmt::Debug for SecretKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.debug_tuple("SecretKey").field(&"_").finish()
+    }
+}
+
+impl<'de> Deserialize<'de> for SecretKey {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        H256::deserialize(deserializer).map(Self)
+    }
+}
+
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 pub struct FundingConfig {
     /// Ethereum-like address to fund.
@@ -80,7 +95,9 @@ pub struct FundingConfig {
     pub balance: U256,
     /// Secret string value.
     pub api_key: Option<SecretString>,
-    // FIXME: also test a secret key (H256)
+    /// Secret key.
+    #[config(secret, with = de::Serde![str])]
+    pub secret_key: Option<SecretKey>,
 }
 
 const JSON: &str = r#"
@@ -127,6 +144,10 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
             ("APP_TEST_DIRS", "/usr/bin:usr/local/bin"),
             ("APP_TEST_CACHE_SIZE", "128 MiB"),
             ("APP_TEST_FUNDING_API_KEY", "correct horse battery staple"),
+            (
+                "APP_TEST_FUNDING_SECRET_KEY",
+                "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
+            ),
         ],
     );
     let mut repo = ConfigRepository::new(schema)
@@ -142,6 +163,7 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
                 ("BOGUS_TEST_NESTED_TIMEOUTS", "nope,124us"),
                 ("BOGUS_TEST_NESTED_COMPLEX", r#"{ "array": [1, true] }"#),
                 ("BOGUS_TEST_CACHE_SIZE", "128 MiBis"),
+                ("BOGUS_TEST_FUNDING_SECRET_KEY", "not a key"),
             ],
         );
         repo = repo.with(bogus_vars);

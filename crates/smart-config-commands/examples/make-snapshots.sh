@@ -26,6 +26,6 @@ export CLICOLOR_FORCE=1
 echo "Creating help snapshot..."
 term-transcript exec $TT_ARGS --scroll=540 "$TARGET_DIR/examples/cli print" > "$THIS_DIR/help.svg"
 echo "Creating debug snapshot..."
-term-transcript exec $TT_ARGS "$TARGET_DIR/examples/cli debug" > "$THIS_DIR/debug.svg"
+term-transcript exec $TT_ARGS --scroll=540 "$TARGET_DIR/examples/cli debug" > "$THIS_DIR/debug.svg"
 echo "Creating errors snapshot..."
 term-transcript exec $TT_ARGS --scroll=540 "$TARGET_DIR/examples/cli debug --bogus" > "$THIS_DIR/errors.svg"
