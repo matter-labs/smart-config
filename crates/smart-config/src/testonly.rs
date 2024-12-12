@@ -59,6 +59,8 @@ pub(crate) struct ValueCoercingConfig {
     pub param: TestParam,
     #[config(default)]
     pub set: HashSet<u64>,
+    #[config(default)]
+    pub repeated: Vec<TestParam>,
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]

@@ -754,7 +754,7 @@ fn nesting_for_object_param() {
 }
 
 #[test]
-fn testing_for_object_param_with_structured_source() {
+fn nesting_for_object_param_with_structured_source() {
     let mut schema = ConfigSchema::default();
     schema.insert::<ValueCoercingConfig>("test").unwrap();
 
@@ -776,6 +776,47 @@ fn testing_for_object_param_with_structured_source() {
 }
 
 #[test]
+fn nesting_for_array_param() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_PARAM_INT", "123"),
+            ("TEST_PARAM_STRING", "??"),
+            ("TEST_SET_0", "123"),
+            ("TEST_SET_1", "321"),
+            ("TEST_SET_2", "777"),
+            ("TEST_REPEATED_0", r#"{ "int": 123, "string": "!" }"#),
+            (
+                "TEST_REPEATED_1",
+                r#"{ "int": 321, "string": "?", "array": [1, 2] }"#,
+            ),
+        ],
+    );
+    let repo = ConfigRepository::new(&schema).with(env);
+
+    assert_matches!(
+        &repo.merged().get(Pointer("test.set")).unwrap().inner,
+        Value::Array(_)
+    );
+    assert_matches!(
+        &repo.merged().get(Pointer("test.repeated")).unwrap().inner,
+        Value::Array(_)
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.set, HashSet::from([123, 321, 777]));
+    assert_eq!(config.repeated.len(), 2);
+    assert_eq!(config.repeated[0].int, 123);
+    assert_eq!(config.repeated[0].string, "!");
+    assert_eq!(config.repeated[1].int, 321);
+    assert_eq!(config.repeated[1].string, "?");
+    assert_eq!(config.repeated[1].array, [1, 2]);
+}
+
+#[test]
 fn nesting_not_applied_if_original_param_is_defined() {
     let mut schema = ConfigSchema::default();
     schema.insert::<ValueCoercingConfig>("test").unwrap();
@@ -790,6 +831,37 @@ fn nesting_not_applied_if_original_param_is_defined() {
     let repo = ConfigRepository::new(&schema).with(env);
     let val = &repo.merged().get(Pointer("test.param")).unwrap().inner;
     assert_matches!(val, Value::String(StrValue::Plain(s)) if s == r#"{ "int": 42 }"#);
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_SET", "[]"),
+            ("TEST_SET_0", "123"),
+            ("TEST_SET_1", "321"),
+        ],
+    );
+    let repo = ConfigRepository::new(&schema).with(env);
+
+    assert_matches!(
+        &repo.merged().get(Pointer("test.set")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "[]"
+    );
+}
+
+#[test]
+fn nesting_not_applied_for_non_sequential_array_indices() {
+    let mut schema = ConfigSchema::default();
+    schema.insert::<ValueCoercingConfig>("test").unwrap();
+
+    let env = Environment::from_iter("", [("TEST_SET_1", "123"), ("TEST_SET_2", "321")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let set = repo.merged().get(Pointer("test.set"));
+    assert!(set.is_none(), "{set:?}");
+
+    let env = Environment::from_iter("", [("TEST_SET_0", "123"), ("TEST_SET_2", "321")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let set = repo.merged().get(Pointer("test.set"));
+    assert!(set.is_none(), "{set:?}");
 }
 
 #[test]
