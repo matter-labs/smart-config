@@ -609,10 +609,11 @@ fn multiple_errors_for_composed_deserializers() {
     assert_eq!(errors.len(), 2);
     assert!(errors.iter().any(|err| {
         err.path() == "map_of_ints.what"
-            && err
-                .inner()
-                .to_string()
-                .starts_with("cannot deserialize key")
+            && matches!(
+                err.origin(),
+                ValueOrigin::Synthetic { transform, .. } if transform.contains("key")
+            )
+            && err.inner().to_string().starts_with("invalid digit")
     }));
     assert!(errors.iter().any(|err| {
         err.path() == "map_of_ints.what" && err.inner().to_string().starts_with("invalid type")

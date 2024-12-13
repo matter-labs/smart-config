@@ -2,9 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    fmt,
     hash::{BuildHasher, Hash},
-    str::FromStr,
     sync::Arc,
 };
 
@@ -17,12 +15,9 @@ use crate::{
     value::{StrValue, Value, ValueOrigin, WithOrigin},
 };
 
-/// Deserializer from JSON arrays and objects.
+/// Deserializer from JSON arrays.
 ///
-/// Supports the following param types:
-///
-/// - [`Vec`], arrays, [`HashSet`], [`BTreeSet`] when deserializing from an array
-/// - [`HashMap`] and [`BTreeMap`] when deserializing from an object
+/// Supports deserializing to [`Vec`], arrays, [`HashSet`], [`BTreeSet`].
 #[derive(Debug)]
 pub struct Repeated<De>(pub De);
 
@@ -69,58 +64,6 @@ impl<De> Repeated<De> {
         if has_errors {
             let origin = deserializer.origin().clone();
             Err(ErrorWithOrigin::new(LowLevelError::InvalidArray, origin))
-        } else {
-            Ok(items)
-        }
-    }
-
-    fn deserialize_map<K, V, C>(
-        &self,
-        mut ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<C, ErrorWithOrigin>
-    where
-        K: FromStr,
-        K::Err: fmt::Display,
-        De: DeserializeParam<V>,
-        C: FromIterator<(K, V)>,
-    {
-        let deserializer = ctx.current_value_deserializer(param.name)?;
-        let Value::Object(items) = deserializer.value() else {
-            return Err(deserializer.invalid_type("object"));
-        };
-
-        let mut has_errors = false;
-        let items = items.iter().filter_map(|(key, value)| {
-            let coerced = value.coerce_value_type(De::EXPECTING);
-            let mut child_ctx = ctx.child(key, ctx.location_in_config);
-            let mut child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(value));
-
-            let key = match key.parse::<K>() {
-                Ok(val) if !has_errors => Some(val),
-                Ok(_) => None,
-                Err(err) => {
-                    has_errors = true;
-                    child_ctx.push_error(DeError::custom(format!("cannot deserialize key: {err}")));
-                    None
-                }
-            };
-            let value = match self.0.deserialize_param(child_ctx.borrow(), param) {
-                Ok(val) if !has_errors => Some(val),
-                Ok(_) => None,
-                Err(err) => {
-                    has_errors = true;
-                    child_ctx.push_error(err);
-                    None
-                }
-            };
-            Some((key?, value?))
-        });
-        let items: C = items.collect();
-
-        if has_errors {
-            let origin = deserializer.origin().clone();
-            Err(ErrorWithOrigin::new(LowLevelError::InvalidObject, origin))
         } else {
             Ok(items)
         }
@@ -234,14 +177,91 @@ where
     const DE: Self::Deserializer = Repeated(T::DE);
 }
 
-impl<K, V, S, De> DeserializeParam<HashMap<K, V, S>> for Repeated<De>
+/// Deserializer from JSON objects.
+///
+/// Supports deserializing to [`HashMap`] and [`BTreeMap`].
+#[derive(Debug)]
+pub struct RepeatedEntries<DeK, DeV>(pub DeK, pub DeV);
+
+impl<DeK, DeV> RepeatedEntries<DeK, DeV> {
+    fn deserialize_map<K, V, C>(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<C, ErrorWithOrigin>
+    where
+        DeK: DeserializeParam<K>,
+        DeV: DeserializeParam<V>,
+        C: FromIterator<(K, V)>,
+    {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let Value::Object(items) = deserializer.value() else {
+            return Err(deserializer.invalid_type("object"));
+        };
+
+        let mut has_errors = false;
+        let items = items.iter().filter_map(|(key, value)| {
+            let key_as_value = WithOrigin::new(
+                Value::String(StrValue::Plain(key.clone())),
+                Arc::new(ValueOrigin::Synthetic {
+                    source: deserializer.origin().clone(),
+                    transform: "string key".into(),
+                }),
+            );
+
+            let coerced = key_as_value.coerce_value_type(DeK::EXPECTING);
+            let mut child_ctx = ctx.child(key, ctx.location_in_config);
+            let mut child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(&key_as_value));
+            let parsed_key = match self.0.deserialize_param(child_ctx.borrow(), param) {
+                Ok(val) if !has_errors => Some(val),
+                Ok(_) => None,
+                Err(err) => {
+                    has_errors = true;
+                    child_ctx.push_error(err);
+                    None
+                }
+            };
+
+            let coerced = value.coerce_value_type(DeV::EXPECTING);
+            let mut child_ctx = ctx.child(key, ctx.location_in_config);
+            let mut child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(value));
+            let parsed_value = match self.1.deserialize_param(child_ctx.borrow(), param) {
+                Ok(val) if !has_errors => Some(val),
+                Ok(_) => None,
+                Err(err) => {
+                    has_errors = true;
+                    child_ctx.push_error(err);
+                    None
+                }
+            };
+            Some((parsed_key?, parsed_value?))
+        });
+        let items: C = items.collect();
+
+        if has_errors {
+            let origin = deserializer.origin().clone();
+            Err(ErrorWithOrigin::new(LowLevelError::InvalidObject, origin))
+        } else {
+            Ok(items)
+        }
+    }
+}
+
+impl<K, V, S, DeK, DeV> DeserializeParam<HashMap<K, V, S>> for RepeatedEntries<DeK, DeV>
 where
-    K: 'static + Eq + Hash + FromStr,
-    K::Err: fmt::Display,
+    K: 'static + Eq + Hash,
     S: 'static + Default + BuildHasher,
-    De: DeserializeParam<V>,
+    DeK: DeserializeParam<K>,
+    DeV: DeserializeParam<V>,
 {
-    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
+    const EXPECTING: BasicTypes = {
+        assert!(
+            DeK::EXPECTING.contains(BasicTypes::STRING)
+                || DeK::EXPECTING.contains(BasicTypes::INTEGER),
+            "map keys must be deserializable from strings or ints"
+        );
+        BasicTypes::OBJECT
+    };
 
     fn type_qualifiers(&self) -> TypeQualifiers {
         TypeQualifiers::new("map")
@@ -256,13 +276,20 @@ where
     }
 }
 
-impl<K, V, De> DeserializeParam<BTreeMap<K, V>> for Repeated<De>
+impl<K, V, DeK, DeV> DeserializeParam<BTreeMap<K, V>> for RepeatedEntries<DeK, DeV>
 where
-    K: 'static + Eq + Ord + FromStr,
-    K::Err: fmt::Display,
-    De: DeserializeParam<V>,
+    K: 'static + Eq + Ord,
+    DeK: DeserializeParam<K>,
+    DeV: DeserializeParam<V>,
 {
-    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
+    const EXPECTING: BasicTypes = {
+        assert!(
+            DeK::EXPECTING.contains(BasicTypes::STRING)
+                || DeK::EXPECTING.contains(BasicTypes::INTEGER),
+            "map keys must be deserializable from strings or ints"
+        );
+        BasicTypes::OBJECT
+    };
 
     fn type_qualifiers(&self) -> TypeQualifiers {
         TypeQualifiers::new("map")
@@ -279,23 +306,21 @@ where
 
 impl<K, V, S> WellKnown for HashMap<K, V, S>
 where
-    K: 'static + Eq + Hash + FromStr,
-    K::Err: fmt::Display,
+    K: 'static + Eq + Hash + WellKnown,
     V: WellKnown,
     S: 'static + Default + BuildHasher,
 {
-    type Deserializer = Repeated<V::Deserializer>;
-    const DE: Self::Deserializer = Repeated(V::DE);
+    type Deserializer = RepeatedEntries<K::Deserializer, V::Deserializer>;
+    const DE: Self::Deserializer = RepeatedEntries(K::DE, V::DE);
 }
 
 impl<K, V> WellKnown for BTreeMap<K, V>
 where
-    K: 'static + Eq + Ord + FromStr,
-    K::Err: fmt::Display,
+    K: 'static + Eq + Ord + WellKnown,
     V: WellKnown,
 {
-    type Deserializer = Repeated<V::Deserializer>;
-    const DE: Self::Deserializer = Repeated(V::DE);
+    type Deserializer = RepeatedEntries<K::Deserializer, V::Deserializer>;
+    const DE: Self::Deserializer = RepeatedEntries(K::DE, V::DE);
 }
 
 /// Deserializer that supports either an array of values, or a string in which values are delimited
