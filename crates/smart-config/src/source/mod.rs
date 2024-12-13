@@ -290,13 +290,9 @@ impl WithOrigin {
                 })
                 .collect();
 
-            let mut new_values = vec![];
+            let mut new_values = Map::new();
             let mut new_map_origin = None;
             for param in config_data.metadata.params {
-                if canonical_map.map_or(false, |map| map.contains_key(param.name)) {
-                    continue;
-                }
-
                 // Create a prioritized iterator of all candidates
                 let local_candidates = canonical_map
                     .into_iter()
@@ -305,15 +301,31 @@ impl WithOrigin {
                 let alias_candidates = alias_maps.iter().flat_map(|&(map, origin)| {
                     all_names.clone().map(move |name| (map, name, Some(origin)))
                 });
+                let all_candidates = local_candidates.chain(alias_candidates);
 
-                // Find the value alias among the candidates
-                let maybe_value_and_origin = local_candidates
-                    .chain(alias_candidates)
-                    .find_map(|(map, name, origin)| Some((map.get(name)?, origin)));
-                if let Some((value, origin)) = maybe_value_and_origin {
-                    new_values.push((param.name.to_owned(), value.clone()));
-                    if new_map_origin.is_none() {
-                        new_map_origin = origin.cloned();
+                for (map, name, origin) in all_candidates {
+                    // Copy all values in `map` that either match `name` exactly, or start with `{name}_`
+                    // (the latter can be used for object or array nesting).
+                    for (key, val) in map {
+                        let canonical_key = if key == name {
+                            param.name // Exact match
+                        } else if let Some(key_suffix) = Self::strip_prefix(key, name) {
+                            &format!("{}_{key_suffix}", param.name)
+                        } else {
+                            continue;
+                        };
+
+                        if canonical_map.map_or(false, |map| map.contains_key(canonical_key)) {
+                            // Key is already present in the original map
+                            continue;
+                        }
+
+                        if !new_values.contains_key(canonical_key) {
+                            new_values.insert(canonical_key.to_owned(), val.clone());
+                            if new_map_origin.is_none() {
+                                new_map_origin = origin.cloned();
+                            }
+                        }
                     }
                 }
             }
@@ -333,6 +345,12 @@ impl WithOrigin {
             self.ensure_object(prefix, |_| new_map_origin.clone().unwrap())
                 .extend(new_values);
         }
+    }
+
+    fn strip_prefix<'s>(s: &'s str, prefix: &str) -> Option<&'s str> {
+        s.strip_prefix(prefix)?
+            .strip_prefix('_')
+            .filter(|suffix| !suffix.is_empty())
     }
 
     /// Ensures that there is an object (possibly empty) at the specified location.
@@ -482,7 +500,7 @@ impl WithOrigin {
                 let matching_fields: Vec<_> = config_object
                     .iter()
                     .filter_map(|(name, field)| {
-                        let stripped_name = name.strip_prefix(child_name)?.strip_prefix('_')?;
+                        let stripped_name = Self::strip_prefix(name, child_name)?;
                         if let Some(param_object) = target_object {
                             if param_object.contains_key(stripped_name) {
                                 return None; // Never overwrite existing fields
@@ -544,7 +562,7 @@ impl WithOrigin {
                 let matching_fields: BTreeMap<_, _> = config_object
                     .iter()
                     .filter_map(|(name, field)| {
-                        let stripped_name = name.strip_prefix(param.name)?.strip_prefix('_')?;
+                        let stripped_name = Self::strip_prefix(name, param.name)?;
                         let idx: usize = stripped_name.parse().ok()?;
                         Some((idx, field.clone()))
                     })

@@ -925,6 +925,35 @@ fn nesting_with_duration_param() {
 }
 
 #[test]
+fn nesting_with_aliased_duration_param() {
+    // Sanity check: the alias should be recognized.
+    let json = config!("array": [4, 5], "long_timeout": "30s");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(30));
+
+    let json = config!("array": [4, 5], "long_timeout_sec": 30);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(30));
+
+    // Test global aliases as well.
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert(&ConfigWithComplexTypes::DESCRIPTION, "test")
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+    let json = config!("alias.array": [4, 5], "alias.long_timeout_sec": 30);
+    let mut repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(30));
+
+    let env = Environment::from_iter("", [("ALIAS_LONG_DUR_MIN", "1")]);
+    repo = repo.with(env);
+    let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(60));
+}
+
+#[test]
 fn nesting_with_byte_size_param() {
     let json = config!("array": [4, 5], "disk_size_mb": 64);
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();

@@ -204,7 +204,7 @@ pub(crate) struct ConfigWithComplexTypes {
     pub assumed: Option<serde_json::Value>,
     #[config(default_t = Duration::from_millis(100), with = TimeUnit::Millis)]
     pub short_dur: Duration,
-    #[config(default_t = Duration::from_secs(5))]
+    #[config(default_t = Duration::from_secs(5), alias = "long_timeout")]
     pub long_dur: Duration,
     #[config(default_t = "./test".into())]
     pub path: PathBuf,
