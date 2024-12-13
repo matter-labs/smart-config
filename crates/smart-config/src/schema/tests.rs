@@ -146,6 +146,19 @@ fn using_nesting() {
     let config_prefixes: HashSet<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
     assert_eq!(config_prefixes, HashSet::from(["", "hierarchical"]));
 
+    let refs: Vec<_> = schema
+        .iter()
+        .map(|config_ref| (config_ref.prefix, config_ref.metadata().ty.name_in_code()))
+        .collect();
+    assert_eq!(
+        refs,
+        [
+            ("", "NestingConfig"),
+            ("", "TestConfig"),
+            ("hierarchical", "TestConfig")
+        ]
+    );
+
     let err = schema
         .single(&TestConfig::DESCRIPTION)
         .unwrap_err()
@@ -390,4 +403,56 @@ fn aliasing_info_for_nested_configs() {
         let (_, expecting) = data.pop().unwrap();
         assert_eq!(expecting, BasicTypes::STRING);
     }
+}
+
+#[test]
+fn aliasing_does_not_change_config_depth() {
+    let mut schema = ConfigSchema::default();
+    schema.insert(&AliasedConfig::DESCRIPTION, "test").unwrap();
+
+    let expected_index_by_depth = BTreeSet::from([
+        (0, any::TypeId::of::<AliasedConfig>()),
+        (1, any::TypeId::of::<NestedAliasedConfig>()),
+    ]);
+    assert_eq!(schema.configs["test"].by_depth, expected_index_by_depth);
+    assert_eq!(
+        schema.configs["test.nested"].by_depth,
+        BTreeSet::from([(1, any::TypeId::of::<NestedAliasedConfig>())])
+    );
+
+    schema
+        .get_mut(&NestedAliasedConfig::DESCRIPTION, "test")
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+
+    assert_eq!(schema.configs["test"].by_depth, expected_index_by_depth);
+    assert_eq!(
+        schema.configs["test.nested"].by_depth,
+        BTreeSet::from([(1, any::TypeId::of::<NestedAliasedConfig>())])
+    );
+
+    // Insert a top-level config at the location of a nested config.
+    schema
+        .insert(&TestConfig::DESCRIPTION, "test.nested")
+        .unwrap();
+
+    assert_eq!(schema.configs["test"].by_depth, expected_index_by_depth);
+    let expected_nested_index_by_depth = BTreeSet::from([
+        (0, any::TypeId::of::<TestConfig>()),
+        (1, any::TypeId::of::<NestedAliasedConfig>()),
+    ]);
+    assert_eq!(
+        schema.configs["test.nested"].by_depth,
+        expected_nested_index_by_depth
+    );
+
+    // Insert another instance of a nested config (should be no-op).
+    schema
+        .insert(&NestedAliasedConfig::DESCRIPTION, "test.nested")
+        .unwrap();
+    assert_eq!(
+        schema.configs["test.nested"].by_depth,
+        expected_nested_index_by_depth
+    );
 }
