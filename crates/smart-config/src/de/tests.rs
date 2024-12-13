@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    net::{Ipv4Addr, Ipv6Addr},
     num::NonZeroUsize,
     time::Duration,
 };
@@ -390,6 +391,8 @@ fn parsing_complex_types() {
             disk_size: None,
             paths: vec![],
             map_or_string: MapOrString::default(),
+            ip_addr: Ipv4Addr::LOCALHOST.into(),
+            socket_addr: ([192, 168, 0, 1], 3000).into(),
         }
     );
 
@@ -404,6 +407,8 @@ fn parsing_complex_types() {
         "memory_size_mb": 64,
         "disk_size": "4 GB",
         "map_or_string": "test=1,other=2",
+        "ip_addr": "10.10.0.103",
+        "socket_addr": "[::1]:4040",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -420,6 +425,8 @@ fn parsing_complex_types() {
             disk_size: Some(ByteSize::new(4, SizeUnit::GiB)),
             paths: vec!["/usr/bin".into(), "/usr/local/bin".into()],
             map_or_string: MapOrString(HashMap::from([("test".into(), 1), ("other".into(), 2),])),
+            ip_addr: [10, 10, 0, 103].into(),
+            socket_addr: (Ipv6Addr::LOCALHOST, 4040).into(),
         }
     );
 
@@ -437,6 +444,7 @@ fn parsing_complex_types() {
             "test": 42,
             "other": 23,
         }),
+        "socket_addr": "127.0.0.1:8000",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -453,6 +461,8 @@ fn parsing_complex_types() {
             disk_size: Some(ByteSize::new(256, SizeUnit::MiB)),
             paths: vec!["/usr/bin".into(), "/mnt".into()],
             map_or_string: MapOrString(HashMap::from([("test".into(), 42), ("other".into(), 23),])),
+            ip_addr: Ipv4Addr::LOCALHOST.into(),
+            socket_addr: ([127, 0, 0, 1], 8000).into(),
         }
     );
 }

@@ -2,6 +2,7 @@
 
 use std::{
     any, fmt,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
         NonZeroU64, NonZeroU8, NonZeroUsize,
@@ -161,6 +162,36 @@ impl WellKnown for String {
 impl WellKnown for PathBuf {
     type Deserializer = Qualified<super::Serde![str]>;
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "filesystem path");
+}
+
+impl WellKnown for IpAddr {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IP address");
+}
+
+impl WellKnown for Ipv4Addr {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IPv4 address");
+}
+
+impl WellKnown for Ipv6Addr {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IPv6 address");
+}
+
+impl WellKnown for SocketAddr {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "socket address");
+}
+
+impl WellKnown for SocketAddrV4 {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "v4 socket address");
+}
+
+impl WellKnown for SocketAddrV6 {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "v6 socket address");
 }
 
 impl WellKnown for f32 {

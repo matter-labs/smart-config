@@ -2,6 +2,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     num::NonZeroUsize,
     path::PathBuf,
     str::FromStr,
@@ -216,6 +217,10 @@ pub(crate) struct ConfigWithComplexTypes {
     pub paths: Vec<PathBuf>,
     #[config(default, with = de::OrString(Serde![object]))]
     pub map_or_string: MapOrString,
+    #[config(default_t = Ipv4Addr::LOCALHOST.into())]
+    pub ip_addr: IpAddr,
+    #[config(default_t = ([192, 168, 0, 1], 3000).into())]
+    pub socket_addr: SocketAddr,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
