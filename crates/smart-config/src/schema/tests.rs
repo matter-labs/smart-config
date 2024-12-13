@@ -72,7 +72,7 @@ fn getting_config_metadata() {
 fn using_alias() {
     let mut schema = ConfigSchema::default();
     schema
-        .insert::<TestConfig>("test")
+        .insert(&TestConfig::DESCRIPTION, "test")
         .unwrap()
         .push_alias("")
         .unwrap();
@@ -104,7 +104,7 @@ fn using_alias() {
 fn using_multiple_aliases() {
     let mut schema = ConfigSchema::default();
     schema
-        .insert::<TestConfig>("test")
+        .insert(&TestConfig::DESCRIPTION, "test")
         .unwrap()
         .push_alias("")
         .unwrap()
@@ -139,7 +139,7 @@ fn using_multiple_aliases() {
 #[test]
 fn using_nesting() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<NestingConfig>("").unwrap();
+    schema.insert(&NestingConfig::DESCRIPTION, "").unwrap();
 
     let config_prefixes: Vec<_> = schema.locate(&NestingConfig::DESCRIPTION).collect();
     assert_eq!(config_prefixes, [""]);
@@ -219,7 +219,7 @@ struct BogusNestedConfigWithAlias {
 #[test]
 fn mountpoint_errors() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<NestingConfig>("test").unwrap();
+    schema.insert(&NestingConfig::DESCRIPTION, "test").unwrap();
     assert_matches!(
         schema.mounting_points["test.hierarchical"],
         MountingPoint::Config
@@ -254,14 +254,14 @@ fn mountpoint_errors() {
     );
 
     let err = schema
-        .insert::<BogusParamConfig>("test")
+        .insert(&BogusParamConfig::DESCRIPTION, "test")
         .unwrap_err()
         .to_string();
     assert!(err.contains("[Rust field: `hierarchical`]"), "{err}");
     assert!(err.contains("config(s) are already mounted"), "{err}");
 
     let err = schema
-        .insert::<BogusNestedConfig>("test")
+        .insert(&BogusNestedConfig::DESCRIPTION, "test")
         .unwrap_err()
         .to_string();
     assert!(err.contains("Cannot mount config"), "{err}");
@@ -269,7 +269,7 @@ fn mountpoint_errors() {
     assert!(err.contains("parameter(s) are already mounted"), "{err}");
 
     let err = schema
-        .insert::<BogusNestedConfig>("test.bool_value")
+        .insert(&BogusNestedConfig::DESCRIPTION, "test.bool_value")
         .unwrap_err()
         .to_string();
     assert!(err.contains("Cannot mount config"), "{err}");
@@ -277,7 +277,7 @@ fn mountpoint_errors() {
     assert!(err.contains("parameter(s) are already mounted"), "{err}");
 
     let err = schema
-        .insert::<BogusParamTypeConfig>("test")
+        .insert(&BogusParamTypeConfig::DESCRIPTION, "test")
         .unwrap_err()
         .to_string();
     assert!(err.contains("Cannot insert param"), "{err}");
@@ -288,10 +288,10 @@ fn mountpoint_errors() {
 #[test]
 fn aliasing_mountpoint_errors() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<NestingConfig>("test").unwrap();
+    schema.insert(&NestingConfig::DESCRIPTION, "test").unwrap();
 
     let err = schema
-        .insert::<BogusParamConfig>("bogus")
+        .insert(&BogusParamConfig::DESCRIPTION, "bogus")
         .unwrap()
         .push_alias("test")
         .unwrap_err()
@@ -312,7 +312,7 @@ fn aliasing_mountpoint_errors() {
     );
 
     let err = schema
-        .insert::<BogusParamTypeConfig>("bogus")
+        .insert(&BogusParamTypeConfig::DESCRIPTION, "bogus")
         .unwrap()
         .push_alias("test")
         .unwrap_err()
@@ -325,10 +325,10 @@ fn aliasing_mountpoint_errors() {
 #[test]
 fn aliasing_mountpoint_errors_via_nested_configs() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<NestingConfig>("test").unwrap();
+    schema.insert(&NestingConfig::DESCRIPTION, "test").unwrap();
 
     let err = schema
-        .insert::<BogusNestedConfigWithAlias>("test")
+        .insert(&BogusNestedConfigWithAlias::DESCRIPTION, "test")
         .unwrap_err()
         .to_string();
     assert!(err.contains("Cannot mount config"), "{err}");
@@ -337,10 +337,12 @@ fn aliasing_mountpoint_errors_via_nested_configs() {
 
     // Mount a config at the location of a param of the nested config.
     let mut schema = ConfigSchema::default();
-    schema.insert::<TestConfig>("str.optional").unwrap();
+    schema
+        .insert(&TestConfig::DESCRIPTION, "str.optional")
+        .unwrap();
 
     let err = schema
-        .insert::<BogusNestedConfigWithAlias>("")
+        .insert(&BogusNestedConfigWithAlias::DESCRIPTION, "")
         .unwrap_err()
         .to_string();
     assert!(err.contains("Cannot insert param"), "{err}");
@@ -352,7 +354,7 @@ fn aliasing_mountpoint_errors_via_nested_configs() {
 fn aliasing_info_for_nested_configs() {
     let mut schema = ConfigSchema::default();
     schema
-        .insert::<AliasedConfig>("test")
+        .insert(&AliasedConfig::DESCRIPTION, "test")
         .unwrap()
         .push_alias("alias")
         .unwrap();

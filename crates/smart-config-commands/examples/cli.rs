@@ -192,7 +192,7 @@ fn main() {
     let cli = Cli::parse();
 
     let mut schema = ConfigSchema::default();
-    schema.insert::<TestConfig>("test").unwrap();
+    schema.insert(&TestConfig::DESCRIPTION, "test").unwrap();
 
     match cli {
         Cli::Print { filter } => {

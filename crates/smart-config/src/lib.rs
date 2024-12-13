@@ -70,7 +70,7 @@
 //! }
 //!
 //! let mut schema = ConfigSchema::default();
-//! schema.insert::<TestConfig>("test")?;
+//! schema.insert(&TestConfig::DESCRIPTION, "test")?;
 //! // Assume we use two config sources: a YAML file and env vars,
 //! // the latter having higher priority.
 //! let yaml = r"

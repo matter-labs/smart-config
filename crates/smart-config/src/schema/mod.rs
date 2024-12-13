@@ -8,7 +8,6 @@ use self::mount::{MountingPoint, MountingPoints};
 use crate::{
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
     value::Pointer,
-    DescribeConfig,
 };
 
 mod mount;
@@ -155,6 +154,24 @@ impl ConfigSchema {
         Some(ConfigRef { prefix, data })
     }
 
+    /// Gets a reference to a config by ist unique key (metadata + canonical prefix).
+    pub fn get_mut(
+        &mut self,
+        metadata: &'static ConfigMetadata,
+        prefix: &str,
+    ) -> Option<ConfigMut<'_>> {
+        let ty = metadata.ty.id();
+        if !self.configs.contains_key(&(ty, prefix.into())) {
+            return None;
+        }
+
+        Some(ConfigMut {
+            schema: self,
+            prefix: prefix.to_owned(),
+            type_id: ty,
+        })
+    }
+
     /// Returns a single reference to the specified config.
     ///
     /// # Errors
@@ -226,12 +243,11 @@ impl ConfigSchema {
     ///   is mounted at the location of an existing config.
     /// - Vice versa, if a config or nested config is mounted at the location of an existing param.
     /// - If a parameter is mounted at the location of a parameter with disjoint [expected types](ParamMetadata.expecting).
-    pub fn insert<C>(&mut self, prefix: &'static str) -> anyhow::Result<ConfigMut<'_>>
-    where
-        C: DescribeConfig,
-    {
-        let metadata = &C::DESCRIPTION;
-
+    pub fn insert(
+        &mut self,
+        metadata: &'static ConfigMetadata,
+        prefix: &'static str,
+    ) -> anyhow::Result<ConfigMut<'_>> {
         let mut patched = PatchedSchema::new(self);
         patched.insert_config(prefix, metadata)?;
         patched.commit();
