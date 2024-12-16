@@ -307,10 +307,12 @@ impl WithOrigin {
                     // Copy all values in `map` that either match `name` exactly, or start with `{name}_`
                     // (the latter can be used for object or array nesting).
                     for (key, val) in map {
+                        let canonical_key_string;
                         let canonical_key = if key == name {
                             param.name // Exact match
                         } else if let Some(key_suffix) = Self::strip_prefix(key, name) {
-                            &format!("{}_{key_suffix}", param.name)
+                            canonical_key_string = format!("{}_{key_suffix}", param.name);
+                            &canonical_key_string
                         } else {
                             continue;
                         };
