@@ -218,7 +218,19 @@ macro_rules! impl_well_known_int {
 }
 
 impl_well_known_int!(u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize);
-impl_well_known_int!(
+
+macro_rules! impl_well_known_non_zero_int {
+    ($($int:ty),+) => {
+        $(
+        impl WellKnown for $int {
+            type Deserializer = Qualified<super::Serde![int]>;
+            const DE: Self::Deserializer = Qualified::new(super::Serde![int], "non-zero");
+        }
+        )+
+    };
+}
+
+impl_well_known_non_zero_int!(
     NonZeroU8,
     NonZeroI8,
     NonZeroU16,
