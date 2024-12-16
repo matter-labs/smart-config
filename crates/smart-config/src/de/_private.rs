@@ -7,7 +7,7 @@ use serde::{de::Error as DeError, Deserialize};
 use super::{deserializer::ValueDeserializer, DeserializeContext, DeserializeParam};
 use crate::{
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
+    metadata::{BasicTypes, ParamMetadata, TypeDescription},
 };
 
 pub const fn extract_expected_types<T, De: DeserializeParam<T>>(_: &De) -> BasicTypes {
@@ -16,7 +16,7 @@ pub const fn extract_expected_types<T, De: DeserializeParam<T>>(_: &De) -> Basic
 
 /// Erased counterpart of a parameter deserializer. Stored in param metadata.
 pub trait ErasedDeserializer: fmt::Debug + Send + Sync + 'static {
-    fn type_qualifiers(&self) -> TypeQualifiers;
+    fn describe(&self, description: &mut TypeDescription);
 
     fn deserialize_param(
         &self,
@@ -47,8 +47,8 @@ impl<T: 'static, De: DeserializeParam<T>> Erased<T, De> {
 }
 
 impl<T: 'static, De: DeserializeParam<T>> ErasedDeserializer for Erased<T, De> {
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        self.inner.type_qualifiers()
+    fn describe(&self, description: &mut TypeDescription) {
+        self.inner.describe(description);
     }
 
     fn deserialize_param(
@@ -83,6 +83,10 @@ impl TagDeserializer {
 
 impl DeserializeParam<&'static str> for TagDeserializer {
     const EXPECTING: BasicTypes = BasicTypes::STRING;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details(format!("one of {:?}", self.expected));
+    }
 
     fn deserialize_param(
         &self,

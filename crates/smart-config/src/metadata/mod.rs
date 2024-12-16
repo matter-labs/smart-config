@@ -2,7 +2,7 @@
 
 use std::{any, borrow::Cow, fmt};
 
-use crate::de::_private::ErasedDeserializer;
+use crate::de::{DeserializeParam, _private::ErasedDeserializer};
 
 #[cfg(test)]
 mod tests;
@@ -20,14 +20,6 @@ pub struct ConfigMetadata {
     pub params: &'static [ParamMetadata],
     /// Nested configs included in the config.
     pub nested_configs: &'static [NestedConfigMetadata],
-}
-
-impl ConfigMetadata {
-    #[allow(dead_code)] // FIXME: ???
-    pub(crate) fn help_header(&self) -> Option<&'static str> {
-        let first_line = self.help.lines().next()?;
-        first_line.strip_prefix("# ")
-    }
 }
 
 /// Metadata for a specific configuration parameter.
@@ -55,6 +47,15 @@ impl ParamMetadata {
     /// Returns the default value for the param.
     pub fn default_value(&self) -> Option<impl fmt::Debug + '_> {
         self.default_value.map(|value_fn| value_fn())
+    }
+
+    /// Returns the type description for this param as provided by its deserializer.
+    // TODO: can be cached if necessary
+    pub fn type_description(&self) -> TypeDescription {
+        let mut description = TypeDescription::default();
+        self.deserializer.describe(&mut description);
+        description.rust_type = self.rust_type.name_in_code;
+        description
     }
 }
 
@@ -177,56 +178,47 @@ impl fmt::Debug for BasicTypes {
     }
 }
 
-/// Human-readable description for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
-#[derive(Debug, Clone, Default)]
-pub struct TypeQualifiers {
-    description: Option<Cow<'static, str>>,
-    unit: Option<UnitOfMeasurement>,
-    pub(crate) is_secret: bool,
+#[derive(Debug, Clone)]
+struct ChildDescription {
+    expecting: BasicTypes,
+    description: Box<TypeDescription>,
 }
 
-impl TypeQualifiers {
-    pub(crate) const fn new(description: &'static str) -> Self {
+impl ChildDescription {
+    fn new<T: 'static, De: DeserializeParam<T>>(deserializer: &De) -> Self {
+        let mut description = Box::default();
+        deserializer.describe(&mut description);
+        description.rust_type = any::type_name::<T>();
         Self {
-            description: Some(Cow::Borrowed(description)),
-            unit: None,
-            is_secret: false,
+            expecting: De::EXPECTING,
+            description,
         }
     }
+}
 
-    pub(crate) const fn secret() -> Self {
-        Self {
-            description: None,
-            unit: None,
-            is_secret: true,
-        }
+/// Human-readable description for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
+///
+/// If a configuration parameter supports complex inputs (objects and/or arrays), this information *may* contain
+/// info on child types (array items; map keys / values).
+#[derive(Debug, Clone, Default)]
+pub struct TypeDescription {
+    rust_type: &'static str,
+    details: Option<Cow<'static, str>>,
+    unit: Option<UnitOfMeasurement>,
+    pub(crate) is_secret: bool,
+    items: Option<ChildDescription>,
+    entries: Option<(ChildDescription, ChildDescription)>,
+}
+
+impl TypeDescription {
+    #[doc(hidden)]
+    pub fn rust_type(&self) -> &str {
+        self.rust_type
     }
 
-    pub(crate) fn dynamic(description: String) -> Self {
-        Self {
-            description: Some(description.into()),
-            unit: None,
-            is_secret: false,
-        }
-    }
-
-    /// Adds a unit of measurement.
-    #[must_use]
-    pub const fn with_unit(mut self, unit: UnitOfMeasurement) -> Self {
-        self.unit = Some(unit);
-        self
-    }
-
-    /// Marks the value as secret.
-    #[must_use]
-    pub const fn with_secret(mut self) -> Self {
-        self.is_secret = true;
-        self
-    }
-
-    /// Gets the description.
-    pub fn description(&self) -> Option<&str> {
-        self.description.as_deref()
+    /// Gets the type details.
+    pub fn details(&self) -> Option<&str> {
+        self.details.as_deref()
     }
 
     /// Gets the unit of measurement.
@@ -234,15 +226,85 @@ impl TypeQualifiers {
         self.unit
     }
 
-    /// Checks whether this value is secret.
-    pub fn is_secret(&self) -> bool {
-        self.is_secret
+    /// Returns the description of array items, if one was provided.
+    pub fn items(&self) -> Option<(BasicTypes, &Self)> {
+        self.items
+            .as_ref()
+            .map(|child| (child.expecting, &*child.description))
+    }
+
+    /// Returns the description of map keys, if one was provided.
+    pub fn keys(&self) -> Option<(BasicTypes, &Self)> {
+        let keys = &self.entries.as_ref()?.0;
+        Some((keys.expecting, &*keys.description))
+    }
+
+    /// Returns the description of map values, if one was provided.
+    pub fn values(&self) -> Option<(BasicTypes, &Self)> {
+        let keys = &self.entries.as_ref()?.1;
+        Some((keys.expecting, &*keys.description))
+    }
+
+    /// Checks whether this type or any child types (e.g., array items or map keys / values) are marked
+    /// as secret.
+    pub fn contains_secrets(&self) -> bool {
+        if self.is_secret {
+            return true;
+        }
+        if let Some(item) = &self.items {
+            if item.description.contains_secrets() {
+                return true;
+            }
+        }
+        if let Some((key, value)) = &self.entries {
+            if key.description.contains_secrets() {
+                return true;
+            }
+            if value.description.contains_secrets() {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Sets human-readable type details.
+    pub fn set_details(&mut self, details: impl Into<Cow<'static, str>>) -> &mut Self {
+        self.details = Some(details.into());
+        self
+    }
+
+    /// Adds a unit of measurement.
+    pub fn set_unit(&mut self, unit: UnitOfMeasurement) -> &mut Self {
+        self.unit = Some(unit);
+        self
+    }
+
+    /// Marks the value as secret.
+    pub fn set_secret(&mut self) -> &mut Self {
+        self.is_secret = true;
+        self
+    }
+
+    /// Adds a description of array items. This only makes sense for params accepting array input.
+    pub fn set_items<T: 'static>(&mut self, items: &impl DeserializeParam<T>) -> &mut Self {
+        self.items = Some(ChildDescription::new(items));
+        self
+    }
+
+    /// Adds a description of keys and values. This only makes sense for params accepting object input.
+    pub fn set_entries<K: 'static, V: 'static>(
+        &mut self,
+        keys: &impl DeserializeParam<K>,
+        values: &impl DeserializeParam<V>,
+    ) -> &mut Self {
+        self.entries = Some((ChildDescription::new(keys), ChildDescription::new(values)));
+        self
     }
 }
 
-impl fmt::Display for TypeQualifiers {
+impl fmt::Display for TypeDescription {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(description) = &self.description {
+        if let Some(description) = &self.details {
             write!(formatter, ", {description}")?;
         }
         if let Some(unit) = self.unit {

@@ -66,14 +66,14 @@ fn describing_complex_types() {
         array_param.expecting,
         BasicTypes::ARRAY.or(BasicTypes::STRING)
     );
+    let description = array_param.type_description();
     assert_eq!(
-        array_param
-            .deserializer
-            .type_qualifiers()
-            .description
-            .unwrap(),
-        "using \",\" delimiter"
+        description.details().unwrap(),
+        "2-element array; using \",\" delimiter"
     );
+    assert!(!description.contains_secrets());
+    let (expected_item, _) = description.items().unwrap();
+    assert_eq!(expected_item, BasicTypes::INTEGER);
 
     let assumed_param = metadata
         .params
@@ -88,8 +88,8 @@ fn describing_complex_types() {
         .find(|param| param.name == "path")
         .unwrap();
     assert_eq!(path_param.expecting, BasicTypes::STRING);
-    let qualifiers = path_param.deserializer.type_qualifiers();
-    assert_eq!(qualifiers.description.unwrap(), "filesystem path");
+    let description = path_param.type_description();
+    assert_eq!(description.details().unwrap(), "filesystem path");
 
     let dur_param = metadata
         .params
@@ -97,7 +97,7 @@ fn describing_complex_types() {
         .find(|param| param.name == "short_dur")
         .unwrap();
     assert_eq!(dur_param.expecting, BasicTypes::INTEGER);
-    let qualifiers = dur_param.deserializer.type_qualifiers();
-    assert_eq!(qualifiers.description.unwrap(), "time duration");
-    assert_eq!(qualifiers.unit, Some(TimeUnit::Millis.into()));
+    let description = dur_param.type_description();
+    assert_eq!(description.details().unwrap(), "time duration");
+    assert_eq!(description.unit(), Some(TimeUnit::Millis.into()));
 }

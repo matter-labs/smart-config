@@ -10,7 +10,7 @@ use serde::{
 use crate::{
     de::{DeserializeContext, DeserializeParam, WellKnown},
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeQualifiers},
+    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription},
     value::Value,
     ByteSize,
 };
@@ -76,8 +76,10 @@ impl TimeUnit {
 impl DeserializeParam<Duration> for TimeUnit {
     const EXPECTING: BasicTypes = BasicTypes::INTEGER;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("time duration").with_unit((*self).into())
+    fn describe(&self, description: &mut TypeDescription) {
+        description
+            .set_details("time duration")
+            .set_unit((*self).into());
     }
 
     fn deserialize_param(
@@ -115,8 +117,10 @@ impl DeserializeParam<Duration> for TimeUnit {
 impl DeserializeParam<ByteSize> for SizeUnit {
     const EXPECTING: BasicTypes = BasicTypes::INTEGER;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("byte size").with_unit((*self).into())
+    fn describe(&self, description: &mut TypeDescription) {
+        description
+            .set_details("byte size")
+            .set_unit((*self).into());
     }
 
     fn deserialize_param(
@@ -252,8 +256,8 @@ impl TryFrom<RawDuration> for Duration {
 impl DeserializeParam<Duration> for WithUnit {
     const EXPECTING: BasicTypes = BasicTypes::STRING.or(BasicTypes::OBJECT);
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("duration with unit, or object with single unit key")
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details("duration with unit, or object with single unit key");
     }
 
     fn deserialize_param(
@@ -345,8 +349,8 @@ impl TryFrom<RawByteSize> for ByteSize {
 impl DeserializeParam<ByteSize> for WithUnit {
     const EXPECTING: BasicTypes = BasicTypes::STRING.or(BasicTypes::OBJECT);
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("size with unit, or object with single unit key")
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details("size with unit, or object with single unit key");
     }
 
     fn deserialize_param(

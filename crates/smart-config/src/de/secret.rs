@@ -3,7 +3,7 @@ use secrecy::SecretString;
 use super::{DeserializeContext, DeserializeParam, WellKnown};
 use crate::{
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
+    metadata::{BasicTypes, ParamMetadata, TypeDescription},
     value::{StrValue, Value},
 };
 
@@ -32,8 +32,8 @@ pub struct FromSecretString;
 impl<T: From<SecretString>> DeserializeParam<T> for FromSecretString {
     const EXPECTING: BasicTypes = BasicTypes::STRING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::secret()
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_secret();
     }
 
     fn deserialize_param(
@@ -114,8 +114,9 @@ where
         BasicTypes::STRING
     };
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        self.0.type_qualifiers().with_secret()
+    fn describe(&self, description: &mut TypeDescription) {
+        self.0.describe(description);
+        description.set_secret();
     }
 
     fn deserialize_param(

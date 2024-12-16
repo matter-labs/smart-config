@@ -16,7 +16,7 @@ use serde::de::{DeserializeOwned, Error as DeError};
 use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
+    metadata::{BasicTypes, ParamMetadata, TypeDescription},
     value::{Value, WithOrigin},
 };
 
@@ -44,9 +44,7 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     const EXPECTING: BasicTypes;
 
     /// Additional info about the deserialized type, e.g., extended description.
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::default()
-    }
+    fn describe(&self, description: &mut TypeDescription);
 
     /// Performs deserialization given the context and param metadata.
     ///
@@ -91,7 +89,7 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     note = "Add #[config(with = _)] attribute to specify deserializer to use",
     note = "If `{Self}` is a config, add #[config(nest)] or #[config(flatten)]"
 )]
-pub trait WellKnown: Sized {
+pub trait WellKnown: 'static + Sized {
     /// Type of the deserializer used for this type.
     type Deserializer: DeserializeParam<Self>;
     /// Deserializer instance.
@@ -101,8 +99,8 @@ pub trait WellKnown: Sized {
 impl<T: WellKnown> DeserializeParam<T> for () {
     const EXPECTING: BasicTypes = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        T::DE.type_qualifiers()
+    fn describe(&self, description: &mut TypeDescription) {
+        T::DE.describe(description);
     }
 
     fn deserialize_param(
@@ -129,6 +127,10 @@ impl<const EXPECTING: u8> fmt::Debug for Serde<EXPECTING> {
 
 impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXPECTING> {
     const EXPECTING: BasicTypes = BasicTypes::from_raw(EXPECTING);
+
+    fn describe(&self, _description: &mut TypeDescription) {
+        // Do nothing
+    }
 
     fn deserialize_param(
         &self,
@@ -234,12 +236,12 @@ impl<T: WellKnown> WellKnown for Option<T> {
     const DE: Self::Deserializer = Optional(T::DE);
 }
 
-/// [Deserializer](DeserializeParam) decorator that provides additional [qualifiers](TypeQualifiers)
+/// [Deserializer](DeserializeParam) decorator that provides additional [details](TypeDescription)
 /// for the deserialized type.
 #[derive(Debug)]
 pub struct Qualified<De> {
     inner: De,
-    // Cannot use `TypeQualifiers` directly because it wouldn't allow to drop the type in const contexts.
+    // Cannot use `TypeDescription` directly because it wouldn't allow to drop the type in const contexts.
     description: &'static str,
 }
 
@@ -256,8 +258,8 @@ where
 {
     const EXPECTING: BasicTypes = <De as DeserializeParam<T>>::EXPECTING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new(self.description)
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details(self.description);
     }
 
     fn deserialize_param(
@@ -295,8 +297,8 @@ impl<T: 'static, De: DeserializeParam<T>> WithDefault<T, De> {
 impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        self.inner.type_qualifiers()
+    fn describe(&self, description: &mut TypeDescription) {
+        self.inner.describe(description);
     }
 
     fn deserialize_param(
@@ -320,8 +322,8 @@ pub struct Optional<De>(pub De);
 impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        self.0.type_qualifiers()
+    fn describe(&self, description: &mut TypeDescription) {
+        self.0.describe(description);
     }
 
     fn deserialize_param(
@@ -389,6 +391,10 @@ where
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = <De as DeserializeParam<T>>::EXPECTING.or(BasicTypes::STRING);
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.0.describe(description);
+    }
 
     fn deserialize_param(
         &self,

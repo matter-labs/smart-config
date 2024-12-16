@@ -13,7 +13,7 @@ use serde::de::{DeserializeOwned, Error as DeError};
 use crate::{
     de::{DeserializeContext, DeserializeParam, WellKnown},
     error::{ErrorWithOrigin, LowLevelError},
-    metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
+    metadata::{BasicTypes, ParamMetadata, TypeDescription},
     utils::const_eq,
     value::{Map, StrValue, Value, ValueOrigin, WithOrigin},
 };
@@ -73,11 +73,15 @@ impl<De> Repeated<De> {
     }
 }
 
-impl<T, De> DeserializeParam<Vec<T>> for Repeated<De>
+impl<T: 'static, De> DeserializeParam<Vec<T>> for Repeated<De>
 where
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = BasicTypes::ARRAY;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_items(&self.0);
+    }
 
     fn deserialize_param(
         &self,
@@ -90,14 +94,14 @@ where
 
 impl<T, S, De> DeserializeParam<HashSet<T, S>> for Repeated<De>
 where
-    T: Eq + Hash,
+    T: 'static + Eq + Hash,
     S: 'static + Default + BuildHasher,
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = BasicTypes::ARRAY;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("set")
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details("set").set_items(&self.0);
     }
 
     fn deserialize_param(
@@ -111,13 +115,13 @@ where
 
 impl<T, De> DeserializeParam<BTreeSet<T>> for Repeated<De>
 where
-    T: Eq + Ord,
+    T: 'static + Eq + Ord,
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = BasicTypes::ARRAY;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("set")
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details("set").set_items(&self.0);
     }
 
     fn deserialize_param(
@@ -129,14 +133,16 @@ where
     }
 }
 
-impl<T, De, const N: usize> DeserializeParam<[T; N]> for Repeated<De>
+impl<T: 'static, De, const N: usize> DeserializeParam<[T; N]> for Repeated<De>
 where
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = BasicTypes::ARRAY;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::dynamic(format!("{N}-element array"))
+    fn describe(&self, description: &mut TypeDescription) {
+        description
+            .set_details(format!("{N}-element array"))
+            .set_items(&self.0);
     }
 
     fn deserialize_param(
@@ -309,8 +315,10 @@ where
         BasicTypes::OBJECT
     };
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("map")
+    fn describe(&self, description: &mut TypeDescription) {
+        description
+            .set_details("map")
+            .set_entries(&self.keys, &self.values);
     }
 
     fn deserialize_param(
@@ -406,8 +414,14 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
         base.or(BasicTypes::STRING)
     };
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::dynamic(format!("using {:?} delimiter", self.0))
+    fn describe(&self, description: &mut TypeDescription) {
+        T::DE.describe(description);
+        let details = if let Some(details) = description.details() {
+            format!("{details}; using {:?} delimiter", self.0)
+        } else {
+            format!("using {:?} delimiter", self.0)
+        };
+        description.set_details(details);
     }
 
     fn deserialize_param(
@@ -601,12 +615,14 @@ where
 {
     const EXPECTING: BasicTypes = BasicTypes::OBJECT.or(BasicTypes::ARRAY);
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        let description = format!(
+    fn describe(&self, description: &mut TypeDescription) {
+        let details = format!(
             "map or array of {{ {:?}: _, {:?}: _ }} tuples",
             self.keys_name, self.values_name
         );
-        TypeQualifiers::dynamic(description)
+        description
+            .set_details(details)
+            .set_entries(&self.inner.keys, &self.inner.values);
     }
 
     fn deserialize_param(

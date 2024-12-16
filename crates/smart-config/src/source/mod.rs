@@ -411,7 +411,7 @@ impl WithOrigin {
             };
 
             for param in config_data.metadata.params {
-                if !param.deserializer.type_qualifiers().is_secret {
+                if !param.type_description().contains_secrets() {
                     continue;
                 }
                 let Some(value) = config_object.get_mut(param.name) else {
