@@ -58,7 +58,7 @@ pub use self::{
     deserializer::DeserializerOptions,
     macros::Serde,
     param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
-    repeated::{Delimited, Repeated, RepeatedEntries},
+    repeated::{Delimited, Entries, NamedEntries, Repeated},
     secret::Secret,
     units::WithUnit,
 };

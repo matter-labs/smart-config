@@ -85,7 +85,7 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
 /// | [`ByteSize`](crate::ByteSize) | [`WithUnit`](super::WithUnit) | string or object |
 /// | [`Option`] | [`Optional`] | value, or `null`, or nothing |
 /// | [`Vec`], `[_; N]`, [`HashSet`](std::collections::HashSet), [`BTreeSet`](std::collections::BTreeSet) | [`Repeated`](super::Repeated) | array |
-/// | [`HashMap`](std::collections::HashMap), [`BTreeMap`](std::collections::BTreeSet) | [`RepeatedEntries`](super::RepeatedEntries) | object |
+/// | [`HashMap`](std::collections::HashMap), [`BTreeMap`](std::collections::BTreeSet) | [`RepeatedEntries`](super::Entries) | object |
 #[diagnostic::on_unimplemented(
     message = "`{Self}` param cannot be deserialized",
     note = "Add #[config(with = _)] attribute to specify deserializer to use",

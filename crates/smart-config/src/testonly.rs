@@ -236,6 +236,8 @@ pub(crate) struct ComposedConfig {
     pub map_of_sizes: HashMap<String, ByteSize>,
     #[config(default)]
     pub map_of_ints: HashMap<u64, Duration>,
+    #[config(default, with = de::Entries::WELL_KNOWN.named("val", "timeout"))]
+    pub entry_map: HashMap<u64, Duration>,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]

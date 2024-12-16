@@ -499,6 +499,20 @@ fn parsing_composed_params() {
     let json = config!("map_of_ints": HashMap::from([(5, "30 sec")]));
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.map_of_ints[&5], Duration::from_secs(30));
+
+    let json = config!("entry_map": HashMap::from([(5, "30 sec")]));
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.entry_map[&5], Duration::from_secs(30));
+
+    let json = config!(
+        "entry_map": serde_json::json!([
+            { "val": 5, "timeout": "30s" },
+            { "val": 10, "timeout": "2min" },
+        ]),
+    );
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.entry_map[&5], Duration::from_secs(30));
+    assert_eq!(config.entry_map[&10], Duration::from_secs(120));
 }
 
 #[test]
