@@ -13,14 +13,15 @@ use serde::{
 
 use crate::{
     error::ErrorWithOrigin,
+    utils::EnumVariant,
     value::{Map, StrValue, Value, ValueOrigin, WithOrigin},
 };
 
 /// Available deserialization options.
 #[derive(Debug, Clone, Default)]
 pub struct DeserializerOptions {
-    /// Enables coercion of variant names from `SHOUTING_CASE` to `shouting_case`.
-    pub coerce_shouting_variant_names: bool,
+    /// Enables coercion of variant names between cases, e.g. from `SHOUTING_CASE` to `shouting_case`.
+    pub coerce_variant_names: bool,
 }
 
 impl WithOrigin {
@@ -232,14 +233,11 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
             _ => return Err(self.invalid_type("string or object with single key")),
         };
 
-        if self.options.coerce_shouting_variant_names && variant.chars().any(char::is_uppercase) {
-            let lc_variant = variant.to_lowercase();
-            let expected_variant = variants
-                .iter()
-                .copied()
-                .find(|&expected| expected == lc_variant);
-            if let Some(expected_variant) = expected_variant {
-                variant = expected_variant;
+        if self.options.coerce_variant_names {
+            if let Some(parsed) = EnumVariant::new(variant) {
+                if let Some(expected_variant) = parsed.try_match(variants) {
+                    variant = expected_variant;
+                }
             }
         }
 

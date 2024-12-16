@@ -5,6 +5,7 @@ use assert_matches::assert_matches;
 use super::*;
 use crate::{
     metadata::BasicTypes,
+    testonly::{AliasedConfig, NestedAliasedConfig},
     value::{StrValue, Value},
     ConfigRepository, DescribeConfig, DeserializeConfig, Environment,
 };
@@ -71,7 +72,7 @@ fn getting_config_metadata() {
 fn using_alias() {
     let mut schema = ConfigSchema::default();
     schema
-        .insert::<TestConfig>("test")
+        .insert(&TestConfig::DESCRIPTION, "test")
         .unwrap()
         .push_alias("")
         .unwrap();
@@ -103,7 +104,7 @@ fn using_alias() {
 fn using_multiple_aliases() {
     let mut schema = ConfigSchema::default();
     schema
-        .insert::<TestConfig>("test")
+        .insert(&TestConfig::DESCRIPTION, "test")
         .unwrap()
         .push_alias("")
         .unwrap()
@@ -138,12 +139,25 @@ fn using_multiple_aliases() {
 #[test]
 fn using_nesting() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<NestingConfig>("").unwrap();
+    schema.insert(&NestingConfig::DESCRIPTION, "").unwrap();
 
     let config_prefixes: Vec<_> = schema.locate(&NestingConfig::DESCRIPTION).collect();
     assert_eq!(config_prefixes, [""]);
     let config_prefixes: HashSet<_> = schema.locate(&TestConfig::DESCRIPTION).collect();
     assert_eq!(config_prefixes, HashSet::from(["", "hierarchical"]));
+
+    let refs: Vec<_> = schema
+        .iter()
+        .map(|config_ref| (config_ref.prefix, config_ref.metadata().ty.name_in_code()))
+        .collect();
+    assert_eq!(
+        refs,
+        [
+            ("", "NestingConfig"),
+            ("", "TestConfig"),
+            ("hierarchical", "TestConfig")
+        ]
+    );
 
     let err = schema
         .single(&TestConfig::DESCRIPTION)
@@ -207,10 +221,18 @@ struct BogusNestedConfig {
     str: TestConfig,
 }
 
+#[derive(Debug, DescribeConfig)]
+#[config(crate = crate)]
+struct BogusNestedConfigWithAlias {
+    #[allow(dead_code)]
+    #[config(nest, alias = "str")]
+    nested: TestConfig,
+}
+
 #[test]
 fn mountpoint_errors() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<NestingConfig>("test").unwrap();
+    schema.insert(&NestingConfig::DESCRIPTION, "test").unwrap();
     assert_matches!(
         schema.mounting_points["test.hierarchical"],
         MountingPoint::Config
@@ -245,14 +267,14 @@ fn mountpoint_errors() {
     );
 
     let err = schema
-        .insert::<BogusParamConfig>("test")
+        .insert(&BogusParamConfig::DESCRIPTION, "test")
         .unwrap_err()
         .to_string();
     assert!(err.contains("[Rust field: `hierarchical`]"), "{err}");
     assert!(err.contains("config(s) are already mounted"), "{err}");
 
     let err = schema
-        .insert::<BogusNestedConfig>("test")
+        .insert(&BogusNestedConfig::DESCRIPTION, "test")
         .unwrap_err()
         .to_string();
     assert!(err.contains("Cannot mount config"), "{err}");
@@ -260,7 +282,7 @@ fn mountpoint_errors() {
     assert!(err.contains("parameter(s) are already mounted"), "{err}");
 
     let err = schema
-        .insert::<BogusNestedConfig>("test.bool_value")
+        .insert(&BogusNestedConfig::DESCRIPTION, "test.bool_value")
         .unwrap_err()
         .to_string();
     assert!(err.contains("Cannot mount config"), "{err}");
@@ -268,7 +290,7 @@ fn mountpoint_errors() {
     assert!(err.contains("parameter(s) are already mounted"), "{err}");
 
     let err = schema
-        .insert::<BogusParamTypeConfig>("test")
+        .insert(&BogusParamTypeConfig::DESCRIPTION, "test")
         .unwrap_err()
         .to_string();
     assert!(err.contains("Cannot insert param"), "{err}");
@@ -279,10 +301,10 @@ fn mountpoint_errors() {
 #[test]
 fn aliasing_mountpoint_errors() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<NestingConfig>("test").unwrap();
+    schema.insert(&NestingConfig::DESCRIPTION, "test").unwrap();
 
     let err = schema
-        .insert::<BogusParamConfig>("bogus")
+        .insert(&BogusParamConfig::DESCRIPTION, "bogus")
         .unwrap()
         .push_alias("test")
         .unwrap_err()
@@ -303,7 +325,7 @@ fn aliasing_mountpoint_errors() {
     );
 
     let err = schema
-        .insert::<BogusParamTypeConfig>("bogus")
+        .insert(&BogusParamTypeConfig::DESCRIPTION, "bogus")
         .unwrap()
         .push_alias("test")
         .unwrap_err()
@@ -311,4 +333,126 @@ fn aliasing_mountpoint_errors() {
     assert!(err.contains("Cannot insert param"), "{err}");
     assert!(err.contains("at `test.bool_value`"), "{err}");
     assert!(err.contains("expects integer"), "{err}");
+}
+
+#[test]
+fn aliasing_mountpoint_errors_via_nested_configs() {
+    let mut schema = ConfigSchema::default();
+    schema.insert(&NestingConfig::DESCRIPTION, "test").unwrap();
+
+    let err = schema
+        .insert(&BogusNestedConfigWithAlias::DESCRIPTION, "test")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Cannot mount config"), "{err}");
+    assert!(err.contains("at `test.str`"), "{err}");
+    assert!(err.contains("parameter(s) are already mounted"), "{err}");
+
+    // Mount a config at the location of a param of the nested config.
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert(&TestConfig::DESCRIPTION, "str.optional")
+        .unwrap();
+
+    let err = schema
+        .insert(&BogusNestedConfigWithAlias::DESCRIPTION, "")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Cannot insert param"), "{err}");
+    assert!(err.contains("at `str.optional`"), "{err}");
+    assert!(err.contains(" config(s) are already mounted"), "{err}");
+}
+
+#[test]
+fn aliasing_info_for_nested_configs() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert(&AliasedConfig::DESCRIPTION, "test")
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+    let aliases: Vec<_> = schema
+        .single(&AliasedConfig::DESCRIPTION)
+        .unwrap()
+        .aliases()
+        .collect();
+    assert_eq!(aliases, ["alias"]);
+    let aliases: Vec<_> = schema
+        .get(&NestedAliasedConfig::DESCRIPTION, "test")
+        .unwrap()
+        .aliases()
+        .collect();
+    assert_eq!(aliases, ["alias"]);
+    let aliases: Vec<_> = schema
+        .get(&NestedAliasedConfig::DESCRIPTION, "test.nested")
+        .unwrap()
+        .aliases()
+        .collect();
+    assert_eq!(aliases, ["test.nest", "alias.nested", "alias.nest"]);
+
+    let param_paths = [
+        "test_nested_str",
+        "test_nested_string",
+        "alias_nested_str",
+        "alias_nest_string",
+    ];
+    for path in param_paths {
+        println!("Testing path: {path}");
+        let mut data: Vec<_> = schema.params_with_kv_path(path).collect();
+        assert_eq!(data.len(), 1);
+        let (_, expecting) = data.pop().unwrap();
+        assert_eq!(expecting, BasicTypes::STRING);
+    }
+}
+
+#[test]
+fn aliasing_does_not_change_config_depth() {
+    let mut schema = ConfigSchema::default();
+    schema.insert(&AliasedConfig::DESCRIPTION, "test").unwrap();
+
+    let expected_index_by_depth = BTreeSet::from([
+        (0, any::TypeId::of::<AliasedConfig>()),
+        (1, any::TypeId::of::<NestedAliasedConfig>()),
+    ]);
+    assert_eq!(schema.configs["test"].by_depth, expected_index_by_depth);
+    assert_eq!(
+        schema.configs["test.nested"].by_depth,
+        BTreeSet::from([(1, any::TypeId::of::<NestedAliasedConfig>())])
+    );
+
+    schema
+        .get_mut(&NestedAliasedConfig::DESCRIPTION, "test")
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+
+    assert_eq!(schema.configs["test"].by_depth, expected_index_by_depth);
+    assert_eq!(
+        schema.configs["test.nested"].by_depth,
+        BTreeSet::from([(1, any::TypeId::of::<NestedAliasedConfig>())])
+    );
+
+    // Insert a top-level config at the location of a nested config.
+    schema
+        .insert(&TestConfig::DESCRIPTION, "test.nested")
+        .unwrap();
+
+    assert_eq!(schema.configs["test"].by_depth, expected_index_by_depth);
+    let expected_nested_index_by_depth = BTreeSet::from([
+        (0, any::TypeId::of::<TestConfig>()),
+        (1, any::TypeId::of::<NestedAliasedConfig>()),
+    ]);
+    assert_eq!(
+        schema.configs["test.nested"].by_depth,
+        expected_nested_index_by_depth
+    );
+
+    // Insert another instance of a nested config (should be no-op).
+    schema
+        .insert(&NestedAliasedConfig::DESCRIPTION, "test.nested")
+        .unwrap();
+    assert_eq!(
+        schema.configs["test.nested"].by_depth,
+        expected_nested_index_by_depth
+    );
 }

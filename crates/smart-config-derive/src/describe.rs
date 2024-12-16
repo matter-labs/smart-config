@@ -46,7 +46,7 @@ impl ConfigField {
         deserializer
     }
 
-    fn validate_param(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
+    fn validate_names(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
         let name_span = self.name_span();
         let param_name = self.param_name();
         let name_validation_span = self.attrs.rename.as_ref().map_or(name_span, LitStr::span);
@@ -111,6 +111,7 @@ impl ConfigField {
     fn describe_nested_config(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
         let cr = parent.cr(self.name_span());
         let name = &self.name;
+        let aliases = self.attrs.aliases.iter();
         let ty = Self::unwrap_option(&self.ty).unwrap_or(&self.ty);
         let config_name = if self.attrs.flatten {
             String::new()
@@ -121,6 +122,7 @@ impl ConfigField {
         quote_spanned! {self.name_span()=>
             #cr::metadata::NestedConfigMetadata {
                 name: #config_name,
+                aliases: &[#(#aliases,)*],
                 rust_field_name: ::core::stringify!(#name),
                 meta: &<#ty as #cr::DescribeConfig>::DESCRIPTION,
             }
@@ -136,13 +138,16 @@ impl ConfigContainer {
         let help = &self.help;
 
         let all_fields = self.fields.all_fields();
-        let params = all_fields.iter().filter_map(|field| {
-            if !field.attrs.nest {
-                return Some((field.validate_param(self), field.describe_param(self)));
-            }
-            None
-        });
-        let (param_validation, mut params): (Vec<_>, Vec<_>) = params.unzip();
+        let validations = all_fields
+            .iter()
+            .filter(|field| !field.attrs.flatten)
+            .map(|field| field.validate_names(self));
+
+        let params = all_fields
+            .iter()
+            .filter(|field| !field.attrs.nest)
+            .map(|field| field.describe_param(self));
+        let mut params: Vec<_> = params.collect();
 
         if let ConfigContainerFields::Enum { tag, variants } = &self.fields {
             // Add the tag field description
@@ -176,7 +181,7 @@ impl ConfigContainer {
                 };
             }
 
-            #(#param_validation)*
+            #(#validations)*
             const _: () = <#name as #cr::DescribeConfig>::DESCRIPTION.assert_valid();
         }
     }

@@ -1,8 +1,9 @@
 //! Testing tools for configurations.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{
+    de::DeserializerOptions,
     metadata::{ConfigMetadata, RustType},
     schema::ConfigSchema,
     value::{Pointer, WithOrigin},
@@ -58,12 +59,8 @@ use crate::{
 ///     .to_string()
 ///     .contains("provided string was not `true` or `false`"));
 /// ```
-#[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible
 pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {
-    let mut schema = ConfigSchema::default();
-    schema.insert::<C>("").unwrap();
-    let repo = ConfigRepository::new(&schema).with(sample);
-    repo.single::<C>().unwrap().parse()
+    Tester::default().test(sample)
 }
 
 /// Tests config deserialization ensuring that *all* declared config params are covered.
@@ -119,27 +116,7 @@ pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseE
 /// # anyhow::Ok(())
 /// ```
 pub fn test_complete<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {
-    let mut schema = ConfigSchema::default();
-    schema.insert::<C>("").unwrap();
-    let repo = ConfigRepository::new(&schema).with(sample);
-
-    let metadata = &C::DESCRIPTION;
-    let mut missing_params = HashMap::new();
-    let mut missing_configs = HashMap::new();
-    check_params(
-        Pointer(""),
-        repo.merged(),
-        metadata,
-        &mut missing_params,
-        &mut missing_configs,
-    );
-
-    assert!(
-        missing_params.is_empty() && missing_configs.is_empty(),
-        "The provided sample is incomplete; missing params: {missing_params:?}, missing configs: {missing_configs:?}"
-    );
-
-    repo.single::<C>().unwrap().parse()
+    Tester::default().test_complete(sample)
 }
 
 fn check_params(
@@ -166,6 +143,88 @@ fn check_params(
             missing_params,
             missing_configs,
         );
+    }
+}
+
+/// Test case builder that allows configuring deserialization options etc.
+#[derive(Debug)]
+pub struct Tester<C> {
+    de_options: DeserializerOptions,
+    schema: ConfigSchema,
+    _config: PhantomData<C>,
+}
+
+impl<C: DeserializeConfig> Default for Tester<C> {
+    fn default() -> Self {
+        let mut schema = ConfigSchema::default();
+        schema.insert(&C::DESCRIPTION, "").unwrap();
+        Self {
+            de_options: DeserializerOptions::default(),
+            schema,
+            _config: PhantomData,
+        }
+    }
+}
+
+impl<C: DeserializeConfig> Tester<C> {
+    /// Enables coercion of enum variant names.
+    pub fn coerce_variant_names(&mut self) -> &mut Self {
+        self.de_options.coerce_variant_names = true;
+        self
+    }
+
+    /// Tests config deserialization from the provided `sample`. Takes into account param aliases,
+    /// performs `sample` preprocessing etc.
+    ///
+    /// # Errors
+    ///
+    /// Propagates parsing errors, which allows testing negative cases.
+    ///
+    /// # Examples
+    ///
+    /// See [`test()`] for the examples of usage.
+    #[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible
+    pub fn test(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
+        let mut repo = ConfigRepository::new(&self.schema).with(sample);
+        *repo.deserializer_options() = self.de_options.clone();
+        repo.single::<C>().unwrap().parse()
+    }
+
+    /// Tests config deserialization ensuring that *all* declared config params are covered.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `sample` doesn't recursively cover all params in the config. The config message
+    /// will contain paths to the missing params.
+    ///
+    /// # Errors
+    ///
+    /// Propagates parsing errors, which allows testing negative cases.
+    ///
+    /// # Examples
+    ///
+    /// See [`test_complete()`] for the examples of usage.
+    pub fn test_complete(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
+        let mut repo = ConfigRepository::new(&self.schema).with(sample);
+        *repo.deserializer_options() = self.de_options.clone();
+
+        let metadata = &C::DESCRIPTION;
+        let mut missing_params = HashMap::new();
+        let mut missing_configs = HashMap::new();
+        check_params(
+            Pointer(""),
+            repo.merged(),
+            metadata,
+            &mut missing_params,
+            &mut missing_configs,
+        );
+
+        assert!(
+            missing_params.is_empty() && missing_configs.is_empty(),
+            "The provided sample is incomplete; missing params: {missing_params:?}, missing configs: {missing_configs:?}"
+        );
+
+        repo.single::<C>().unwrap().parse()
     }
 }
 

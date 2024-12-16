@@ -1,4 +1,9 @@
-use std::{collections::HashSet, iter, marker::PhantomData, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    iter,
+    marker::PhantomData,
+    sync::Arc,
+};
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
@@ -264,7 +269,8 @@ impl WithOrigin {
     ) -> usize {
         self.copy_aliased_values(schema);
         self.mark_secrets(schema);
-        self.nest_object_params(schema);
+        self.nest_object_params_and_sub_configs(schema);
+        self.nest_array_params(schema);
         self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
     }
 
@@ -277,10 +283,9 @@ impl WithOrigin {
             };
 
             let alias_maps: Vec<_> = config_data
-                .aliases
-                .iter()
-                .filter_map(|&alias| {
-                    let val = self.get(alias)?;
+                .aliases()
+                .filter_map(|alias| {
+                    let val = self.get(Pointer(alias))?;
                     Some((val.inner.as_object()?, &val.origin))
                 })
                 .collect();
@@ -436,12 +441,12 @@ impl WithOrigin {
         }
     }
 
-    /// Nests values inside matching object params.
+    /// Nests values inside matching object params or nested configs.
     ///
     /// For example, we have an object param at `test.param` and a source with a value at `test.param_ms`.
     /// This transform will copy this value to `test.param.ms` (i.e., inside the param object), provided that
     /// the source doesn't contain `test.param` or contains an object at this path.
-    fn nest_object_params(&mut self, schema: &ConfigSchema) {
+    fn nest_object_params_and_sub_configs(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
             let Some(config_object) = self.get_mut(prefix) else {
                 continue;
@@ -451,12 +456,20 @@ impl WithOrigin {
                 continue;
             };
 
-            for param in config_data.metadata.params {
-                if !param.expecting.contains(BasicTypes::OBJECT) {
-                    continue;
-                }
+            let object_params = config_data.metadata.params.iter().filter_map(|param| {
+                param
+                    .expecting
+                    .contains(BasicTypes::OBJECT)
+                    .then_some(param.name)
+            });
+            let nested_configs = config_data
+                .metadata
+                .nested_configs
+                .iter()
+                .filter_map(|nested| (!nested.name.is_empty()).then_some(nested.name));
 
-                let param_object = match config_object.get(param.name) {
+            for child_name in object_params.chain(nested_configs) {
+                let target_object = match config_object.get(child_name) {
                     None => None,
                     Some(WithOrigin {
                         inner: Value::Object(obj),
@@ -469,8 +482,8 @@ impl WithOrigin {
                 let matching_fields: Vec<_> = config_object
                     .iter()
                     .filter_map(|(name, field)| {
-                        let stripped_name = name.strip_prefix(param.name)?.strip_prefix('_')?;
-                        if let Some(param_object) = param_object {
+                        let stripped_name = name.strip_prefix(child_name)?.strip_prefix('_')?;
+                        if let Some(param_object) = target_object {
                             if param_object.contains_key(stripped_name) {
                                 return None; // Never overwrite existing fields
                             }
@@ -482,21 +495,75 @@ impl WithOrigin {
                     continue;
                 }
 
-                if !config_object.contains_key(param.name) {
+                if !config_object.contains_key(child_name) {
                     let origin = Arc::new(ValueOrigin::Synthetic {
                         source: config_origin.clone(),
-                        transform: format!("nesting for object param '{}'", param.name),
+                        transform: format!("nesting for object param '{child_name}'"),
                     });
                     let val = Self::new(Value::Object(Map::new()), origin);
-                    config_object.insert(param.name.to_owned(), val);
+                    config_object.insert(child_name.to_owned(), val);
                 }
 
-                let Value::Object(param_object) =
-                    &mut config_object.get_mut(param.name).unwrap().inner
+                let Value::Object(target_object) =
+                    &mut config_object.get_mut(child_name).unwrap().inner
                 else {
                     unreachable!(); // Due to the checks above
                 };
-                param_object.extend(matching_fields);
+                target_object.extend(matching_fields);
+            }
+        }
+    }
+
+    /// Nests values inside matching array params.
+    ///
+    /// For example, we have an array param at `test.param` and a source with values at `test.param_0`, `test.param_1`, `test.param_2`
+    /// (and no `test.param`). This transform will copy these values as a 3-element array at `test.param`.
+    fn nest_array_params(&mut self, schema: &ConfigSchema) {
+        for (prefix, config_data) in schema.iter_ll() {
+            let Some(config_object) = self.get_mut(prefix) else {
+                continue;
+            };
+            let config_origin = &config_object.origin;
+            let Value::Object(config_object) = &mut config_object.inner else {
+                continue;
+            };
+
+            for param in config_data.metadata.params {
+                if !param.expecting.contains(BasicTypes::ARRAY)
+                    || param.expecting.contains(BasicTypes::OBJECT)
+                {
+                    // If a param expects an object, a transform is ambiguous; `_${i}` suffix could be either an array index
+                    // or an object key.
+                    continue;
+                }
+                if config_object.contains_key(param.name) {
+                    // Unlike objects, we never extend existing arrays.
+                    continue;
+                }
+
+                let matching_fields: BTreeMap<_, _> = config_object
+                    .iter()
+                    .filter_map(|(name, field)| {
+                        let stripped_name = name.strip_prefix(param.name)?.strip_prefix('_')?;
+                        let idx: usize = stripped_name.parse().ok()?;
+                        Some((idx, field.clone()))
+                    })
+                    .collect();
+                let Some(&last_idx) = matching_fields.keys().next_back() else {
+                    continue; // No matching fields
+                };
+
+                if last_idx != matching_fields.len() - 1 {
+                    continue; // Fields are not sequential; TODO: log
+                }
+
+                let origin = Arc::new(ValueOrigin::Synthetic {
+                    source: config_origin.clone(),
+                    transform: format!("nesting for array param '{}'", param.name),
+                });
+                let array_items = matching_fields.into_values().collect();
+                let val = Self::new(Value::Array(array_items), origin);
+                config_object.insert(param.name.to_owned(), val);
             }
         }
     }
@@ -526,21 +593,7 @@ impl WithOrigin {
                 for (param_path, expecting) in schema.params_with_kv_path(key_prefix) {
                     let should_copy = key_prefix == key || expecting.contains(BasicTypes::OBJECT);
                     if should_copy {
-                        // `unwrap()` is safe: params have non-empty paths
-                        let (parent, _) = param_path.split_last().unwrap();
-                        let field_name_start = if parent.0.is_empty() {
-                            parent.0.len()
-                        } else {
-                            parent.0.len() + 1 // skip `_` after the parent
-                        };
-                        let field_name = key[field_name_start..].to_owned();
-
-                        let origin = Arc::new(ValueOrigin::Synthetic {
-                            source: source_origin.clone(),
-                            transform: format!("nesting kv entries for '{param_path}'"),
-                        });
-                        dest.ensure_object(parent, |_| origin.clone())
-                            .insert(field_name, value.clone());
+                        dest.copy_kv_entry(source_origin, param_path, &key, value.clone());
                     }
                 }
 
@@ -549,8 +602,46 @@ impl WithOrigin {
                     None => break,
                 };
             }
+
+            // Allow for array params.
+            let Some((key_prefix, maybe_idx)) = key.rsplit_once('_') else {
+                continue;
+            };
+            if !maybe_idx.bytes().all(|ch| ch.is_ascii_digit()) {
+                continue;
+            }
+            for (param_path, expecting) in schema.params_with_kv_path(key_prefix) {
+                if expecting.contains(BasicTypes::ARRAY) && !expecting.contains(BasicTypes::OBJECT)
+                {
+                    dest.copy_kv_entry(source_origin, param_path, &key, value.clone());
+                }
+            }
         }
         dest
+    }
+
+    fn copy_kv_entry(
+        &mut self,
+        source_origin: &Arc<ValueOrigin>,
+        param_path: Pointer<'_>,
+        key: &str,
+        value: WithOrigin,
+    ) {
+        // `unwrap()` is safe: params have non-empty paths
+        let (parent, _) = param_path.split_last().unwrap();
+        let field_name_start = if parent.0.is_empty() {
+            parent.0.len()
+        } else {
+            parent.0.len() + 1 // skip `_` after the parent
+        };
+        let field_name = key[field_name_start..].to_owned();
+
+        let origin = Arc::new(ValueOrigin::Synthetic {
+            source: source_origin.clone(),
+            transform: format!("nesting kv entries for '{param_path}'"),
+        });
+        self.ensure_object(parent, |_| origin.clone())
+            .insert(field_name, value);
     }
 
     /// Deep merge stopped at params (i.e., params are always merged atomically).

@@ -11,17 +11,17 @@ use crate::{
     metadata::SizeUnit,
     testing,
     testonly::{
-        extract_env_var_name, extract_json_name, test_deserialize, ComposedConfig, CompoundConfig,
-        ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig, KvTestConfig,
-        NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
+        extract_env_var_name, extract_json_name, test_deserialize, AliasedConfig, ComposedConfig,
+        CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig,
+        KvTestConfig, NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
     },
-    ByteSize,
+    ByteSize, DescribeConfig,
 };
 
 #[test]
 fn parsing_enum_config_with_schema() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<EnumConfig>("").unwrap();
+    schema.insert(&EnumConfig::DESCRIPTION, "").unwrap();
 
     let json = config!(
         "type": "Nested",
@@ -41,28 +41,40 @@ fn parsing_enum_config_with_schema() {
     );
 
     // Test coercing config variants for an enum used directly as a param
-    let json = config!(
-        "type": "Nested",
-        "renamed": "FIRST",
-        "map.first": 1,
-    );
-    let mut repo = ConfigRepository::new(&schema).with(json);
-    let errors = repo.single::<EnumConfig>().unwrap().parse().unwrap_err();
-    let err = errors.first();
-    let inner = err.inner().to_string();
-    assert!(inner.contains("unknown variant"), "{inner}");
-    assert_eq!(err.path(), "renamed");
+    let enum_values = [
+        "FIRST",
+        "First",
+        "FIRST_CHOICE",
+        "FirstChoice",
+        "firstChoice",
+        "first-choice",
+    ];
+    for enum_value in enum_values {
+        println!("testing enum value: {enum_value}");
 
-    repo.deserializer_options().coerce_shouting_variant_names = true;
-    let config: EnumConfig = repo.single().unwrap().parse().unwrap();
-    assert_eq!(
-        config,
-        EnumConfig::Nested(NestedConfig {
-            simple_enum: SimpleEnum::First,
-            other_int: 42,
-            map: HashMap::from([("first".to_owned(), 1)]),
-        })
-    );
+        let json = config!(
+            "type": "Nested",
+            "renamed": enum_value,
+            "map.first": 1,
+        );
+        let mut repo = ConfigRepository::new(&schema).with(json);
+        let errors = repo.single::<EnumConfig>().unwrap().parse().unwrap_err();
+        let err = errors.first();
+        let inner = err.inner().to_string();
+        assert!(inner.contains("unknown variant"), "{inner}");
+        assert_eq!(err.path(), "renamed");
+
+        repo.deserializer_options().coerce_variant_names = true;
+        let config: EnumConfig = repo.single().unwrap().parse().unwrap();
+        assert_eq!(
+            config,
+            EnumConfig::Nested(NestedConfig {
+                simple_enum: SimpleEnum::First,
+                other_int: 42,
+                map: HashMap::from([("first".to_owned(), 1)]),
+            })
+        );
+    }
 
     let json = config!(
         "type": "Fields",
@@ -110,7 +122,9 @@ fn parsing_enum_config_with_schema() {
 #[test]
 fn parsing_defaulting_config_from_missing_value_with_schema() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<DefaultingConfig>("test").unwrap();
+    schema
+        .insert(&DefaultingConfig::DESCRIPTION, "test")
+        .unwrap();
     let json = config!("unrelated": 123);
     let repo = ConfigRepository::new(&schema).with(json);
     let config: DefaultingConfig = repo.single().unwrap().parse().unwrap();
@@ -126,7 +140,7 @@ fn parsing_compound_config_with_schema() {
     );
 
     let mut schema = ConfigSchema::default();
-    schema.insert::<CompoundConfig>("").unwrap();
+    schema.insert(&CompoundConfig::DESCRIPTION, "").unwrap();
     let repo = ConfigRepository::new(&schema).with(json);
     let config: CompoundConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(
@@ -151,7 +165,7 @@ fn parsing_compound_config_with_schema() {
 
 fn test_parsing_compound_config_with_schema_error(json: Json, expected_err_path: &str) {
     let mut schema = ConfigSchema::default();
-    schema.insert::<CompoundConfig>("").unwrap();
+    schema.insert(&CompoundConfig::DESCRIPTION, "").unwrap();
     let repo = ConfigRepository::new(&schema).with(json);
     let err = repo
         .single::<CompoundConfig>()
@@ -217,7 +231,7 @@ fn nesting_json() {
     );
 
     let mut schema = ConfigSchema::default();
-    schema.insert::<ConfigWithNesting>("").unwrap();
+    schema.insert(&ConfigWithNesting::DESCRIPTION, "").unwrap();
     let map = ConfigRepository::new(&schema).with(env).merged;
 
     assert_matches!(
@@ -240,6 +254,50 @@ fn nesting_json() {
 }
 
 #[test]
+fn nesting_inside_child_config() {
+    let json = config!(
+        "value": 123,
+        "nested_renamed": "first",
+        "nested_other_int": 321,
+    );
+    let mut schema = ConfigSchema::default();
+    schema.insert(&ConfigWithNesting::DESCRIPTION, "").unwrap();
+    let map = ConfigRepository::new(&schema).with(json).merged;
+
+    assert_matches!(
+        &map.get(Pointer("value")).unwrap().inner,
+        Value::Number(num) if *num == 123.into()
+    );
+    assert_matches!(
+        &map.get(Pointer("nested.renamed")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "first"
+    );
+    assert_matches!(
+        &map.get(Pointer("nested.other_int")).unwrap().inner,
+        Value::Number(num) if *num == 321.into()
+    );
+
+    let json = config!(
+        "value": 123,
+        "nested_renamed": "first",
+        "nested_other_int": 321,
+        "nested.other_int": 777, // has priority
+    );
+    let mut schema = ConfigSchema::default();
+    schema.insert(&ConfigWithNesting::DESCRIPTION, "").unwrap();
+    let map = ConfigRepository::new(&schema).with(json).merged;
+
+    assert_matches!(
+        &map.get(Pointer("nested.renamed")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "first"
+    );
+    assert_matches!(
+        &map.get(Pointer("nested.other_int")).unwrap().inner,
+        Value::Number(num) if *num == 777.into()
+    );
+}
+
+#[test]
 fn merging_config_parts() {
     let json = config!(
         "deprecated.value": 4,
@@ -248,12 +306,12 @@ fn merging_config_parts() {
 
     let mut schema = ConfigSchema::default();
     schema
-        .insert::<ConfigWithNesting>("")
+        .insert(&ConfigWithNesting::DESCRIPTION, "")
         .unwrap()
         .push_alias("deprecated")
         .unwrap();
     schema
-        .single_mut::<NestedConfig>()
+        .single_mut(&NestedConfig::DESCRIPTION)
         .unwrap()
         .push_alias("deprecated")
         .unwrap();
@@ -311,17 +369,49 @@ fn merging_config_parts() {
 }
 
 #[test]
+fn using_nested_config_aliases() {
+    let json = config!(
+        "value": 10,
+        "nest.renamed": "first",
+        "nest.other_int": 50,
+    );
+    let config: ConfigWithNesting = testing::test(json).unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 50);
+
+    // Mixing canonical path and aliases
+    let json = config!(
+        "value": 10,
+        "nested.renamed": "first",
+        "nest.other_int": 50,
+    );
+    let config: ConfigWithNesting = testing::test(json).unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 50);
+
+    let json = config!(
+        "value": 10,
+        "nest.renamed": "first",
+        "nested.other_int": 777,
+        "nest.other_int": 50, // shouldn't be used since there's a canonical param
+    );
+    let config: ConfigWithNesting = testing::test(json).unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 777);
+}
+
+#[test]
 fn merging_config_parts_with_env() {
     let env = Environment::from_iter("", [("deprecated_value", "4"), ("nested_renamed", "first")]);
 
     let mut schema = ConfigSchema::default();
     schema
-        .insert::<ConfigWithNesting>("")
+        .insert(&ConfigWithNesting::DESCRIPTION, "")
         .unwrap()
         .push_alias("deprecated")
         .unwrap();
     schema
-        .single_mut::<NestedConfig>()
+        .single_mut(&NestedConfig::DESCRIPTION)
         .unwrap()
         .push_alias("deprecated")
         .unwrap();
@@ -379,7 +469,7 @@ fn merging_configs() {
     let overrides = Json::new("overrides.json", json);
 
     let mut schema = ConfigSchema::default();
-    schema.insert::<ConfigWithNesting>("").unwrap();
+    schema.insert(&ConfigWithNesting::DESCRIPTION, "").unwrap();
     let repo = ConfigRepository::new(&schema).with(base).with(overrides);
     let Value::Object(merged) = &repo.merged().inner else {
         panic!("unexpected merged value");
@@ -426,7 +516,7 @@ fn merging_configs() {
 fn using_aliases_with_object_config() {
     let mut schema = ConfigSchema::default();
     schema
-        .insert::<ConfigWithNesting>("test")
+        .insert(&ConfigWithNesting::DESCRIPTION, "test")
         .unwrap()
         .push_alias("deprecated")
         .unwrap();
@@ -448,7 +538,7 @@ fn using_aliases_with_object_config() {
 fn using_env_config_overrides() {
     let mut schema = ConfigSchema::default();
     schema
-        .insert::<ConfigWithNesting>("test")
+        .insert(&ConfigWithNesting::DESCRIPTION, "test")
         .unwrap()
         .push_alias("deprecated")
         .unwrap();
@@ -575,7 +665,9 @@ fn merging_params_is_atomic() {
         }),
     );
     let mut schema = ConfigSchema::default();
-    schema.insert::<ValueCoercingConfig>("").unwrap();
+    schema
+        .insert(&ValueCoercingConfig::DESCRIPTION, "")
+        .unwrap();
     let repo = ConfigRepository::new(&schema).with(base).with(overrides);
     let param_value = &repo.merged().get(Pointer("param")).unwrap().inner;
     assert_matches!(
@@ -607,7 +699,9 @@ fn merging_params_is_still_atomic_with_prefixes() {
         "test.config.unused": true,
     );
     let mut schema = ConfigSchema::default();
-    schema.insert::<ValueCoercingConfig>("test.config").unwrap();
+    schema
+        .insert(&ValueCoercingConfig::DESCRIPTION, "test.config")
+        .unwrap();
     let repo = ConfigRepository::new(&schema).with(base).with(overrides);
     let param_value = &repo
         .merged()
@@ -628,7 +722,7 @@ fn merging_params_is_still_atomic_with_prefixes() {
 #[test]
 fn nesting_key_value_map_to_multiple_locations() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<KvTestConfig>("").unwrap();
+    schema.insert(&KvTestConfig::DESCRIPTION, "").unwrap();
 
     let mut repo = ConfigRepository::new(&schema);
     let config: KvTestConfig = repo.single().unwrap().parse().unwrap();
@@ -645,7 +739,9 @@ fn nesting_key_value_map_to_multiple_locations() {
 #[test]
 fn nesting_for_object_param() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<ValueCoercingConfig>("test").unwrap();
+    schema
+        .insert(&ValueCoercingConfig::DESCRIPTION, "test")
+        .unwrap();
 
     let env = Environment::from_iter("", [("TEST_PARAM_INT", "123"), ("TEST_PARAM_STRING", "??")]);
     let repo = ConfigRepository::new(&schema).with(env);
@@ -666,9 +762,11 @@ fn nesting_for_object_param() {
 }
 
 #[test]
-fn testing_for_object_param_with_structured_source() {
+fn nesting_for_object_param_with_structured_source() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<ValueCoercingConfig>("test").unwrap();
+    schema
+        .insert(&ValueCoercingConfig::DESCRIPTION, "test")
+        .unwrap();
 
     let json = config!(
         "test.param_int": 123,
@@ -688,9 +786,54 @@ fn testing_for_object_param_with_structured_source() {
 }
 
 #[test]
+fn nesting_for_array_param() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert(&ValueCoercingConfig::DESCRIPTION, "test")
+        .unwrap();
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_PARAM_INT", "123"),
+            ("TEST_PARAM_STRING", "??"),
+            ("TEST_SET_0", "123"),
+            ("TEST_SET_1", "321"),
+            ("TEST_SET_2", "777"),
+            ("TEST_REPEATED_0", r#"{ "int": 123, "string": "!" }"#),
+            (
+                "TEST_REPEATED_1",
+                r#"{ "int": 321, "string": "?", "array": [1, 2] }"#,
+            ),
+        ],
+    );
+    let repo = ConfigRepository::new(&schema).with(env);
+
+    assert_matches!(
+        &repo.merged().get(Pointer("test.set")).unwrap().inner,
+        Value::Array(_)
+    );
+    assert_matches!(
+        &repo.merged().get(Pointer("test.repeated")).unwrap().inner,
+        Value::Array(_)
+    );
+
+    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.set, HashSet::from([123, 321, 777]));
+    assert_eq!(config.repeated.len(), 2);
+    assert_eq!(config.repeated[0].int, 123);
+    assert_eq!(config.repeated[0].string, "!");
+    assert_eq!(config.repeated[1].int, 321);
+    assert_eq!(config.repeated[1].string, "?");
+    assert_eq!(config.repeated[1].array, [1, 2]);
+}
+
+#[test]
 fn nesting_not_applied_if_original_param_is_defined() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<ValueCoercingConfig>("test").unwrap();
+    schema
+        .insert(&ValueCoercingConfig::DESCRIPTION, "test")
+        .unwrap();
 
     let env = Environment::from_iter(
         "",
@@ -702,12 +845,47 @@ fn nesting_not_applied_if_original_param_is_defined() {
     let repo = ConfigRepository::new(&schema).with(env);
     let val = &repo.merged().get(Pointer("test.param")).unwrap().inner;
     assert_matches!(val, Value::String(StrValue::Plain(s)) if s == r#"{ "int": 42 }"#);
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_SET", "[]"),
+            ("TEST_SET_0", "123"),
+            ("TEST_SET_1", "321"),
+        ],
+    );
+    let repo = ConfigRepository::new(&schema).with(env);
+
+    assert_matches!(
+        &repo.merged().get(Pointer("test.set")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "[]"
+    );
+}
+
+#[test]
+fn nesting_not_applied_for_non_sequential_array_indices() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert(&ValueCoercingConfig::DESCRIPTION, "test")
+        .unwrap();
+
+    let env = Environment::from_iter("", [("TEST_SET_1", "123"), ("TEST_SET_2", "321")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let set = repo.merged().get(Pointer("test.set"));
+    assert!(set.is_none(), "{set:?}");
+
+    let env = Environment::from_iter("", [("TEST_SET_0", "123"), ("TEST_SET_2", "321")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let set = repo.merged().get(Pointer("test.set"));
+    assert!(set.is_none(), "{set:?}");
 }
 
 #[test]
 fn nesting_does_not_override_existing_values() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<ValueCoercingConfig>("test").unwrap();
+    schema
+        .insert(&ValueCoercingConfig::DESCRIPTION, "test")
+        .unwrap();
 
     let json = config!(
         "test.param_int": 123,
@@ -810,7 +988,9 @@ fn nesting_with_duration_param_errors() {
 #[test]
 fn merging_duration_params_is_atomic() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<ConfigWithComplexTypes>("test").unwrap();
+    schema
+        .insert(&ConfigWithComplexTypes::DESCRIPTION, "test")
+        .unwrap();
 
     // Base case: the duration is defined only in overrides
     let base = config!("test.array": [4, 5]);
@@ -952,7 +1132,7 @@ fn nesting_with_composed_deserializers_errors() {
 #[test]
 fn reading_secrets() {
     let mut schema = ConfigSchema::default();
-    schema.insert::<SecretConfig>("").unwrap();
+    schema.insert(&SecretConfig::DESCRIPTION, "").unwrap();
     let env = Environment::from_iter("APP_", [("APP_KEY", "super_secret")]);
     let mut repo = ConfigRepository::new(&schema).with(env);
 
@@ -1003,4 +1183,60 @@ fn reading_secrets() {
     let debug_str = format!("{:?}", repo.merged());
     assert!(!debug_str.contains("override_secret"), "{debug_str}");
     assert!(!debug_str.contains("opt_secret"), "{debug_str}");
+}
+
+#[test]
+fn aliasing_for_flattened_config() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert(&AliasedConfig::DESCRIPTION, "test")
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+
+    let json = config!("alias.int": 123, "alias.str": "!!");
+    let mut repo = ConfigRepository::new(&schema).with(json);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 123);
+    assert_eq!(config.flat.str, "!!");
+
+    let mixed_json = config!("test.int": 321, "alias.str": "??");
+    repo = repo.with(mixed_json);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 321);
+    assert_eq!(config.flat.str, "??");
+
+    let env = Environment::from_iter("", [("ALIAS_INT", "777"), ("ALIAS_STR", "!")]);
+    repo = repo.with(env);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 777);
+    assert_eq!(config.flat.str, "!");
+}
+
+#[test]
+fn aliasing_for_nested_config() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert(&AliasedConfig::DESCRIPTION, "test")
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+
+    let json = config!("alias.int": 123, "alias.nested.str": "!!");
+    let mut repo = ConfigRepository::new(&schema).with(json);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 123);
+    assert_eq!(config.nested.str, "!!");
+
+    let mixed_json = config!("test.int": 321, "alias.nest.str": "??");
+    repo = repo.with(mixed_json);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 321);
+    assert_eq!(config.nested.str, "??");
+
+    let env = Environment::from_iter("", [("ALIAS_INT", "777"), ("ALIAS_NEST_STRING", "!")]);
+    repo = repo.with(env);
+    let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 777);
+    assert_eq!(config.nested.str, "!");
 }

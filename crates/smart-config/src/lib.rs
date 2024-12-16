@@ -70,7 +70,7 @@
 //! }
 //!
 //! let mut schema = ConfigSchema::default();
-//! schema.insert::<TestConfig>("test")?;
+//! schema.insert(&TestConfig::DESCRIPTION, "test")?;
 //! // Assume we use two config sources: a YAML file and env vars,
 //! // the latter having higher priority.
 //! let yaml = r"
@@ -309,6 +309,7 @@ pub mod testing;
 #[cfg(test)]
 mod testonly;
 mod types;
+mod utils;
 pub mod value;
 
 /// Describes a configuration (i.e., a group of related parameters).

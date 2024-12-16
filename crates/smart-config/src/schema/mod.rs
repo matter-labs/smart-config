@@ -1,14 +1,18 @@
 //! Configuration schema.
 
-use std::{any, borrow::Cow, collections::HashMap, iter};
+use std::{
+    any,
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet, HashMap},
+    iter,
+};
 
 use anyhow::Context;
 
 use self::mount::{MountingPoint, MountingPoints};
 use crate::{
-    metadata::{BasicTypes, ConfigMetadata, NestedConfigMetadata, ParamMetadata},
+    metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
     value::Pointer,
-    DescribeConfig,
 };
 
 mod mount;
@@ -18,15 +22,12 @@ mod tests;
 #[derive(Debug, Clone)]
 pub(crate) struct ConfigData {
     pub metadata: &'static ConfigMetadata,
-    pub aliases: Vec<Pointer<'static>>,
+    all_paths: Vec<Cow<'static, str>>,
 }
 
 impl ConfigData {
-    fn new(metadata: &'static ConfigMetadata) -> Self {
-        Self {
-            metadata,
-            aliases: vec![],
-        }
+    pub(crate) fn aliases(&self) -> impl Iterator<Item = &str> + '_ {
+        self.all_paths.iter().skip(1).map(Cow::as_ref)
     }
 }
 
@@ -49,8 +50,8 @@ impl<'a> ConfigRef<'a> {
     }
 
     /// Iterates over all aliases for this config.
-    pub fn aliases(&self) -> impl Iterator<Item = &'static str> + '_ {
-        self.data.aliases.iter().map(|ptr| ptr.0)
+    pub fn aliases(&self) -> impl Iterator<Item = &'a str> + '_ {
+        self.data.aliases()
     }
 }
 
@@ -69,9 +70,9 @@ impl ConfigMut<'_> {
     }
 
     /// Iterates over all aliases for this config.
-    pub fn aliases(&self) -> impl Iterator<Item = &'static str> + '_ {
-        let data = &self.schema.configs[&(self.type_id, self.prefix.as_str().into())];
-        data.aliases.iter().map(|ptr| ptr.0)
+    pub fn aliases(&self) -> impl Iterator<Item = &str> + '_ {
+        let data = &self.schema.configs[self.prefix.as_str()].inner[&self.type_id];
+        data.aliases()
     }
 
     /// Pushes an additional alias for the config.
@@ -88,10 +89,37 @@ impl ConfigMut<'_> {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+struct ConfigsForPrefix {
+    inner: HashMap<any::TypeId, ConfigData>,
+    by_depth: BTreeSet<(usize, any::TypeId)>,
+}
+
+impl ConfigsForPrefix {
+    fn by_depth(&self) -> impl Iterator<Item = &ConfigData> + '_ {
+        self.by_depth.iter().map(|(_, ty)| &self.inner[ty])
+    }
+
+    fn insert(&mut self, ty: any::TypeId, depth: Option<usize>, data: ConfigData) {
+        self.inner.insert(ty, data);
+        if let Some(depth) = depth {
+            self.by_depth.insert((depth, ty));
+        }
+    }
+
+    fn extend(&mut self, other: Self) {
+        self.inner.extend(other.inner);
+        self.by_depth.extend(other.by_depth);
+    }
+}
+
 /// Schema for configuration. Can contain multiple configs bound to different paths.
+// TODO: more docs; e.g., document global aliases
 #[derive(Debug, Clone, Default)]
 pub struct ConfigSchema {
-    configs: HashMap<(any::TypeId, Cow<'static, str>), ConfigData>,
+    // Order configs by canonical prefix for iteration etc. Also, this makes configs iterator topologically
+    // sorted, and makes it easy to query prefix ranges, but these properties aren't used for now.
+    configs: BTreeMap<Cow<'static, str>, ConfigsForPrefix>,
     mounting_points: MountingPoints,
 }
 
@@ -100,7 +128,7 @@ impl ConfigSchema {
     pub(crate) fn iter_ll(&self) -> impl Iterator<Item = (Pointer<'_>, &ConfigData)> + '_ {
         self.configs
             .iter()
-            .map(|((_, prefix), data)| (Pointer(prefix), data))
+            .flat_map(|(prefix, data)| data.inner.values().map(move |data| (Pointer(prefix), data)))
     }
 
     pub(crate) fn contains_canonical_param(&self, at: Pointer<'_>) -> bool {
@@ -133,16 +161,53 @@ impl ConfigSchema {
     /// Iterates over all configs contained in this schema. A unique key for a config is its type + location;
     /// i.e., multiple returned refs may have the same config type xor same location (never both).
     pub fn iter(&self) -> impl Iterator<Item = ConfigRef<'_>> + '_ {
-        self.configs
-            .iter()
-            .map(|((_, prefix), data)| ConfigRef { prefix, data })
+        self.configs.iter().flat_map(|(prefix, data)| {
+            data.by_depth().map(move |data| ConfigRef {
+                prefix: prefix.as_ref(),
+                data,
+            })
+        })
     }
 
     /// Lists all prefixes for the specified config. This does not include aliases.
     pub fn locate(&self, metadata: &'static ConfigMetadata) -> impl Iterator<Item = &str> + '_ {
         let config_type_id = metadata.ty.id();
-        self.configs.keys().filter_map(move |(type_id, prefix)| {
-            (*type_id == config_type_id).then_some(prefix.as_ref())
+        self.configs.iter().filter_map(move |(prefix, data)| {
+            data.inner
+                .contains_key(&config_type_id)
+                .then_some(prefix.as_ref())
+        })
+    }
+
+    /// Gets a reference to a config by ist unique key (metadata + canonical prefix).
+    pub fn get<'s>(
+        &'s self,
+        metadata: &'static ConfigMetadata,
+        prefix: &'s str,
+    ) -> Option<ConfigRef<'s>> {
+        let data = self.get_ll(prefix, metadata.ty.id())?;
+        Some(ConfigRef { prefix, data })
+    }
+
+    fn get_ll(&self, prefix: &str, ty: any::TypeId) -> Option<&ConfigData> {
+        self.configs.get(prefix)?.inner.get(&ty)
+    }
+
+    /// Gets a reference to a config by ist unique key (metadata + canonical prefix).
+    pub fn get_mut(
+        &mut self,
+        metadata: &'static ConfigMetadata,
+        prefix: &str,
+    ) -> Option<ConfigMut<'_>> {
+        let ty = metadata.ty.id();
+        if !self.configs.get(prefix)?.inner.contains_key(&ty) {
+            return None;
+        }
+
+        Some(ConfigMut {
+            schema: self,
+            prefix: prefix.to_owned(),
+            type_id: ty,
         })
     }
 
@@ -161,10 +226,7 @@ impl ConfigSchema {
             ),
             &[prefix] => Ok(ConfigRef {
                 prefix,
-                data: self
-                    .configs
-                    .get(&(metadata.ty.id(), prefix.into()))
-                    .unwrap(),
+                data: &self.configs[prefix].inner[&metadata.ty.id()],
             }),
             [first, second] => anyhow::bail!(
                 "configuration `{}` is registered in at least 2 locations: {first:?}, {second:?}",
@@ -180,8 +242,10 @@ impl ConfigSchema {
     ///
     /// Returns an error if the configuration is not registered or has more than one mount point.
     #[allow(clippy::missing_panics_doc)] // false positive
-    pub fn single_mut<C: DescribeConfig>(&mut self) -> anyhow::Result<ConfigMut<'_>> {
-        let metadata = &C::DESCRIPTION;
+    pub fn single_mut(
+        &mut self,
+        metadata: &'static ConfigMetadata,
+    ) -> anyhow::Result<ConfigMut<'_>> {
         let mut it = self.locate(metadata);
         let first_prefix = it.next().with_context(|| {
             format!(
@@ -215,15 +279,13 @@ impl ConfigSchema {
     ///   is mounted at the location of an existing config.
     /// - Vice versa, if a config or nested config is mounted at the location of an existing param.
     /// - If a parameter is mounted at the location of a parameter with disjoint [expected types](ParamMetadata.expecting).
-    pub fn insert<C>(&mut self, prefix: &'static str) -> anyhow::Result<ConfigMut<'_>>
-    where
-        C: DescribeConfig,
-    {
-        let metadata = &C::DESCRIPTION;
-        let config_id = any::TypeId::of::<C>();
-
+    pub fn insert(
+        &mut self,
+        metadata: &'static ConfigMetadata,
+        prefix: &'static str,
+    ) -> anyhow::Result<ConfigMut<'_>> {
         let mut patched = PatchedSchema::new(self);
-        patched.insert_config(prefix, config_id, metadata)?;
+        patched.insert_config(prefix, metadata)?;
         patched.commit();
         Ok(ConfigMut {
             schema: self,
@@ -233,20 +295,14 @@ impl ConfigSchema {
     }
 
     fn all_names<'a>(
-        canonical_prefix: &'a str,
         param: &'a ParamMetadata,
         config_data: &'a ConfigData,
     ) -> impl Iterator<Item = (&'a str, &'a str)> + 'a {
         let local_names = iter::once(param.name).chain(param.aliases.iter().copied());
-        let local_names_ = local_names.clone();
-        let global_aliases = config_data
-            .aliases
+        config_data
+            .all_paths
             .iter()
-            .flat_map(move |alias| local_names_.clone().map(move |name| (alias.0, name)));
-        let local_aliases = local_names
-            .clone()
-            .map(move |name| (canonical_prefix, name));
-        local_aliases.chain(global_aliases)
+            .flat_map(move |alias| local_names.clone().map(move |name| (alias.as_ref(), name)))
     }
 }
 
@@ -276,19 +332,40 @@ impl<'a> PatchedSchema<'a> {
     fn insert_config(
         &mut self,
         prefix: &'static str,
-        config_id: any::TypeId,
         metadata: &'static ConfigMetadata,
     ) -> anyhow::Result<()> {
-        self.insert_inner(prefix.into(), config_id, ConfigData::new(metadata))?;
+        self.insert_recursively(
+            prefix.into(),
+            true,
+            ConfigData {
+                metadata,
+                all_paths: vec![prefix.into()],
+            },
+        )
+    }
 
-        // Insert all nested configs recursively.
-        let mut pending_configs: Vec<_> =
-            Self::list_nested_configs(prefix, metadata.nested_configs).collect();
-        while let Some((prefix, metadata)) = pending_configs.pop() {
-            let new_configs = Self::list_nested_configs(&prefix, metadata.nested_configs);
+    fn insert_recursively(
+        &mut self,
+        prefix: Cow<'static, str>,
+        is_new: bool,
+        data: ConfigData,
+    ) -> anyhow::Result<()> {
+        let depth = is_new.then_some(0_usize);
+        let mut pending_configs = vec![(prefix, data, depth)];
+
+        // Insert / update all nested configs recursively.
+        while let Some((prefix, data, depth)) = pending_configs.pop() {
+            // Check whether the config is already present; if so, no need to insert the config
+            // or any nested configs.
+            if is_new && self.base.get_ll(&prefix, data.metadata.ty.id()).is_some() {
+                continue;
+            }
+
+            let child_depth = depth.map(|d| d + 1);
+            let new_configs = Self::list_nested_configs(Pointer(&prefix), &data)
+                .map(|(prefix, data)| (prefix.into(), data, child_depth));
             pending_configs.extend(new_configs);
-
-            self.insert_inner(prefix.into(), metadata.ty.id(), ConfigData::new(metadata))?;
+            self.insert_inner(prefix, depth, data)?;
         }
         Ok(())
     }
@@ -299,35 +376,51 @@ impl<'a> PatchedSchema<'a> {
         config_id: any::TypeId,
         alias: Pointer<'static>,
     ) -> anyhow::Result<()> {
-        let config_data = &self.base.configs[&(config_id, prefix.as_str().into())];
-        if config_data.aliases.contains(&alias) {
+        let config_data = &self.base.configs[prefix.as_str()].inner[&config_id];
+        if config_data.all_paths.contains(&Cow::Borrowed(alias.0)) {
             return Ok(()); // shortcut in the no-op case
         }
 
-        let new_data = ConfigData {
-            metadata: config_data.metadata,
-            aliases: vec![alias],
-        };
-        self.insert_inner(prefix.into(), config_id, new_data)
+        let metadata = config_data.metadata;
+        self.insert_recursively(
+            prefix.into(),
+            false,
+            ConfigData {
+                metadata,
+                all_paths: vec![alias.0.into()],
+            },
+        )
     }
 
     fn list_nested_configs<'i>(
-        prefix: &'i str,
-        nested: &'i [NestedConfigMetadata],
-    ) -> impl Iterator<Item = (String, &'static ConfigMetadata)> + 'i {
-        nested
-            .iter()
-            .map(|nested| (Pointer(prefix).join(nested.name), nested.meta))
+        prefix: Pointer<'i>,
+        data: &'i ConfigData,
+    ) -> impl Iterator<Item = (String, ConfigData)> + 'i {
+        let all_prefixes = data.all_paths.iter().map(|alias| Pointer(alias));
+        data.metadata.nested_configs.iter().map(move |nested| {
+            let local_names = iter::once(nested.name).chain(nested.aliases.iter().copied());
+            let all_paths = all_prefixes.clone().flat_map(|prefix| {
+                local_names
+                    .clone()
+                    .map(move |name| prefix.join(name).into())
+            });
+
+            let config_data = ConfigData {
+                metadata: nested.meta,
+                all_paths: all_paths.collect(),
+            };
+            (prefix.join(nested.name), config_data)
+        })
     }
 
     fn insert_inner(
         &mut self,
         prefix: Cow<'static, str>,
-        config_id: any::TypeId,
+        depth: Option<usize>,
         mut data: ConfigData,
     ) -> anyhow::Result<()> {
         let config_name = data.metadata.ty.name_in_code();
-        let config_paths = data.aliases.iter().map(|ptr| ptr.0);
+        let config_paths = data.all_paths.iter().map(Cow::as_ref);
         let config_paths = iter::once(prefix.as_ref()).chain(config_paths);
 
         for path in config_paths {
@@ -348,17 +441,20 @@ impl<'a> PatchedSchema<'a> {
         }
 
         for param in data.metadata.params {
-            let all_names = ConfigSchema::all_names(&prefix, param, &data);
+            let all_names = ConfigSchema::all_names(param, &data);
 
             for (name_i, (prefix, name)) in all_names.enumerate() {
                 let full_name = Pointer(prefix).join(name);
-                let (prev_expecting, was_canonical) = if let Some(mount) = self.mount(&full_name) {
-                    match mount {
-                        &MountingPoint::Param {
+                let mut was_canonical = false;
+                if let Some(mount) = self.mount(&full_name) {
+                    let prev_expecting = match mount {
+                        MountingPoint::Param {
                             expecting,
                             is_canonical,
-                        } => (expecting, is_canonical),
-
+                        } => {
+                            was_canonical = *is_canonical;
+                            *expecting
+                        }
                         MountingPoint::Config => {
                             anyhow::bail!(
                                 "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
@@ -367,26 +463,23 @@ impl<'a> PatchedSchema<'a> {
                                 field = param.rust_field_name
                             );
                         }
+                    };
+
+                    if prev_expecting != param.expecting {
+                        anyhow::bail!(
+                            "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
+                             it expects {expecting}, while the existing param(s) mounted at this path expect {prev_expecting}",
+                            name = param.name,
+                            field = param.rust_field_name,
+                            expecting = param.expecting
+                        );
                     }
-                } else {
-                    (BasicTypes::ANY, false)
-                };
-
-                let Some(expecting) = prev_expecting.and(param.expecting) else {
-                    anyhow::bail!(
-                        "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
-                         it expects {expecting}, while the existing param(s) mounted at this path expect {prev_expecting}",
-                        name = param.name,
-                        field = param.rust_field_name,
-                        expecting = param.expecting
-                    );
-                };
+                }
                 let is_canonical = was_canonical || name_i == 0;
-
                 self.patch.mounting_points.insert(
                     full_name,
                     MountingPoint::Param {
-                        expecting,
+                        expecting: param.expecting,
                         is_canonical,
                     },
                 );
@@ -396,18 +489,28 @@ impl<'a> PatchedSchema<'a> {
         // `data` is the new data for the config, so we need to consult `base` for existing data.
         // Unlike with params, by design we never insert same config entries in the same patch,
         // so it's safe to *only* consult `base`.
-        if let Some(prev_data) = self.base.configs.get(&(config_id, prefix.as_ref().into())) {
+        let config_id = data.metadata.ty.id();
+        let prev_data = self.base.get_ll(&prefix, config_id);
+        if let Some(prev_data) = prev_data {
             // Append new aliases to the end since their ordering determines alias priority
-            let mut all_aliases = prev_data.aliases.clone();
-            all_aliases.extend_from_slice(&data.aliases);
-            data.aliases = all_aliases;
+            let mut all_paths = prev_data.all_paths.clone();
+            all_paths.extend_from_slice(&data.all_paths);
+            data.all_paths = all_paths;
         }
-        self.patch.configs.insert((config_id, prefix), data);
+
+        self.patch
+            .configs
+            .entry(prefix)
+            .or_default()
+            .insert(config_id, depth, data);
         Ok(())
     }
 
     fn commit(self) {
-        self.base.configs.extend(self.patch.configs);
+        for (prefix, data) in self.patch.configs {
+            let prev_data = self.base.configs.entry(prefix).or_default();
+            prev_data.extend(data);
+        }
         self.base.mounting_points.extend(self.patch.mounting_points);
     }
 }

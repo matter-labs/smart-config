@@ -145,11 +145,6 @@ impl BasicTypes {
         Self(self.0 | rhs.0)
     }
 
-    pub(crate) fn and(self, rhs: Self) -> Option<Self> {
-        let raw = self.0 & rhs.0;
-        (raw > 0).then_some(Self(raw))
-    }
-
     /// Checks whether the `needle` is fully contained in this set.
     pub const fn contains(self, needle: Self) -> bool {
         self.0 & needle.0 == needle.0
@@ -262,6 +257,8 @@ impl fmt::Display for TypeQualifiers {
 pub struct NestedConfigMetadata {
     /// Name of the config in config sources. Empty for flattened configs. Not necessarily the Rust field name!
     pub name: &'static str,
+    /// Aliases for the config. Cannot be present for flattened configs.
+    pub aliases: &'static [&'static str],
     /// Name of the config field in Rust code.
     pub rust_field_name: &'static str,
     /// Config metadata.

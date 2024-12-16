@@ -25,6 +25,7 @@ use crate::{
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SimpleEnum {
+    #[serde(alias = "first_choice")]
     First,
     Second,
 }
@@ -58,6 +59,8 @@ pub(crate) struct ValueCoercingConfig {
     pub param: TestParam,
     #[config(default)]
     pub set: HashSet<u64>,
+    #[config(default)]
+    pub repeated: Vec<TestParam>,
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
@@ -87,7 +90,7 @@ pub(crate) struct ConfigWithNesting {
     pub value: u32,
     #[config(default, alias = "alias")]
     pub merged: String,
-    #[config(nest)]
+    #[config(nest, alias = "nest")]
     pub nested: NestedConfig,
 }
 
@@ -242,6 +245,23 @@ pub(crate) struct SecretConfig {
     pub int: u64,
     #[config(default_t = vec![1], secret, with = de::Delimited(","))]
     pub seq: Vec<u64>,
+}
+
+#[derive(DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct NestedAliasedConfig {
+    #[config(default, alias = "string")]
+    pub str: String,
+}
+
+#[derive(DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct AliasedConfig {
+    pub int: u32,
+    #[config(nest, alias = "nest")]
+    pub nested: NestedAliasedConfig,
+    #[config(flatten)]
+    pub flat: NestedAliasedConfig,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {

@@ -43,7 +43,7 @@ pub struct TestConfig {
     pub cache_size: ByteSize,
     #[config(nest)]
     pub nested: NestedConfig,
-    #[config(nest)]
+    #[config(nest, alias = "funds")]
     pub funding: Option<FundingConfig>,
 }
 
@@ -96,7 +96,7 @@ pub struct FundingConfig {
     /// Secret string value.
     pub api_key: Option<SecretString>,
     /// Secret key.
-    #[config(secret, with = de::Serde![str])]
+    #[config(secret, with = de::Optional(de::Serde![str]))]
     pub secret_key: Option<SecretKey>,
 }
 
@@ -143,9 +143,9 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
             ("APP_TEST_APP_NAME", "test"),
             ("APP_TEST_DIRS", "/usr/bin:usr/local/bin"),
             ("APP_TEST_CACHE_SIZE", "128 MiB"),
-            ("APP_TEST_FUNDING_API_KEY", "correct horse battery staple"),
+            ("APP_TEST_FUNDS_API_KEY", "correct horse battery staple"),
             (
-                "APP_TEST_FUNDING_SECRET_KEY",
+                "APP_TEST_FUNDS_SECRET_KEY",
                 "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
             ),
         ],
@@ -192,7 +192,7 @@ fn main() {
     let cli = Cli::parse();
 
     let mut schema = ConfigSchema::default();
-    schema.insert::<TestConfig>("test").unwrap();
+    schema.insert(&TestConfig::DESCRIPTION, "test").unwrap();
 
     match cli {
         Cli::Print { filter } => {

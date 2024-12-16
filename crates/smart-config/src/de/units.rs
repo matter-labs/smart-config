@@ -191,13 +191,13 @@ pub struct WithUnit;
 enum RawDuration {
     #[serde(alias = "ms", alias = "milliseconds")]
     Millis(u64),
-    #[serde(alias = "sec", alias = "secs")]
+    #[serde(alias = "second", alias = "s", alias = "sec", alias = "secs")]
     Seconds(u64),
-    #[serde(alias = "min", alias = "mins")]
+    #[serde(alias = "minute", alias = "min", alias = "mins")]
     Minutes(u64),
-    #[serde(alias = "hr")]
+    #[serde(alias = "hour", alias = "hr")]
     Hours(u64),
-    #[serde(alias = "d")]
+    #[serde(alias = "day", alias = "d")]
     Days(u64),
 }
 
@@ -219,11 +219,11 @@ impl FromStr for RawDuration {
         let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
         let unit = s[unit_start..].trim();
         Ok(match unit {
-            "millis" | "ms" | "milliseconds" => Self::Millis(value),
-            "seconds" | "sec" | "secs" => Self::Seconds(value),
-            "minutes" | "min" | "mins" => Self::Minutes(value),
-            "hours" | "hr" => Self::Hours(value),
-            "days" | "d" => Self::Days(value),
+            "milliseconds" | "millis" | "ms" => Self::Millis(value),
+            "seconds" | "second" | "secs" | "sec" | "s" => Self::Seconds(value),
+            "minutes" | "minute" | "mins" | "min" => Self::Minutes(value),
+            "hours" | "hour" | "hr" => Self::Hours(value),
+            "days" | "day" | "d" => Self::Days(value),
             _ => {
                 return Err(DeError::invalid_value(
                     Unexpected::Str(unit),
@@ -381,12 +381,16 @@ mod tests {
         assert_eq!(duration, RawDuration::Millis(10));
         let duration: RawDuration = "50    seconds".parse().unwrap();
         assert_eq!(duration, RawDuration::Seconds(50));
+        let duration: RawDuration = "40s".parse().unwrap();
+        assert_eq!(duration, RawDuration::Seconds(40));
         let duration: RawDuration = "10 min".parse().unwrap();
         assert_eq!(duration, RawDuration::Minutes(10));
         let duration: RawDuration = "12 hours".parse().unwrap();
         assert_eq!(duration, RawDuration::Hours(12));
         let duration: RawDuration = "30d".parse().unwrap();
         assert_eq!(duration, RawDuration::Days(30));
+        let duration: RawDuration = "1 day".parse().unwrap();
+        assert_eq!(duration, RawDuration::Days(1));
     }
 
     #[test]
