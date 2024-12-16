@@ -1,5 +1,21 @@
 #![allow(clippy::enum_variant_names)]
 
+/// Const-compatible array / string comparison.
+pub(crate) const fn const_eq(lhs: &[u8], rhs: &[u8]) -> bool {
+    if lhs.len() != rhs.len() {
+        return false;
+    }
+
+    let mut i = 0;
+    while i < lhs.len() {
+        if lhs[i] != rhs[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
 #[derive(Debug, Clone, Copy)]
 enum VariantCase {
     // lowercase / uppercase are not supported because they don't provide word boundaries

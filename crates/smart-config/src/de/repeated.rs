@@ -14,6 +14,7 @@ use crate::{
     de::{DeserializeContext, DeserializeParam, WellKnown},
     error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
+    utils::const_eq,
     value::{Map, StrValue, Value, ValueOrigin, WithOrigin},
 };
 
@@ -199,7 +200,7 @@ impl<K, V, DeK: fmt::Debug, DeV: fmt::Debug> fmt::Debug for Entries<K, V, DeK, D
 }
 
 impl<K: WellKnown, V: WellKnown> Entries<K, V, K::Deserializer, V::Deserializer> {
-    /// FIXME
+    /// `Entries` instance using the [`WellKnown`] deserializers for keys and values.
     pub const WELL_KNOWN: Self = Self::new(K::DE, V::DE);
 }
 
@@ -208,7 +209,7 @@ where
     DeK: DeserializeParam<K>,
     DeV: DeserializeParam<V>,
 {
-    /// FIXME
+    /// Creates a new deserializer instance with provided key and value deserializers.
     pub const fn new(keys: DeK, values: DeV) -> Self {
         Self {
             keys,
@@ -217,7 +218,7 @@ where
         }
     }
 
-    /// FIXME
+    /// Converts this to a [`NamedEntries`] instance.
     pub const fn named(
         self,
         keys_name: &'static str,
@@ -225,7 +226,10 @@ where
     ) -> NamedEntries<K, V, DeK, DeV> {
         assert!(!keys_name.is_empty());
         assert!(!values_name.is_empty());
-        // FIXME: keys_name != values_name
+        assert!(
+            !const_eq(keys_name.as_bytes(), values_name.as_bytes()),
+            "Keys and values fields must not coincide"
+        );
 
         NamedEntries {
             inner: self,
@@ -440,7 +444,63 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
     }
 }
 
-/// FIXME
+/// Deserializer that supports either a map or an array of `{ key: _, value: _ }` tuples (with customizable
+/// key / value names). Created using [`Entries::named()`].
+///
+/// Unlike [`Entries`], [`NamedEntries`] doesn't require keys to be deserializable from strings (although
+/// if they don't, map inputs will not work).
+///
+/// # Examples
+///
+/// ```
+/// use std::{collections::HashMap, time::Duration};
+/// # use smart_config::{de::Entries, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(with = Entries::WELL_KNOWN.named("num", "value"))]
+///     entries: HashMap<u64, String>,
+///     /// Can also be used with "linear" containers with tuple items.
+///     #[config(with = Entries::WELL_KNOWN.named("method", "timeout"))]
+///     tuples: Vec<(String, Duration)>,
+/// }
+///
+/// // Parsing from maps:
+/// let map_input = smart_config::config!(
+///     "entries": serde_json::json!({ "2": "two", "3": "three" }),
+///     "tuples": serde_json::json!({ "getLogs": "2s" }),
+/// );
+/// let config: TestConfig = testing::test(map_input)?;
+/// assert_eq!(
+///     config.entries,
+///     HashMap::from([(2, "two".to_owned()), (3, "three".to_owned())])
+/// );
+/// assert_eq!(
+///     config.tuples,
+///    [("getLogs".to_owned(), Duration::from_secs(2))]
+/// );
+///
+/// // The equivalent input as named tuples:
+/// let tuples_input = smart_config::config!(
+///     "entries": serde_json::json!([
+///         { "num": 2, "value": "two" },
+///         { "num": 3, "value": "three" },
+///     ]),
+///     "tuples": serde_json::json!([
+///         { "method": "getLogs", "timeout": "2s" },
+///     ]),
+/// );
+/// let config: TestConfig = testing::test(tuples_input)?;
+/// # assert_eq!(
+/// #     config.entries,
+/// #     HashMap::from([(2, "two".to_owned()), (3, "three".to_owned())])
+/// # );
+/// # assert_eq!(
+/// #     config.tuples,
+/// #    [("getLogs".to_owned(), Duration::from_secs(2))]
+/// # );
+/// # anyhow::Ok(())
+/// ```
 pub struct NamedEntries<K, V, DeK, DeV> {
     inner: Entries<K, V, DeK, DeV>,
     keys_name: &'static str,
@@ -504,7 +564,10 @@ where
         entry: &'a WithOrigin,
     ) -> Result<(&'a WithOrigin, &'a WithOrigin), ErrorWithOrigin> {
         let Value::Object(obj) = &entry.inner else {
-            let expected = format!("{{ {}: _, {}: _ }} tuple", self.keys_name, self.values_name);
+            let expected = format!(
+                "{{ {:?}: _, {:?}: _ }} tuple",
+                self.keys_name, self.values_name
+            );
             return Err(entry.invalid_type(&expected));
         };
 
@@ -518,8 +581,11 @@ where
         })?;
 
         if obj.len() > 2 {
-            let err = DeError::invalid_length(obj.len(), &"2");
-            return Err(ErrorWithOrigin::json(err, entry.origin.clone()));
+            let expected = format!(
+                "{{ {:?}: _, {:?}: _ }} tuple",
+                self.keys_name, self.values_name
+            );
+            return Err(entry.invalid_type(&expected));
         }
         Ok((key, value))
     }
@@ -537,7 +603,7 @@ where
 
     fn type_qualifiers(&self) -> TypeQualifiers {
         let description = format!(
-            "map or array of {{ {}: _, {}: _ }} tuples",
+            "map or array of {{ {:?}: _, {:?}: _ }} tuples",
             self.keys_name, self.values_name
         );
         TypeQualifiers::dynamic(description)

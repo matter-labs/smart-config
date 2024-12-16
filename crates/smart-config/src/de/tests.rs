@@ -515,6 +515,8 @@ fn parsing_composed_params() {
     assert_eq!(config.entry_map[&10], Duration::from_secs(120));
 }
 
+// FIXME: test named entry errors
+
 #[test]
 fn error_parsing_array_from_string() {
     let json = config!("array": "4,what");
