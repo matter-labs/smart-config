@@ -59,7 +59,7 @@ pub use self::{
     macros::Serde,
     param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
     repeated::{Delimited, Entries, NamedEntries, Repeated},
-    secret::Secret,
+    secret::{FromSecretString, Secret},
     units::WithUnit,
 };
 use crate::{
