@@ -1,0 +1,25 @@
+error[E0080]: evaluation of `<smart_config::de::Entries<StructKey, u64, smart_config::de::Serde<32>, smart_config::de::Serde<2>> as smart_config::de::DeserializeParam<std::collections::HashMap<StructKey, u64>>>::EXPECTING` failed
+ --> src/de/repeated.rs
+  |
+  | /         assert!(
+  | |             DeK::EXPECTING.contains(BasicTypes::STRING)
+  | |                 || DeK::EXPECTING.contains(BasicTypes::INTEGER),
+  | |             "map keys must be deserializable from strings or ints"
+  | |         );
+  | |_________^ the evaluated program panicked at 'map keys must be deserializable from strings or ints', $DIR/src/de/repeated.rs:304:9
+  |
+  = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+  --> src/de/_private.rs
+   |
+   |     <De as DeserializeParam<T>>::EXPECTING
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+note: erroneous constant encountered
+  --> tests/ui/derives/map_with_unsupported_keys.rs:17:10
+   |
+17 | #[derive(DescribeConfig)]
+   |          ^^^^^^^^^^^^^^
+   |
+   = note: this note originates in the derive macro `DescribeConfig` (in Nightly builds, run with -Z macro-backtrace for more info)

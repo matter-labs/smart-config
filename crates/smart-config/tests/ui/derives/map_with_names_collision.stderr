@@ -1,0 +1,31 @@
+error[E0080]: evaluation of constant value failed
+ --> src/de/repeated.rs
+  |
+  | /         assert!(
+  | |             !const_eq(keys_name.as_bytes(), values_name.as_bytes()),
+  | |             "Keys and values fields must not coincide"
+  | |         );
+  | |_________^ the evaluated program panicked at 'Keys and values fields must not coincide', $DIR/src/de/repeated.rs:229:9
+  |
+note: inside `Entries::<u64, std::string::String, Serde<2>, Serde<8>>::named`
+ --> src/de/repeated.rs
+  |
+  | /         assert!(
+  | |             !const_eq(keys_name.as_bytes(), values_name.as_bytes()),
+  | |             "Keys and values fields must not coincide"
+  | |         );
+  | |_________^
+note: inside `<TestConfig as DescribeConfig>::DESCRIPTION`
+ --> tests/ui/derives/map_with_names_collision.rs:7:21
+  |
+7 |     #[config(with = de::Entries::WELL_KNOWN.named("val", "val"))]
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `assert` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+note: erroneous constant encountered
+ --> tests/ui/derives/map_with_names_collision.rs:5:10
+  |
+5 | #[derive(DescribeConfig)]
+  |          ^^^^^^^^^^^^^^
+  |
+  = note: this note originates in the derive macro `DescribeConfig` (in Nightly builds, run with -Z macro-backtrace for more info)

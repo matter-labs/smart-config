@@ -515,7 +515,66 @@ fn parsing_composed_params() {
     assert_eq!(config.entry_map[&10], Duration::from_secs(120));
 }
 
-// FIXME: test named entry errors
+#[test]
+fn errors_parsing_named_entries() {
+    let json = config!("entry_map": "5");
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map");
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("invalid type") && inner.contains("expected object or array"),
+        "{inner}"
+    );
+
+    let json = config!("entry_map": ["5"]);
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("invalid type") && inner.contains(r#"{ "val": _, "timeout": _ }"#),
+        "{inner}"
+    );
+
+    let json = config!("entry_map": serde_json::json!([{ "val": 5 }]));
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("missing field `timeout`"), "{inner}");
+
+    let json = config!("entry_map": serde_json::json!([{ "timeout": "30s" }]));
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("missing field `val`"), "{inner}");
+
+    let json = config!("entry_map": serde_json::json!([{ "val": 5, "timeout": "30s", "?": () }]));
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("invalid type") && inner.contains(r#"{ "val": _, "timeout": _ }"#),
+        "{inner}"
+    );
+
+    let json = config!("entry_map": serde_json::json!([{ "val": 5, "timeout": 30 }]));
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "entry_map.0.timeout");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid type"), "{inner}");
+}
 
 #[test]
 fn error_parsing_array_from_string() {
