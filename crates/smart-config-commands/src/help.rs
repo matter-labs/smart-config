@@ -2,7 +2,10 @@ use std::{io, io::Write as _};
 
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
-use smart_config::ConfigSchema;
+use smart_config::{
+    metadata::{BasicTypes, TypeDescription},
+    ConfigSchema,
+};
 
 use crate::{ParamRef, Printer};
 
@@ -63,32 +66,8 @@ impl ParamRef<'_> {
             )?;
         }
 
-        let qualifiers = self.param.deserializer.type_qualifiers();
-        let maybe_secret = if qualifiers.is_secret() {
-            format!("{SECRET}secret{SECRET:#} ")
-        } else {
-            String::new()
-        };
-        let kind = self.param.expecting;
-        let ty = format!(
-            "{maybe_secret}{kind} {DIMMED}[Rust: {}]{DIMMED:#}",
-            self.param.rust_type.name_in_code()
-        );
-
-        let description = if let Some(description) = qualifiers.description() {
-            format!("; {description}")
-        } else {
-            String::new()
-        };
-        let unit = if let Some(unit) = qualifiers.unit() {
-            format!("; unit: {UNIT}{unit}{UNIT:#}")
-        } else {
-            String::new()
-        };
-        writeln!(
-            writer,
-            "{INDENT}{FIELD}Type{FIELD:#}: {ty}{description}{unit}"
-        )?;
+        let description = self.param.type_description();
+        write_type_description(writer, "Type", 2, self.param.expecting, &description)?;
 
         if let Some(default) = self.param.default_value() {
             writeln!(
@@ -104,4 +83,50 @@ impl ParamRef<'_> {
         }
         Ok(())
     }
+}
+
+fn write_type_description(
+    writer: &mut impl io::Write,
+    relation_to_parent: &str,
+    indent: usize,
+    expecting: BasicTypes,
+    description: &TypeDescription,
+) -> io::Result<()> {
+    let maybe_secret = if description.contains_secrets() {
+        format!("{SECRET}secret{SECRET:#} ")
+    } else {
+        String::new()
+    };
+    let ty = format!(
+        "{maybe_secret}{expecting} {DIMMED}[Rust: {}]{DIMMED:#}",
+        description.rust_type()
+    );
+
+    let details = if let Some(details) = description.details() {
+        format!("; {details}")
+    } else {
+        String::new()
+    };
+    let unit = if let Some(unit) = description.unit() {
+        format!("; unit: {UNIT}{unit}{UNIT:#}")
+    } else {
+        String::new()
+    };
+    writeln!(
+        writer,
+        "{:>indent$}{FIELD}{relation_to_parent}{FIELD:#}: {ty}{details}{unit}",
+        ""
+    )?;
+
+    if let Some((expecting, item)) = description.items() {
+        write_type_description(writer, "Array items", indent + 2, expecting, item)?;
+    }
+    if let Some((expecting, key)) = description.keys() {
+        write_type_description(writer, "Map keys", indent + 2, expecting, key)?;
+    }
+    if let Some((expecting, value)) = description.values() {
+        write_type_description(writer, "Map values", indent + 2, expecting, value)?;
+    }
+
+    Ok(())
 }

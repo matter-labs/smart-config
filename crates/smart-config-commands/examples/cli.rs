@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt,
+    num::NonZeroU32,
     path::PathBuf,
     time::Duration,
 };
@@ -58,6 +59,9 @@ pub struct NestedConfig {
     pub complex: ComplexParam,
     #[config(default, alias = "timeouts", with = de::Delimited(","))]
     pub more_timeouts: Vec<Duration>,
+    /// Can be deserialized either from a map or an array of tuples.
+    #[config(default, with = de::Entries::WELL_KNOWN.named("method", "rps"))]
+    pub method_limits: HashMap<String, NonZeroU32>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -127,6 +131,11 @@ test:
       array: [1, 2]
       map:
         value: 25
+    method_limits:
+      - method: eth_getLogs
+        rps: 100
+      - method: eth_blockNumber
+        rps: 3
   funding:
     address: "0x0000000000000000000000000000000000001234"
     balance: "0x123456"
@@ -162,6 +171,7 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
                 ("BOGUS_TEST_TIMEOUT_SEC", "what?"),
                 ("BOGUS_TEST_NESTED_TIMEOUTS", "nope,124us"),
                 ("BOGUS_TEST_NESTED_COMPLEX", r#"{ "array": [1, true] }"#),
+                ("BOGUS_TEST_NESTED_METHOD_LIMITS", r#"{ "eth_getLogs": 0 }"#),
                 ("BOGUS_TEST_CACHE_SIZE", "128 MiBis"),
                 ("BOGUS_TEST_FUNDING_SECRET_KEY", "not a key"),
             ],
