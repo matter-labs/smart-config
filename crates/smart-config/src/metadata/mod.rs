@@ -2,7 +2,10 @@
 
 use std::{any, borrow::Cow, fmt};
 
-use crate::de::{DeserializeParam, _private::ErasedDeserializer};
+use crate::{
+    alt::ProvideValue,
+    de::{DeserializeParam, _private::ErasedDeserializer},
+};
 
 #[cfg(test)]
 mod tests;
@@ -41,6 +44,8 @@ pub struct ParamMetadata {
     pub deserializer: &'static dyn ErasedDeserializer,
     #[doc(hidden)] // implementation detail
     pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
+    #[doc(hidden)]
+    pub alt: Option<&'static dyn ProvideValue>,
 }
 
 impl ParamMetadata {

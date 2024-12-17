@@ -300,6 +300,7 @@ pub use self::{
     types::ByteSize,
 };
 
+pub mod alt;
 pub mod de;
 mod error;
 pub mod metadata;

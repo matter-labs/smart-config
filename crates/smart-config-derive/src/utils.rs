@@ -125,6 +125,7 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
     pub(crate) default: Option<DefaultValue>,
+    pub(crate) alt: Option<Expr>,
     pub(crate) flatten: bool,
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
@@ -138,6 +139,7 @@ impl ConfigFieldAttrs {
         let mut rename = None;
         let mut aliases = vec![];
         let mut default = None;
+        let mut alt = None;
         let mut nested_span = None;
         let mut flatten_span = None;
         let mut with = None;
@@ -159,6 +161,9 @@ impl ConfigFieldAttrs {
                     Ok(())
                 } else if meta.path.is_ident("default_t") {
                     default = Some(DefaultValue::Expr(meta.value()?.parse()?));
+                    Ok(())
+                } else if meta.path.is_ident("alt") {
+                    alt = Some(meta.value()?.parse::<Expr>()?);
                     Ok(())
                 } else if meta.path.is_ident("flatten") {
                     flatten_span = Some(meta.path.span());
@@ -190,6 +195,11 @@ impl ConfigFieldAttrs {
             let msg = "cannot specify `with` for a `nest`ed / `flatten`ed configuration";
             return Err(syn::Error::new(with.span(), msg));
         }
+        if let (Some(alt), true) = (&alt, nest) {
+            let msg = "cannot specify `alt` for a `nest`ed / `flatten`ed configuration";
+            return Err(syn::Error::new(alt.span(), msg));
+        }
+
         if let (Some(flatten_span), Some(_)) = (flatten_span, &rename) {
             let msg = "`rename` attribute is useless for flattened configs; did you mean to make a config nested?";
             return Err(syn::Error::new(flatten_span, msg));
@@ -211,6 +221,7 @@ impl ConfigFieldAttrs {
             rename,
             aliases,
             default,
+            alt,
             flatten,
             nest,
             with,
