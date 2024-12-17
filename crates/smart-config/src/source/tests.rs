@@ -17,6 +17,7 @@ use crate::{
         DefaultingConfig, EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum,
         ValueCoercingConfig,
     },
+    value::StrValue,
     ByteSize, DescribeConfig,
 };
 
@@ -983,21 +984,21 @@ fn nesting_with_duration_param_errors() {
     let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR_SEC", "what")]);
     let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
     let err = assert_error(&err);
-    assert_matches!(err.origin(), ValueOrigin::Path { path, ..} if path == "LONG_DUR_SEC");
+    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "LONG_DUR_SEC");
     let inner = err.inner().to_string();
     assert!(inner.contains("what"), "{inner}");
 
     let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR_WHAT", "123")]);
     let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
     let err = assert_error(&err);
-    assert_matches!(err.origin(), ValueOrigin::Path { path, ..} if path == "LONG_DUR_WHAT");
+    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "LONG_DUR_WHAT");
     let inner = err.inner().to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
 
     let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR", "123 years")]);
     let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
     let err = assert_error(&err);
-    assert_matches!(err.origin(), ValueOrigin::Path { path, ..} if path == "LONG_DUR");
+    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "LONG_DUR");
     let inner = err.inner().to_string();
     assert!(inner.contains("expected duration unit"), "{inner}");
 

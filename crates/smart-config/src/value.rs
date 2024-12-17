@@ -154,7 +154,75 @@ pub enum Value {
     Object(Map),
 }
 
-// TODO: add more conversions
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl PartialEq<bool> for Value {
+    fn eq(&self, other: &bool) -> bool {
+        match self {
+            Self::Bool(val) => val == other,
+            _ => false,
+        }
+    }
+}
+
+impl From<serde_json::Number> for Value {
+    fn from(value: serde_json::Number) -> Self {
+        Self::Number(value)
+    }
+}
+
+impl PartialEq<serde_json::Number> for Value {
+    fn eq(&self, other: &serde_json::Number) -> bool {
+        match self {
+            Self::Number(num) => num == other,
+            _ => false,
+        }
+    }
+}
+
+macro_rules! impl_traits_for_number {
+    ($num:ty) => {
+        impl From<$num> for Value {
+            fn from(value: $num) -> Self {
+                Self::Number(value.into())
+            }
+        }
+
+        impl PartialEq<$num> for Value {
+            fn eq(&self, other: &$num) -> bool {
+                match self {
+                    Self::Number(num) => *num == (*other).into(),
+                    _ => false,
+                }
+            }
+        }
+    };
+}
+
+impl_traits_for_number!(u64);
+impl_traits_for_number!(i64);
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Self::String(StrValue::Plain(value))
+    }
+}
+
+impl From<Vec<WithOrigin>> for Value {
+    fn from(array: Vec<WithOrigin>) -> Self {
+        Self::Array(array)
+    }
+}
+
+impl From<Map> for Value {
+    fn from(map: Map) -> Self {
+        Self::Object(map)
+    }
+}
 
 impl Value {
     pub(crate) fn is_supported_by(&self, types: BasicTypes) -> bool {
@@ -174,6 +242,14 @@ impl Value {
             }
             Self::Array(_) => types.contains(BasicTypes::ARRAY),
             Self::Object(_) => types.contains(BasicTypes::OBJECT),
+        }
+    }
+
+    /// Attempts to convert this value to a plain (non-secret) string.
+    pub fn as_plain_str(&self) -> Option<&str> {
+        match self {
+            Self::String(StrValue::Plain(s)) => Some(s),
+            _ => None,
         }
     }
 

@@ -322,12 +322,12 @@ impl WithOrigin {
             // we do nothing.
             BasicTypes::BOOL => {
                 if let Ok(bool_value) = str.parse::<bool>() {
-                    return Some(Self::new(Value::Bool(bool_value), self.origin.clone()));
+                    return Some(Self::new(bool_value.into(), self.origin.clone()));
                 }
             }
             BasicTypes::INTEGER | BasicTypes::FLOAT => {
                 if let Ok(number) = str.parse::<serde_json::Number>() {
-                    return Some(Self::new(Value::Number(number), self.origin.clone()));
+                    return Some(Self::new(number.into(), self.origin.clone()));
                 }
             }
 

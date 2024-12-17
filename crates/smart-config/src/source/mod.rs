@@ -11,7 +11,7 @@ use crate::{
     de::{DeserializeContext, DeserializerOptions},
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
-    value::{Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin},
+    value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, DeserializeConfigError, ParseError, ParseErrors,
 };
 
@@ -558,7 +558,7 @@ impl WithOrigin {
         };
 
         for (key, value) in kvs {
-            let value = Self::new(Value::String(StrValue::Plain(value.inner)), value.origin);
+            let value = Self::new(value.inner.into(), value.origin);
 
             // Get all params with full paths matching a prefix of `key` split on one of `_`s. E.g.,
             // for `key = "very_long_prefix_value"`, we'll try "very_long_prefix_value", "very_long_prefix", ..., "very".

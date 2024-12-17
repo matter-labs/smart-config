@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Context;
 
 use super::{ConfigContents, ConfigSource};
-use crate::value::{FileFormat, Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin};
+use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// YAML-based configuration source.
 #[derive(Debug)]
@@ -62,9 +62,9 @@ impl Yaml {
     ) -> anyhow::Result<WithOrigin> {
         let inner = match value {
             serde_yaml::Value::Null => Value::Null,
-            serde_yaml::Value::Bool(value) => Value::Bool(value),
+            serde_yaml::Value::Bool(value) => value.into(),
             serde_yaml::Value::Number(value) => Value::Number(Self::map_number(&value, &path)?),
-            serde_yaml::Value::String(value) => Value::String(StrValue::Plain(value)),
+            serde_yaml::Value::String(value) => value.into(),
             serde_yaml::Value::Sequence(items) => Value::Array(
                 items
                     .into_iter()
@@ -115,6 +115,7 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::*;
+    use crate::value::StrValue;
 
     const YAML_CONFIG: &str = r#"
 bool: true

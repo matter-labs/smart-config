@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{ConfigContents, ConfigSource};
-use crate::value::{FileFormat, Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin};
+use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// JSON-based configuration source.
 #[derive(Debug)]
@@ -81,9 +81,9 @@ impl Json {
         path: String,
     ) -> WithOrigin {
         let inner = match value {
-            serde_json::Value::Bool(value) => Value::Bool(value),
-            serde_json::Value::Number(value) => Value::Number(value),
-            serde_json::Value::String(value) => Value::String(StrValue::Plain(value)),
+            serde_json::Value::Bool(value) => value.into(),
+            serde_json::Value::Number(value) => value.into(),
+            serde_json::Value::String(value) => value.into(),
             serde_json::Value::Null => Value::Null,
             serde_json::Value::Array(values) => Value::Array(
                 values
@@ -139,7 +139,7 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::*;
-    use crate::testonly::extract_json_name;
+    use crate::{testonly::extract_json_name, value::StrValue};
 
     #[test]
     fn creating_json_config() {

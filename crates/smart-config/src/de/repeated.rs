@@ -254,7 +254,7 @@ where
         let mut has_errors = false;
         let items = map.iter().filter_map(|(key, value)| {
             let key_as_value = WithOrigin::new(
-                Value::String(StrValue::Plain(key.clone())),
+                key.clone().into(),
                 Arc::new(ValueOrigin::Synthetic {
                     source: map_origin.clone(),
                     transform: "string key".into(),

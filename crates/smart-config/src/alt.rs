@@ -23,7 +23,7 @@ use std::{cell::RefCell, collections::HashMap, env, fmt, sync::Arc};
 
 use crate::{
     source::ConfigContents,
-    value::{Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin},
+    value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     ConfigSchema, ConfigSource,
 };
 
@@ -124,12 +124,11 @@ impl AltSource for Env {
             .with(|cell| cell.borrow().get(self.0).cloned())
             .or_else(|| env::var(self.0).ok());
         if let Some(value) = value {
-            let value = Value::String(StrValue::Plain(value));
             let origin = ValueOrigin::Path {
                 source: Arc::new(ValueOrigin::EnvVars),
                 path: self.0.into(),
             };
-            Some(WithOrigin::new(value, Arc::new(origin)))
+            Some(WithOrigin::new(value.into(), Arc::new(origin)))
         } else {
             None
         }
