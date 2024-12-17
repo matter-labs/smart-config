@@ -275,7 +275,8 @@ pub struct WithOrigin<T = Value> {
 }
 
 impl<T> WithOrigin<T> {
-    pub(crate) fn new(inner: T, origin: Arc<ValueOrigin>) -> Self {
+    /// Creates a new value with origin.
+    pub fn new(inner: T, origin: Arc<ValueOrigin>) -> Self {
         Self { inner, origin }
     }
 

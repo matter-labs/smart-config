@@ -29,8 +29,9 @@ use crate::{
 
 /// Alternative source of a configuration param.
 pub trait AltSource: 'static + Send + Sync + fmt::Debug + fmt::Display {
-    /// Potentially provides a value for the param. Should return `None` (vs `Some(Value::Null)` etc.)
-    /// if the source doesn't have a value.
+    /// Potentially provides a value for the param.
+    ///
+    /// Implementations should return `None` (vs `Some(Value::Null)` etc.) if the source doesn't have a value.
     fn provide_value(&self) -> Option<WithOrigin>;
 }
 
@@ -90,7 +91,7 @@ impl Drop for MockEnvGuard {
 /// struct TestConfig {
 ///     /// Log directives. Always read from `RUST_LOG` env var in addition to
 ///     /// the conventional sources.
-///     #[config(default_t = "info", alt = &alt::Env("RUST_LOG"))]
+///     #[config(default_t = "info".into(), alt = &alt::Env("RUST_LOG"))]
 ///     log_directives: String,
 /// }
 ///
@@ -118,12 +119,18 @@ impl fmt::Display for Env {
     }
 }
 
+impl Env {
+    /// Gets the raw string value of the env var, taking [mock vars](MockEnvGuard) into account.
+    pub fn get_raw(&self) -> Option<String> {
+        MOCK_ENV_VARS
+            .with(|cell| cell.borrow().get(self.0).cloned())
+            .or_else(|| env::var(self.0).ok())
+    }
+}
+
 impl AltSource for Env {
     fn provide_value(&self) -> Option<WithOrigin> {
-        let value = MOCK_ENV_VARS
-            .with(|cell| cell.borrow().get(self.0).cloned())
-            .or_else(|| env::var(self.0).ok());
-        if let Some(value) = value {
+        if let Some(value) = self.get_raw() {
             let origin = ValueOrigin::Path {
                 source: Arc::new(ValueOrigin::EnvVars),
                 path: self.0.into(),
@@ -139,7 +146,37 @@ impl AltSource for Env {
 ///
 /// # Examples
 ///
-/// FIXME: example
+/// ```
+/// # use std::sync::Arc;
+/// use smart_config::{
+///     alt, testing, value::{ValueOrigin, WithOrigin},
+///     DescribeConfig, DeserializeConfig,
+/// };
+///
+/// // Value source combining two env variables. It usually makes sense to split off
+/// // the definition like this so that it's more readable.
+/// const COMBINED_VARS: &'static dyn alt::AltSource =
+///     &alt::Custom::new("$TEST_ENV - $TEST_NETWORK", || {
+///         let env = alt::Env("TEST_ENV").get_raw()?;
+///         let network = alt::Env("TEST_NETWORK").get_raw()?;
+///         let origin = Arc::new(ValueOrigin::EnvVars);
+///         Some(WithOrigin::new(format!("{env} - {network}").into(), origin))
+///     });
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default_t = "app".into(), alt = COMBINED_VARS)]
+///     app: String,
+/// }
+///
+/// let _guard = alt::MockEnvGuard::new([
+///     ("TEST_ENV", "stage"),
+///     ("TEST_NETWORK", "goerli"),
+/// ]);
+/// let config: TestConfig = testing::test(smart_config::config!())?;
+/// assert_eq!(config.app, "stage - goerli");
+/// # anyhow::Ok(())
+/// ```
 #[derive(Debug)]
 pub struct Custom {
     description: &'static str,
