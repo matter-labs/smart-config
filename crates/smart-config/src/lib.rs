@@ -69,8 +69,7 @@
 //!     pub tracing: bool,
 //! }
 //!
-//! let mut schema = ConfigSchema::default();
-//! schema.insert(&TestConfig::DESCRIPTION, "test")?;
+//! let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
 //! // Assume we use two config sources: a YAML file and env vars,
 //! // the latter having higher priority.
 //! let yaml = r"
@@ -303,7 +302,10 @@ pub use self::{
     de::DeserializeConfig,
     error::{DeserializeConfigError, ParseError, ParseErrors},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
-    source::{ConfigParser, ConfigRepository, ConfigSource, Environment, Json, SourceInfo, Yaml},
+    source::{
+        ConfigParser, ConfigRepository, ConfigSource, ConfigSources, Environment, Json, SourceInfo,
+        Yaml,
+    },
     types::ByteSize,
 };
 

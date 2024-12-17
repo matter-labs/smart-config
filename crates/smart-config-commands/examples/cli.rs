@@ -200,9 +200,7 @@ enum Cli {
 
 fn main() {
     let cli = Cli::parse();
-
-    let mut schema = ConfigSchema::default();
-    schema.insert(&TestConfig::DESCRIPTION, "test").unwrap();
+    let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
 
     match cli {
         Cli::Print { filter } => {

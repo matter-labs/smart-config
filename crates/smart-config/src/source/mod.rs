@@ -24,7 +24,7 @@ mod tests;
 mod yaml;
 
 /// Contents of a [`ConfigSource`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum ConfigContents {
     /// Key–value / flat configuration.
@@ -41,7 +41,21 @@ pub trait ConfigSource {
     fn into_contents(self) -> ConfigContents;
 }
 
-/// Information about a source returned from [].
+/// Prioritized list of configuration sources. Can be used to push multiple sources at once
+/// into a [`ConfigRepository`].
+#[derive(Debug, Clone, Default)]
+pub struct ConfigSources {
+    inner: Vec<(Arc<ValueOrigin>, ConfigContents)>,
+}
+
+impl ConfigSources {
+    /// Pushes a configuration source at the end of the list.
+    pub fn push(&mut self, source: impl ConfigSource) {
+        self.inner.push((source.origin(), source.into_contents()));
+    }
+}
+
+/// Information about a source returned from [`ConfigRepository::sources()`].
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct SourceInfo {
@@ -155,8 +169,12 @@ impl<'a> ConfigRepository<'a> {
     /// Extends this environment with a new configuration source.
     #[must_use]
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
-        let source_origin = source.origin();
-        let mut source_value = match source.into_contents() {
+        self.insert_inner(source.origin(), source.into_contents());
+        self
+    }
+
+    fn insert_inner(&mut self, source_origin: Arc<ValueOrigin>, contents: ConfigContents) {
+        let mut source_value = match contents {
             ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &source_origin),
             ConfigContents::Hierarchical(map) => WithOrigin {
                 inner: Value::Object(map),
@@ -172,6 +190,14 @@ impl<'a> ConfigRepository<'a> {
             origin: source_origin,
             param_count,
         });
+    }
+
+    ///  Extends this environment with a multiple configuration sources.
+    #[must_use]
+    pub fn with_all(mut self, sources: ConfigSources) -> Self {
+        for (source_origin, contents) in sources.inner {
+            self.insert_inner(source_origin, contents);
+        }
         self
     }
 

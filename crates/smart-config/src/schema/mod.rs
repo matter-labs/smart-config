@@ -124,6 +124,15 @@ pub struct ConfigSchema {
 }
 
 impl ConfigSchema {
+    /// Creates a schema consisting of a single configuration at the specified prefix.
+    #[allow(clippy::missing_panics_doc)]
+    pub fn new(metadata: &'static ConfigMetadata, prefix: &'static str) -> Self {
+        let mut this = Self::default();
+        this.insert(metadata, prefix)
+            .expect("internal error: failed inserting first config to the schema");
+        this
+    }
+
     /// Iterates over all configs with their canonical prefixes.
     pub(crate) fn iter_ll(&self) -> impl Iterator<Item = (Pointer<'_>, &ConfigData)> + '_ {
         self.configs
