@@ -7,6 +7,7 @@ use std::{
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
+    alt::Alternatives,
     de::{DeserializeContext, DeserializerOptions},
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
@@ -124,7 +125,7 @@ impl<'a> ConfigRepository<'a> {
             .chain([Pointer("")])
             .collect();
 
-        Self {
+        let this = Self {
             schema,
             prefixes_for_canonical_configs,
             de_options: DeserializerOptions::default(),
@@ -133,6 +134,11 @@ impl<'a> ConfigRepository<'a> {
                 inner: Value::Object(Map::default()),
                 origin: Arc::default(),
             },
+        };
+        if let Some(alternatives) = Alternatives::new(schema) {
+            this.with(alternatives)
+        } else {
+            this
         }
     }
 
@@ -353,52 +359,6 @@ impl WithOrigin {
         s.strip_prefix(prefix)?
             .strip_prefix('_')
             .filter(|suffix| !suffix.is_empty())
-    }
-
-    /// Ensures that there is an object (possibly empty) at the specified location.
-    fn ensure_object(
-        &mut self,
-        at: Pointer<'_>,
-        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
-    ) -> &mut Map {
-        for ancestor_path in at.with_ancestors() {
-            self.ensure_object_step(ancestor_path, &mut create_origin);
-        }
-
-        let Value::Object(map) = &mut self.get_mut(at).unwrap().inner else {
-            unreachable!(); // Ensured by calls above
-        };
-        map
-    }
-
-    fn ensure_object_step(
-        &mut self,
-        at: Pointer<'_>,
-        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
-    ) {
-        let Some((parent, last_segment)) = at.split_last() else {
-            // Nothing to do.
-            return;
-        };
-
-        // `unwrap()` is safe since `ensure_object()` is always called for the parent
-        let parent = &mut self.get_mut(parent).unwrap().inner;
-        if !matches!(parent, Value::Object(_)) {
-            *parent = Value::Object(Map::new());
-        }
-        let Value::Object(parent_object) = parent else {
-            unreachable!();
-        };
-
-        if !parent_object.contains_key(last_segment) {
-            parent_object.insert(
-                last_segment.to_owned(),
-                WithOrigin {
-                    inner: Value::Object(Map::new()),
-                    origin: create_origin(at),
-                },
-            );
-        }
     }
 
     /// Wraps secret string values into `Value::SecretString(_)`.

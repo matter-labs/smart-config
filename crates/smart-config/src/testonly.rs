@@ -16,6 +16,8 @@ use secrecy::SecretString;
 use serde::Deserialize;
 
 use crate::{
+    alt,
+    alt::ProvideValue,
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
     metadata::{SizeUnit, TimeUnit},
     source::ConfigContents,
@@ -269,6 +271,22 @@ pub(crate) struct AliasedConfig {
     pub nested: NestedAliasedConfig,
     #[config(flatten)]
     pub flat: NestedAliasedConfig,
+}
+
+const STR_SOURCE: &'static dyn ProvideValue =
+    &alt::Custom::new("filtered 'SMART_CONFIG_STR' env var", || {
+        alt::Env("SMART_CONFIG_STR")
+            .provide_value()
+            .filter(|val| !matches!(&val.inner, Value::String(StrValue::Plain(s)) if s == "unset"))
+    });
+
+#[derive(DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ConfigWithAlternatives {
+    #[config(default_t = 42, alt = &alt::Env("SMART_CONFIG_INT"))]
+    pub int: u32,
+    #[config(alt = STR_SOURCE)]
+    pub str: Option<SecretString>,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {

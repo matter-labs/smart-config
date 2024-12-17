@@ -38,6 +38,8 @@ pub enum ValueOrigin {
     Unknown,
     /// Environment variables.
     EnvVars,
+    /// Alternative values for config params.
+    Alternatives,
     /// File source.
     File {
         /// Filename; may not correspond to a real filesystem path.
@@ -66,6 +68,7 @@ impl fmt::Display for ValueOrigin {
         match self {
             Self::Unknown => formatter.write_str("unknown"),
             Self::EnvVars => formatter.write_str("env variables"),
+            Self::Alternatives => formatter.write_str("alternatives"),
             Self::File { name, format } => {
                 write!(formatter, "{format} file '{name}'")
             }
@@ -151,6 +154,8 @@ pub enum Value {
     Object(Map),
 }
 
+// TODO: add more conversions
+
 impl Value {
     pub(crate) fn is_supported_by(&self, types: BasicTypes) -> bool {
         match self {
@@ -230,6 +235,52 @@ impl WithOrigin {
                 Value::Array(array) => array.get_mut(segment.parse::<usize>().ok()?),
                 _ => None,
             })
+    }
+
+    /// Ensures that there is an object (possibly empty) at the specified location.
+    pub(crate) fn ensure_object(
+        &mut self,
+        at: Pointer<'_>,
+        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
+    ) -> &mut Map {
+        for ancestor_path in at.with_ancestors() {
+            self.ensure_object_step(ancestor_path, &mut create_origin);
+        }
+
+        let Value::Object(map) = &mut self.get_mut(at).unwrap().inner else {
+            unreachable!(); // Ensured by calls above
+        };
+        map
+    }
+
+    fn ensure_object_step(
+        &mut self,
+        at: Pointer<'_>,
+        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
+    ) {
+        let Some((parent, last_segment)) = at.split_last() else {
+            // Nothing to do.
+            return;
+        };
+
+        // `unwrap()` is safe since `ensure_object()` is always called for the parent
+        let parent = &mut self.get_mut(parent).unwrap().inner;
+        if !matches!(parent, Value::Object(_)) {
+            *parent = Value::Object(Map::new());
+        }
+        let Value::Object(parent_object) = parent else {
+            unreachable!();
+        };
+
+        if !parent_object.contains_key(last_segment) {
+            parent_object.insert(
+                last_segment.to_owned(),
+                WithOrigin {
+                    inner: Value::Object(Map::new()),
+                    origin: create_origin(at),
+                },
+            );
+        }
     }
 
     /// Deep-merges self and `other`, with `other` having higher priority. Only objects are meaningfully merged;

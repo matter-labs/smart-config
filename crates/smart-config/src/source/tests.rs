@@ -8,12 +8,14 @@ use secrecy::ExposeSecret;
 
 use super::*;
 use crate::{
+    alt::MockEnvGuard,
     metadata::SizeUnit,
     testing,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, AliasedConfig, ComposedConfig,
-        CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, EnumConfig,
-        KvTestConfig, NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
+        CompoundConfig, ConfigWithAlternatives, ConfigWithComplexTypes, ConfigWithNesting,
+        DefaultingConfig, EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum,
+        ValueCoercingConfig,
     },
     ByteSize, DescribeConfig,
 };
@@ -1268,4 +1270,51 @@ fn aliasing_for_nested_config() {
     let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.int, 777);
     assert_eq!(config.nested.str, "!");
+}
+
+#[test]
+fn reading_alternatives() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .insert(&ConfigWithAlternatives::DESCRIPTION, "test")
+        .unwrap();
+
+    let repo = ConfigRepository::new(&schema);
+    assert!(repo.sources().is_empty());
+    let config: ConfigWithAlternatives = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 42);
+    assert!(config.str.is_none());
+
+    let guard = MockEnvGuard::new([
+        ("SMART_CONFIG_INT", "23"),
+        ("SMART_CONFIG_STR", "correct horse"),
+    ]);
+    let repo = ConfigRepository::new(&schema);
+    assert_eq!(repo.sources().len(), 1);
+    assert_matches!(repo.sources()[0].origin.as_ref(), ValueOrigin::Alternatives);
+    assert_eq!(repo.sources()[0].param_count, 2);
+    drop(guard);
+
+    assert_matches!(
+        &repo.merged().get(Pointer("test.int")).unwrap().inner,
+        Value::String(StrValue::Plain(s)) if s == "23"
+    );
+    assert_matches!(
+        &repo.merged().get(Pointer("test.str")).unwrap().inner,
+        Value::String(StrValue::Secret(_))
+    );
+
+    let config: ConfigWithAlternatives = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.int, 23);
+    assert_eq!(config.str.unwrap().expose_secret(), "correct horse");
+
+    // Mock env vars are read in `test::*` methods as well
+    let _guard = MockEnvGuard::new([("SMART_CONFIG_INT", "23"), ("SMART_CONFIG_STR", "unset")]);
+    let config: ConfigWithAlternatives = testing::test(config!()).unwrap();
+    assert_eq!(config.int, 23);
+    assert!(config.str.is_none());
+
+    let config: ConfigWithAlternatives = testing::test(config!("int": 555)).unwrap();
+    assert_eq!(config.int, 555);
+    assert!(config.str.is_none());
 }
