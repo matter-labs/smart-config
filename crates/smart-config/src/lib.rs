@@ -192,8 +192,8 @@
 ///
 /// **Type:** string
 ///
-/// Have the same meaning as in `serde`; i.e. allow to rename / specify additional names for the param.
-/// Param names are [validated](#validations) in compile time.
+/// Have the same meaning as in `serde`; i.e. allow to rename / specify additional names for the param or a nested config.
+/// Names are [validated](#validations) in compile time.
 ///
 /// ## `default`
 ///
@@ -207,6 +207,13 @@
 /// **Type:** expression with param type
 ///
 /// Allows to specify the default typed value for the param. The provided expression doesn't need to be constant.
+///
+/// ## `alt`
+///
+/// **Type:** constant expression evaluating to `&'static dyn `[`AltSource`](alt::AltSource)
+///
+/// Allows to provide an alternative source for the param. See the [`alt`] module docs for the discussion of alternatives
+/// and intended use cases.
 ///
 /// ## `with`
 ///

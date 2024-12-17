@@ -1,6 +1,23 @@
-//! Alternative value sources.
-
-#![allow(missing_docs)] // FIXME
+//! Alternative [`Value`] sources.
+//!
+//! # Motivation and use cases
+//!
+//! Some configuration params may be sourced from places that do not fit well into the hierarchical config schema.
+//! For example, a config param with logging directives may want to read from a `RUST_LOG` env var, regardless of where
+//! the param is placed in the hierarchy. It is possible to manually move raw config values around, it may get unmaintainable
+//! for large configs.
+//!
+//! *Alternatives* provide a more sound approach: declare the alternative config sources as a part of the [`DescribeConfig`](macro@crate::DescribeConfig)
+//! derive macro. In this way, alternatives are documented (being a part of the config metadata)
+//! and do not require splitting logic between config declaration and preparing config sources.
+//!
+//! Alternatives should be used sparingly, since they make it more difficult to reason about configs due to their non-local nature.
+//!
+//! # Features and limitations
+//!
+//! - By design, alternatives are location-independent. E.g., an [`Env`] alternative will always read from the same env var,
+//!   regardless of where the param containing it is placed (including the case when it has multiple copies!).
+//! - Alternatives always have lower priority than all other config sources.
 
 use std::{cell::RefCell, collections::HashMap, env, fmt, sync::Arc};
 
@@ -10,7 +27,10 @@ use crate::{
     ConfigSchema, ConfigSource,
 };
 
-pub trait ProvideValue: 'static + Send + Sync + fmt::Debug + fmt::Display {
+/// Alternative source of a configuration param.
+pub trait AltSource: 'static + Send + Sync + fmt::Debug + fmt::Display {
+    /// Potentially provides a value for the param. Should return `None` (vs `Some(Value::Null)` etc.)
+    /// if the source doesn't have a value.
     fn provide_value(&self) -> Option<WithOrigin>;
 }
 
@@ -18,10 +38,20 @@ thread_local! {
     static MOCK_ENV_VARS: RefCell<HashMap<String, String>> = RefCell::default();
 }
 
+/// Thread-local guard for mock env variables read by the [`Env`] value provider.
+///
+/// While a guard is active, all vars defined [when creating it](Self::new()) will be used in place of
+/// the corresponding env vars.
+///
+/// # Examples
+///
+/// See [`Env`] for the examples of usage.
 #[derive(Debug)]
 pub struct MockEnvGuard(());
 
 impl MockEnvGuard {
+    /// Creates a guard that defines the specified env vars.
+    ///
     /// # Panics
     ///
     /// Panics if another guard is active for the same thread.
@@ -47,6 +77,38 @@ impl Drop for MockEnvGuard {
     }
 }
 
+/// Gets a string value from the specified env variable.
+///
+/// This source is aware of mock env vars provided via [`MockEnvGuard`].
+///
+/// # Examples
+///
+/// ```
+/// use smart_config::{alt, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     /// Log directives. Always read from `RUST_LOG` env var in addition to
+///     /// the conventional sources.
+///     #[config(default_t = "info", alt = &alt::Env("RUST_LOG"))]
+///     log_directives: String,
+/// }
+///
+/// let config: TestConfig = testing::test(smart_config::config!())?;
+/// // Without env var set or other sources, the param will assume the default value.
+/// assert_eq!(config.log_directives, "info");
+///
+/// let _guard = alt::MockEnvGuard::new([("RUST_LOG", "warn")]);
+/// let config: TestConfig = testing::test(smart_config::config!())?;
+/// assert_eq!(config.log_directives, "warn");
+///
+/// // Mock env vars are still set here, but alternatives have lower priority
+/// // than other sources.
+/// let input = smart_config::config!("log_directives": "info,my_crate=debug");
+/// let config: TestConfig = testing::test(input)?;
+/// assert_eq!(config.log_directives, "info,my_crate=debug");
+/// # anyhow::Ok(())
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct Env(pub &'static str);
 
@@ -56,7 +118,7 @@ impl fmt::Display for Env {
     }
 }
 
-impl ProvideValue for Env {
+impl AltSource for Env {
     fn provide_value(&self) -> Option<WithOrigin> {
         let value = MOCK_ENV_VARS
             .with(|cell| cell.borrow().get(self.0).cloned())
@@ -74,6 +136,11 @@ impl ProvideValue for Env {
     }
 }
 
+/// Custom [value provider](AltSource).
+///
+/// # Examples
+///
+/// FIXME: example
 #[derive(Debug)]
 pub struct Custom {
     description: &'static str,
@@ -81,6 +148,7 @@ pub struct Custom {
 }
 
 impl Custom {
+    /// Creates a provider with the specified human-readable description and a getter function.
     pub const fn new(description: &'static str, getter: fn() -> Option<WithOrigin>) -> Self {
         Self {
             description,
@@ -95,7 +163,7 @@ impl fmt::Display for Custom {
     }
 }
 
-impl ProvideValue for Custom {
+impl AltSource for Custom {
     fn provide_value(&self) -> Option<WithOrigin> {
         (self.getter)()
     }

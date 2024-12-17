@@ -17,7 +17,7 @@ use serde::Deserialize;
 
 use crate::{
     alt,
-    alt::ProvideValue,
+    alt::AltSource,
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
     metadata::{SizeUnit, TimeUnit},
     source::ConfigContents,
@@ -273,7 +273,7 @@ pub(crate) struct AliasedConfig {
     pub flat: NestedAliasedConfig,
 }
 
-const STR_SOURCE: &'static dyn ProvideValue =
+const STR_SOURCE: &'static dyn AltSource =
     &alt::Custom::new("filtered 'SMART_CONFIG_STR' env var", || {
         alt::Env("SMART_CONFIG_STR")
             .provide_value()
