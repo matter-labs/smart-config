@@ -212,6 +212,7 @@ pub(crate) struct Alternatives {
 }
 
 impl Alternatives {
+    #[tracing::instrument(level = "debug", name = "Alternatives::new", skip_all)]
     pub(crate) fn new(schema: &ConfigSchema) -> Option<Self> {
         let mut inner = HashMap::new();
         for (prefix, config) in schema.iter_ll() {
@@ -220,6 +221,14 @@ impl Alternatives {
                     continue;
                 };
                 if let Some(mut val) = alt.provide_value() {
+                    tracing::trace!(
+                        prefix = prefix.0,
+                        config = ?config.metadata.ty,
+                        param = param.rust_field_name,
+                        provider = ?alt,
+                        "got alternative for param"
+                    );
+
                     let origin = ValueOrigin::Synthetic {
                         source: val.origin.clone(),
                         transform: format!(
@@ -237,6 +246,7 @@ impl Alternatives {
         if inner.is_empty() {
             None
         } else {
+            tracing::debug!(count = inner.len(), "got alternatives for config params");
             Some(Self {
                 inner,
                 origin: Arc::new(ValueOrigin::Alternatives),

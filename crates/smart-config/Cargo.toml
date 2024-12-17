@@ -21,6 +21,7 @@ smart-config-derive.workspace = true
 # Private dependencies (not exposed in public crate APIs).
 compile-fmt.workspace = true
 secrecy.workspace = true
+tracing.workspace = true # TODO: optional?
 
 # As a feature: recognizes types from `primitive-types` as well-known
 primitive-types = { workspace = true, features = ["serde"], optional = true }

@@ -173,6 +173,11 @@ impl<'a> ConfigRepository<'a> {
         self
     }
 
+    #[tracing::instrument(
+        level = "debug",
+        name = "ConfigRepository::insert",
+        skip(self, contents)
+    )]
     fn insert_inner(&mut self, source_origin: Arc<ValueOrigin>, contents: ConfigContents) {
         let mut source_value = match contents {
             ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &source_origin),
@@ -184,6 +189,7 @@ impl<'a> ConfigRepository<'a> {
 
         let param_count =
             source_value.preprocess_source(self.schema, &self.prefixes_for_canonical_configs);
+        tracing::debug!(param_count, "Inserted source into config repo");
         self.merged
             .guided_merge(source_value, self.schema, Pointer(""));
         self.sources.push(SourceInfo {
@@ -306,11 +312,19 @@ impl WithOrigin {
         self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
             let canonical_map = match self.get(prefix).map(|val| &val.inner) {
                 Some(Value::Object(map)) => Some(map),
-                Some(_) => continue, // TODO: log warning
+                Some(_) => {
+                    tracing::warn!(
+                        prefix = prefix.0,
+                        config = ?config_data.metadata.ty,
+                        "canonical config location contains a non-object"
+                    );
+                    continue;
+                }
                 None => None,
             };
 
@@ -355,6 +369,15 @@ impl WithOrigin {
                         }
 
                         if !new_values.contains_key(canonical_key) {
+                            tracing::trace!(
+                                prefix = prefix.0,
+                                config = ?config_data.metadata.ty,
+                                param = param.rust_field_name,
+                                name,
+                                ?origin,
+                                canonical_key,
+                                "copied aliased param"
+                            );
                             new_values.insert(canonical_key.to_owned(), val.clone());
                             if new_map_origin.is_none() {
                                 new_map_origin = origin.cloned();
@@ -407,9 +430,21 @@ impl WithOrigin {
                 };
 
                 if let Value::String(str) = &mut value.inner {
+                    tracing::trace!(
+                        prefix = prefix.0,
+                        config = ?config_data.metadata.ty,
+                        param = param.rust_field_name,
+                        "marked param as secret"
+                    );
                     str.make_secret();
+                } else {
+                    tracing::warn!(
+                        prefix = prefix.0,
+                        config = ?config_data.metadata.ty,
+                        param = param.rust_field_name,
+                        "param marked as secret has non-string value"
+                    );
                 }
-                // TODO: log warning otherwise
             }
         }
     }
@@ -452,6 +487,7 @@ impl WithOrigin {
     /// For example, we have an object param at `test.param` and a source with a value at `test.param_ms`.
     /// This transform will copy this value to `test.param.ms` (i.e., inside the param object), provided that
     /// the source doesn't contain `test.param` or contains an object at this path.
+    #[tracing::instrument(level = "debug", skip_all)]
     fn nest_object_params_and_sub_configs(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
             let Some(config_object) = self.get_mut(prefix) else {
@@ -501,6 +537,14 @@ impl WithOrigin {
                     continue;
                 }
 
+                tracing::trace!(
+                    prefix = prefix.0,
+                    config = ?config_data.metadata.ty,
+                    child_name,
+                    fields = ?matching_fields.iter().map(|(name, _)| name).collect::<Vec<_>>(),
+                    "nesting for object param / config"
+                );
+
                 if !config_object.contains_key(child_name) {
                     let origin = Arc::new(ValueOrigin::Synthetic {
                         source: config_origin.clone(),
@@ -524,6 +568,7 @@ impl WithOrigin {
     ///
     /// For example, we have an array param at `test.param` and a source with values at `test.param_0`, `test.param_1`, `test.param_2`
     /// (and no `test.param`). This transform will copy these values as a 3-element array at `test.param`.
+    #[tracing::instrument(level = "debug", skip_all)]
     fn nest_array_params(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
             let Some(config_object) = self.get_mut(prefix) else {
@@ -560,8 +605,23 @@ impl WithOrigin {
                 };
 
                 if last_idx != matching_fields.len() - 1 {
-                    continue; // Fields are not sequential; TODO: log
+                    tracing::info!(
+                        prefix = prefix.0,
+                        config = ?config_data.metadata.ty,
+                        param = param.rust_field_name,
+                        indexes = ?matching_fields.keys().copied().collect::<Vec<_>>(),
+                        "indexes for array nesting are not sequential"
+                    );
+                    continue;
                 }
+
+                tracing::trace!(
+                    prefix = prefix.0,
+                    config = ?config_data.metadata.ty,
+                    param = param.rust_field_name,
+                    len = matching_fields.len(),
+                    "nesting for array param"
+                );
 
                 let origin = Arc::new(ValueOrigin::Synthetic {
                     source: config_origin.clone(),
@@ -577,6 +637,7 @@ impl WithOrigin {
     /// Nests a flat key–value map into a structured object using the provided `schema`.
     ///
     /// Has complexity `O(kvs.len() * log(n_params))`, which seems about the best possible option if `kvs` is not presorted.
+    #[tracing::instrument(level = "debug", skip_all)]
     fn nest_kvs(kvs: Map<String>, schema: &ConfigSchema, source_origin: &Arc<ValueOrigin>) -> Self {
         let mut dest = Self {
             inner: Value::Object(Map::new()),
@@ -599,6 +660,13 @@ impl WithOrigin {
                 for (param_path, expecting) in schema.params_with_kv_path(key_prefix) {
                     let should_copy = key_prefix == key || expecting.contains(BasicTypes::OBJECT);
                     if should_copy {
+                        tracing::trace!(
+                            param_path = param_path.0,
+                            ?expecting,
+                            key,
+                            key_prefix,
+                            "copied key–value entry"
+                        );
                         dest.copy_kv_entry(source_origin, param_path, &key, value.clone());
                     }
                 }
