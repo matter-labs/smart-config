@@ -137,7 +137,7 @@ impl fmt::Display for StrValue {
 }
 
 /// JSON value with additional origin information.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub enum Value {
     /// `null`.
     #[default]
@@ -152,6 +152,19 @@ pub enum Value {
     Array(Vec<WithOrigin>),
     /// Object / map of values.
     Object(Map),
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Null => formatter.write_str("null"),
+            Self::Bool(value) => fmt::Display::fmt(value, formatter),
+            Self::Number(value) => fmt::Display::fmt(value, formatter),
+            Self::String(value) => fmt::Debug::fmt(value, formatter),
+            Self::Array(array) => formatter.debug_list().entries(array).finish(),
+            Self::Object(map) => formatter.debug_map().entries(map).finish(),
+        }
+    }
 }
 
 impl From<bool> for Value {
