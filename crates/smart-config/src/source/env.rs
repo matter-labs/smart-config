@@ -2,7 +2,7 @@ use std::{env, sync::Arc};
 
 use anyhow::Context as _;
 
-use super::{ConfigContents, ConfigSource};
+use super::ConfigSource;
 use crate::value::{FileFormat, Map, ValueOrigin, WithOrigin};
 
 /// Configuration sourced from environment variables.
@@ -117,12 +117,10 @@ impl Environment {
 }
 
 impl ConfigSource for Environment {
-    fn origin(&self) -> Arc<ValueOrigin> {
-        self.origin.clone()
-    }
+    type Map = Map<String>;
 
-    fn into_contents(self) -> ConfigContents {
-        ConfigContents::KeyValue(self.map)
+    fn into_contents(self) -> WithOrigin<Self::Map> {
+        WithOrigin::new(self.map, self.origin)
     }
 }
 

@@ -303,8 +303,8 @@ pub use self::{
     error::{DeserializeConfigError, ParseError, ParseErrors},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
     source::{
-        ConfigParser, ConfigRepository, ConfigSource, ConfigSources, Environment, Json, SourceInfo,
-        Yaml,
+        ConfigContents, ConfigParser, ConfigRepository, ConfigSource, ConfigSources, Environment,
+        Json, Prefixed, SourceInfo, Yaml,
     },
     types::ByteSize,
 };

@@ -22,7 +22,6 @@
 use std::{cell::RefCell, collections::HashMap, env, fmt, sync::Arc};
 
 use crate::{
-    source::ConfigContents,
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     ConfigSchema, ConfigSource,
 };
@@ -256,18 +255,17 @@ impl Alternatives {
 }
 
 impl ConfigSource for Alternatives {
-    fn origin(&self) -> Arc<ValueOrigin> {
-        self.origin.clone()
-    }
+    type Map = Map;
 
-    fn into_contents(self) -> ConfigContents {
+    fn into_contents(self) -> WithOrigin<Map> {
         let origin = self.origin;
         let mut map = WithOrigin::new(Value::Object(Map::new()), origin.clone());
         for ((prefix, name), value) in self.inner {
             map.ensure_object(Pointer(&prefix), |_| origin.clone())
                 .insert(name.to_owned(), value);
         }
-        ConfigContents::Hierarchical(match map.inner {
+
+        map.map(|value| match value {
             Value::Object(map) => map,
             _ => unreachable!(),
         })

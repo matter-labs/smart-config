@@ -33,25 +33,80 @@ pub enum ConfigContents {
     Hierarchical(Map),
 }
 
+impl From<Map> for ConfigContents {
+    fn from(map: Map) -> Self {
+        Self::Hierarchical(map)
+    }
+}
+
+impl From<Map<String>> for ConfigContents {
+    fn from(map: Map<String>) -> Self {
+        Self::KeyValue(map)
+    }
+}
+
 /// Source of configuration parameters that can be added to a [`ConfigRepository`].
 pub trait ConfigSource {
-    /// Returns the origin of the entire source (e.g., [`ValueOrigin::File`] for JSON and YAML files).
-    fn origin(&self) -> Arc<ValueOrigin>;
+    /// Map of values produced by this source.
+    type Map: Into<ConfigContents>;
+
     /// Converts this source into config contents.
-    fn into_contents(self) -> ConfigContents;
+    fn into_contents(self) -> WithOrigin<Self::Map>;
+}
+
+/// Wraps a hierarchical source into a prefix.
+#[derive(Debug, Clone)]
+pub struct Prefixed<T> {
+    inner: T,
+    prefix: String,
+}
+
+impl<T: ConfigSource<Map = Map>> Prefixed<T> {
+    /// Wraps the provided source.
+    pub fn new(inner: T, prefix: impl Into<String>) -> Self {
+        Self {
+            inner,
+            prefix: prefix.into(),
+        }
+    }
+}
+
+impl<T: ConfigSource<Map = Map>> ConfigSource for Prefixed<T> {
+    type Map = Map;
+
+    fn into_contents(self) -> WithOrigin<Self::Map> {
+        let contents = self.inner.into_contents();
+
+        let origin = Arc::new(ValueOrigin::Synthetic {
+            source: contents.origin.clone(),
+            transform: format!("prefixed with `{}`", self.prefix),
+        });
+
+        if let Some((parent, key_in_parent)) = Pointer(&self.prefix).split_last() {
+            let mut root = WithOrigin::new(Value::Object(Map::new()), origin.clone());
+            root.ensure_object(parent, |_| origin.clone())
+                .insert(key_in_parent.to_owned(), contents.map(Value::Object));
+            root.map(|value| match value {
+                Value::Object(map) => map,
+                _ => unreachable!(), // guaranteed by `ensure_object`
+            })
+        } else {
+            contents
+        }
+    }
 }
 
 /// Prioritized list of configuration sources. Can be used to push multiple sources at once
 /// into a [`ConfigRepository`].
 #[derive(Debug, Clone, Default)]
 pub struct ConfigSources {
-    inner: Vec<(Arc<ValueOrigin>, ConfigContents)>,
+    inner: Vec<WithOrigin<ConfigContents>>,
 }
 
 impl ConfigSources {
     /// Pushes a configuration source at the end of the list.
     pub fn push(&mut self, source: impl ConfigSource) {
-        self.inner.push((source.origin(), source.into_contents()));
+        self.inner.push(source.into_contents().map(Into::into));
     }
 }
 
@@ -169,7 +224,7 @@ impl<'a> ConfigRepository<'a> {
     /// Extends this environment with a new configuration source.
     #[must_use]
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
-        self.insert_inner(source.origin(), source.into_contents());
+        self.insert_inner(source.into_contents().map(Into::into));
         self
     }
 
@@ -178,12 +233,12 @@ impl<'a> ConfigRepository<'a> {
         name = "ConfigRepository::insert",
         skip(self, contents)
     )]
-    fn insert_inner(&mut self, source_origin: Arc<ValueOrigin>, contents: ConfigContents) {
-        let mut source_value = match contents {
-            ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &source_origin),
+    fn insert_inner(&mut self, contents: WithOrigin<ConfigContents>) {
+        let mut source_value = match contents.inner {
+            ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &contents.origin),
             ConfigContents::Hierarchical(map) => WithOrigin {
                 inner: Value::Object(map),
-                origin: source_origin.clone(),
+                origin: contents.origin.clone(),
             },
         };
 
@@ -193,7 +248,7 @@ impl<'a> ConfigRepository<'a> {
         self.merged
             .guided_merge(source_value, self.schema, Pointer(""));
         self.sources.push(SourceInfo {
-            origin: source_origin,
+            origin: contents.origin,
             param_count,
         });
     }
@@ -201,8 +256,8 @@ impl<'a> ConfigRepository<'a> {
     ///  Extends this environment with a multiple configuration sources.
     #[must_use]
     pub fn with_all(mut self, sources: ConfigSources) -> Self {
-        for (source_origin, contents) in sources.inner {
-            self.insert_inner(source_origin, contents);
+        for contents in sources.inner {
+            self.insert_inner(contents);
         }
         self
     }

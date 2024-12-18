@@ -901,14 +901,14 @@ fn nesting_with_aliased_duration_param() {
     schema
         .insert(&ConfigWithComplexTypes::DESCRIPTION, "test")
         .unwrap()
-        .push_alias("alias")
+        .push_alias("long.alias")
         .unwrap();
-    let json = config!("alias.array": [4, 5], "alias.long_timeout_sec": 30);
-    let mut repo = ConfigRepository::new(&schema).with(json);
+    let json = config!("array": [4, 5], "long_timeout_sec": 30);
+    let mut repo = ConfigRepository::new(&schema).with(Prefixed::new(json, "long.alias"));
     let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(30));
 
-    let env = Environment::from_iter("", [("ALIAS_LONG_DUR_MIN", "1")]);
+    let env = Environment::from_iter("", [("LONG_ALIAS_LONG_DUR_MIN", "1")]);
     repo = repo.with(env);
     let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(60));
@@ -1208,8 +1208,8 @@ fn aliasing_for_nested_config() {
         .push_alias("alias")
         .unwrap();
 
-    let json = config!("alias.int": 123, "alias.nested.str": "!!");
-    let mut repo = ConfigRepository::new(&schema).with(json);
+    let json = config!("int": 123, "nested.str": "!!");
+    let mut repo = ConfigRepository::new(&schema).with(Prefixed::new(json, "alias"));
     let config: AliasedConfig = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.int, 123);
     assert_eq!(config.nested.str, "!!");

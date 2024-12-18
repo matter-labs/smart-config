@@ -20,7 +20,6 @@ use crate::{
     alt::AltSource,
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
     metadata::{SizeUnit, TimeUnit},
-    source::ConfigContents,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
@@ -290,9 +289,7 @@ pub(crate) struct ConfigWithAlternatives {
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
-    let ConfigContents::KeyValue(map) = env.into_contents() else {
-        unreachable!();
-    };
+    let map = env.into_contents().inner;
     let map = map.into_iter().map(|(key, value)| {
         (
             key,

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 
-use super::{ConfigContents, ConfigSource};
+use super::ConfigSource;
 use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// YAML-based configuration source.
@@ -92,21 +92,23 @@ impl Yaml {
 
         Ok(WithOrigin {
             inner,
-            origin: Arc::new(ValueOrigin::Path {
-                source: file_origin.clone(),
-                path,
-            }),
+            origin: if path.is_empty() {
+                file_origin.clone()
+            } else {
+                Arc::new(ValueOrigin::Path {
+                    source: file_origin.clone(),
+                    path,
+                })
+            },
         })
     }
 }
 
 impl ConfigSource for Yaml {
-    fn origin(&self) -> Arc<ValueOrigin> {
-        self.origin.clone()
-    }
+    type Map = Map;
 
-    fn into_contents(self) -> ConfigContents {
-        ConfigContents::Hierarchical(self.inner)
+    fn into_contents(self) -> WithOrigin<Self::Map> {
+        WithOrigin::new(self.inner, self.origin)
     }
 }
 

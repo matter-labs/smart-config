@@ -299,6 +299,13 @@ impl<T> WithOrigin<T> {
         }
         self
     }
+
+    pub(crate) fn map<U>(self, map_fn: impl FnOnce(T) -> U) -> WithOrigin<U> {
+        WithOrigin {
+            inner: map_fn(self.inner),
+            origin: self.origin,
+        }
+    }
 }
 
 impl WithOrigin {
