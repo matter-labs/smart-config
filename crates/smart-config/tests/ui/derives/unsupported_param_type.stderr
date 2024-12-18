@@ -12,7 +12,7 @@ error[E0277]: `()` param cannot be deserialized
             Duration
             HashMap<K, V, S>
             HashSet<T, S>
-            NonZero<i16>
-            NonZero<i32>
-            NonZero<i64>
+            IpAddr
+            Ipv4Addr
+            Ipv6Addr
           and $N others

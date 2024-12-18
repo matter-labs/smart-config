@@ -23,6 +23,12 @@ impl fmt::Debug for ByteSize {
     }
 }
 
+impl From<u64> for ByteSize {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
 impl ByteSize {
     /// Creates a value with the specified unit of measurement checking for overflow.
     pub const fn checked(val: u64, unit: SizeUnit) -> Option<Self> {

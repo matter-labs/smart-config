@@ -3,7 +3,7 @@ use serde::de::DeserializeOwned;
 use crate::{
     de::{DeserializeContext, DeserializeParam, Qualified, Serde, WellKnown},
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
+    metadata::{BasicTypes, ParamMetadata, TypeDescription},
     value::Value,
 };
 
@@ -34,8 +34,8 @@ pub struct HexUintDeserializer;
 impl<T: DeserializeOwned> DeserializeParam<T> for HexUintDeserializer {
     const EXPECTING: BasicTypes = BasicTypes::STRING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("0x-prefixed hex number")
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details("0x-prefixed hex number");
     }
 
     fn deserialize_param(

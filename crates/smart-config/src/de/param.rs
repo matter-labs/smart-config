@@ -2,6 +2,7 @@
 
 use std::{
     any, fmt,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
         NonZeroU64, NonZeroU8, NonZeroUsize,
@@ -15,7 +16,7 @@ use serde::de::{DeserializeOwned, Error as DeError};
 use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
+    metadata::{BasicTypes, ParamMetadata, TypeDescription},
     value::{Value, WithOrigin},
 };
 
@@ -43,9 +44,7 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     const EXPECTING: BasicTypes;
 
     /// Additional info about the deserialized type, e.g., extended description.
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::default()
-    }
+    fn describe(&self, description: &mut TypeDescription);
 
     /// Performs deserialization given the context and param metadata.
     ///
@@ -84,13 +83,13 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
 /// | [`ByteSize`](crate::ByteSize) | [`WithUnit`](super::WithUnit) | string or object |
 /// | [`Option`] | [`Optional`] | value, or `null`, or nothing |
 /// | [`Vec`], `[_; N]`, [`HashSet`](std::collections::HashSet), [`BTreeSet`](std::collections::BTreeSet) | [`Repeated`](super::Repeated) | array |
-/// | [`HashMap`](std::collections::HashMap), [`BTreeMap`](std::collections::BTreeSet) | [`Repeated`](super::Repeated) | object |
+/// | [`HashMap`](std::collections::HashMap), [`BTreeMap`](std::collections::BTreeSet) | [`RepeatedEntries`](super::Entries) | object |
 #[diagnostic::on_unimplemented(
     message = "`{Self}` param cannot be deserialized",
     note = "Add #[config(with = _)] attribute to specify deserializer to use",
     note = "If `{Self}` is a config, add #[config(nest)] or #[config(flatten)]"
 )]
-pub trait WellKnown: Sized {
+pub trait WellKnown: 'static + Sized {
     /// Type of the deserializer used for this type.
     type Deserializer: DeserializeParam<Self>;
     /// Deserializer instance.
@@ -100,8 +99,8 @@ pub trait WellKnown: Sized {
 impl<T: WellKnown> DeserializeParam<T> for () {
     const EXPECTING: BasicTypes = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        T::DE.type_qualifiers()
+    fn describe(&self, description: &mut TypeDescription) {
+        T::DE.describe(description);
     }
 
     fn deserialize_param(
@@ -128,6 +127,10 @@ impl<const EXPECTING: u8> fmt::Debug for Serde<EXPECTING> {
 
 impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXPECTING> {
     const EXPECTING: BasicTypes = BasicTypes::from_raw(EXPECTING);
+
+    fn describe(&self, _description: &mut TypeDescription) {
+        // Do nothing
+    }
 
     fn deserialize_param(
         &self,
@@ -163,6 +166,36 @@ impl WellKnown for PathBuf {
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "filesystem path");
 }
 
+impl WellKnown for IpAddr {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IP address");
+}
+
+impl WellKnown for Ipv4Addr {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IPv4 address");
+}
+
+impl WellKnown for Ipv6Addr {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IPv6 address");
+}
+
+impl WellKnown for SocketAddr {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "socket address");
+}
+
+impl WellKnown for SocketAddrV4 {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "v4 socket address");
+}
+
+impl WellKnown for SocketAddrV6 {
+    type Deserializer = Qualified<super::Serde![str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![str], "v6 socket address");
+}
+
 impl WellKnown for f32 {
     type Deserializer = super::Serde![float];
     const DE: Self::Deserializer = super::Serde![float];
@@ -185,7 +218,19 @@ macro_rules! impl_well_known_int {
 }
 
 impl_well_known_int!(u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize);
-impl_well_known_int!(
+
+macro_rules! impl_well_known_non_zero_int {
+    ($($int:ty),+) => {
+        $(
+        impl WellKnown for $int {
+            type Deserializer = Qualified<super::Serde![int]>;
+            const DE: Self::Deserializer = Qualified::new(super::Serde![int], "non-zero");
+        }
+        )+
+    };
+}
+
+impl_well_known_non_zero_int!(
     NonZeroU8,
     NonZeroI8,
     NonZeroU16,
@@ -203,12 +248,12 @@ impl<T: WellKnown> WellKnown for Option<T> {
     const DE: Self::Deserializer = Optional(T::DE);
 }
 
-/// [Deserializer](DeserializeParam) decorator that provides additional [qualifiers](TypeQualifiers)
+/// [Deserializer](DeserializeParam) decorator that provides additional [details](TypeDescription)
 /// for the deserialized type.
 #[derive(Debug)]
 pub struct Qualified<De> {
     inner: De,
-    // Cannot use `TypeQualifiers` directly because it wouldn't allow to drop the type in const contexts.
+    // Cannot use `TypeDescription` directly because it wouldn't allow to drop the type in const contexts.
     description: &'static str,
 }
 
@@ -225,8 +270,8 @@ where
 {
     const EXPECTING: BasicTypes = <De as DeserializeParam<T>>::EXPECTING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new(self.description)
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details(self.description);
     }
 
     fn deserialize_param(
@@ -264,8 +309,8 @@ impl<T: 'static, De: DeserializeParam<T>> WithDefault<T, De> {
 impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T, De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        self.inner.type_qualifiers()
+    fn describe(&self, description: &mut TypeDescription) {
+        self.inner.describe(description);
     }
 
     fn deserialize_param(
@@ -289,8 +334,8 @@ pub struct Optional<De>(pub De);
 impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        self.0.type_qualifiers()
+    fn describe(&self, description: &mut TypeDescription) {
+        self.0.describe(description);
     }
 
     fn deserialize_param(
@@ -358,6 +403,10 @@ where
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = <De as DeserializeParam<T>>::EXPECTING.or(BasicTypes::STRING);
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.0.describe(description);
+    }
 
     fn deserialize_param(
         &self,

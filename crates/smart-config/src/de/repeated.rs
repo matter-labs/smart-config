@@ -4,7 +4,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     hash::{BuildHasher, Hash},
-    str::FromStr,
+    marker::PhantomData,
     sync::Arc,
 };
 
@@ -13,16 +13,14 @@ use serde::de::{DeserializeOwned, Error as DeError};
 use crate::{
     de::{DeserializeContext, DeserializeParam, WellKnown},
     error::{ErrorWithOrigin, LowLevelError},
-    metadata::{BasicTypes, ParamMetadata, TypeQualifiers},
-    value::{StrValue, Value, ValueOrigin, WithOrigin},
+    metadata::{BasicTypes, ParamMetadata, TypeDescription},
+    utils::const_eq,
+    value::{Map, StrValue, Value, ValueOrigin, WithOrigin},
 };
 
-/// Deserializer from JSON arrays and objects.
+/// Deserializer from JSON arrays.
 ///
-/// Supports the following param types:
-///
-/// - [`Vec`], arrays, [`HashSet`], [`BTreeSet`] when deserializing from an array
-/// - [`HashMap`] and [`BTreeMap`] when deserializing from an object
+/// Supports deserializing to [`Vec`], arrays, [`HashSet`], [`BTreeSet`].
 #[derive(Debug)]
 pub struct Repeated<De>(pub De);
 
@@ -73,65 +71,17 @@ impl<De> Repeated<De> {
             Ok(items)
         }
     }
-
-    fn deserialize_map<K, V, C>(
-        &self,
-        mut ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<C, ErrorWithOrigin>
-    where
-        K: FromStr,
-        K::Err: fmt::Display,
-        De: DeserializeParam<V>,
-        C: FromIterator<(K, V)>,
-    {
-        let deserializer = ctx.current_value_deserializer(param.name)?;
-        let Value::Object(items) = deserializer.value() else {
-            return Err(deserializer.invalid_type("object"));
-        };
-
-        let mut has_errors = false;
-        let items = items.iter().filter_map(|(key, value)| {
-            let coerced = value.coerce_value_type(De::EXPECTING);
-            let mut child_ctx = ctx.child(key, ctx.location_in_config);
-            let mut child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(value));
-
-            let key = match key.parse::<K>() {
-                Ok(val) if !has_errors => Some(val),
-                Ok(_) => None,
-                Err(err) => {
-                    has_errors = true;
-                    child_ctx.push_error(DeError::custom(format!("cannot deserialize key: {err}")));
-                    None
-                }
-            };
-            let value = match self.0.deserialize_param(child_ctx.borrow(), param) {
-                Ok(val) if !has_errors => Some(val),
-                Ok(_) => None,
-                Err(err) => {
-                    has_errors = true;
-                    child_ctx.push_error(err);
-                    None
-                }
-            };
-            Some((key?, value?))
-        });
-        let items: C = items.collect();
-
-        if has_errors {
-            let origin = deserializer.origin().clone();
-            Err(ErrorWithOrigin::new(LowLevelError::InvalidObject, origin))
-        } else {
-            Ok(items)
-        }
-    }
 }
 
-impl<T, De> DeserializeParam<Vec<T>> for Repeated<De>
+impl<T: 'static, De> DeserializeParam<Vec<T>> for Repeated<De>
 where
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = BasicTypes::ARRAY;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_items(&self.0);
+    }
 
     fn deserialize_param(
         &self,
@@ -144,14 +94,14 @@ where
 
 impl<T, S, De> DeserializeParam<HashSet<T, S>> for Repeated<De>
 where
-    T: Eq + Hash,
+    T: 'static + Eq + Hash,
     S: 'static + Default + BuildHasher,
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = BasicTypes::ARRAY;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("set")
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details("set").set_items(&self.0);
     }
 
     fn deserialize_param(
@@ -165,13 +115,13 @@ where
 
 impl<T, De> DeserializeParam<BTreeSet<T>> for Repeated<De>
 where
-    T: Eq + Ord,
+    T: 'static + Eq + Ord,
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = BasicTypes::ARRAY;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("set")
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details("set").set_items(&self.0);
     }
 
     fn deserialize_param(
@@ -183,14 +133,16 @@ where
     }
 }
 
-impl<T, De, const N: usize> DeserializeParam<[T; N]> for Repeated<De>
+impl<T: 'static, De, const N: usize> DeserializeParam<[T; N]> for Repeated<De>
 where
     De: DeserializeParam<T>,
 {
     const EXPECTING: BasicTypes = BasicTypes::ARRAY;
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::dynamic(format!("{N}-element array"))
+    fn describe(&self, description: &mut TypeDescription) {
+        description
+            .set_details(format!("{N}-element array"))
+            .set_items(&self.0);
     }
 
     fn deserialize_param(
@@ -234,68 +186,171 @@ where
     const DE: Self::Deserializer = Repeated(T::DE);
 }
 
-impl<K, V, S, De> DeserializeParam<HashMap<K, V, S>> for Repeated<De>
-where
-    K: 'static + Eq + Hash + FromStr,
-    K::Err: fmt::Display,
-    S: 'static + Default + BuildHasher,
-    De: DeserializeParam<V>,
-{
-    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
+/// Deserializer from JSON objects.
+///
+/// Supports deserializing to [`HashMap`] and [`BTreeMap`].
+pub struct Entries<K, V, DeK, DeV> {
+    keys: DeK,
+    values: DeV,
+    _kv: PhantomData<fn(K, V)>,
+}
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("map")
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<HashMap<K, V, S>, ErrorWithOrigin> {
-        self.deserialize_map(ctx, param)
+impl<K, V, DeK: fmt::Debug, DeV: fmt::Debug> fmt::Debug for Entries<K, V, DeK, DeV> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Entries")
+            .field("keys", &self.keys)
+            .field("values", &self.values)
+            .finish()
     }
 }
 
-impl<K, V, De> DeserializeParam<BTreeMap<K, V>> for Repeated<De>
-where
-    K: 'static + Eq + Ord + FromStr,
-    K::Err: fmt::Display,
-    De: DeserializeParam<V>,
-{
-    const EXPECTING: BasicTypes = BasicTypes::OBJECT;
+impl<K: WellKnown, V: WellKnown> Entries<K, V, K::Deserializer, V::Deserializer> {
+    /// `Entries` instance using the [`WellKnown`] deserializers for keys and values.
+    pub const WELL_KNOWN: Self = Self::new(K::DE, V::DE);
+}
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::new("map")
+impl<K, V, DeK, DeV> Entries<K, V, DeK, DeV>
+where
+    DeK: DeserializeParam<K>,
+    DeV: DeserializeParam<V>,
+{
+    /// Creates a new deserializer instance with provided key and value deserializers.
+    pub const fn new(keys: DeK, values: DeV) -> Self {
+        Self {
+            keys,
+            values,
+            _kv: PhantomData,
+        }
+    }
+
+    /// Converts this to a [`NamedEntries`] instance.
+    pub const fn named(
+        self,
+        keys_name: &'static str,
+        values_name: &'static str,
+    ) -> NamedEntries<K, V, DeK, DeV> {
+        assert!(!keys_name.is_empty());
+        assert!(!values_name.is_empty());
+        assert!(
+            !const_eq(keys_name.as_bytes(), values_name.as_bytes()),
+            "Keys and values fields must not coincide"
+        );
+
+        NamedEntries {
+            inner: self,
+            keys_name,
+            values_name,
+        }
+    }
+
+    fn deserialize_map<C: FromIterator<(K, V)>>(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+        map: &Map,
+        map_origin: &Arc<ValueOrigin>,
+    ) -> Result<C, ErrorWithOrigin> {
+        let mut has_errors = false;
+        let items = map.iter().filter_map(|(key, value)| {
+            let key_as_value = WithOrigin::new(
+                Value::String(StrValue::Plain(key.clone())),
+                Arc::new(ValueOrigin::Synthetic {
+                    source: map_origin.clone(),
+                    transform: "string key".into(),
+                }),
+            );
+            let parsed_key =
+                parse_key_or_value::<K, _>(&mut ctx, param, key, &self.keys, &key_as_value);
+            let parsed_value =
+                parse_key_or_value::<V, _>(&mut ctx, param, key, &self.values, value);
+
+            has_errors |= parsed_key.is_none() || parsed_value.is_none();
+            Some((parsed_key?, parsed_value?)).filter(|_| !has_errors)
+        });
+        let items: C = items.collect();
+
+        if has_errors {
+            let origin = map_origin.clone();
+            Err(ErrorWithOrigin::new(LowLevelError::InvalidObject, origin))
+        } else {
+            Ok(items)
+        }
+    }
+}
+
+fn parse_key_or_value<T, De: DeserializeParam<T>>(
+    ctx: &mut DeserializeContext<'_>,
+    param: &'static ParamMetadata,
+    key_path: &str,
+    de: &De,
+    val: &WithOrigin,
+) -> Option<T> {
+    let coerced = val.coerce_value_type(De::EXPECTING);
+    let mut child_ctx = ctx.child(key_path, ctx.location_in_config);
+    let mut child_ctx = child_ctx.patched(coerced.as_ref().unwrap_or(val));
+    match de.deserialize_param(child_ctx.borrow(), param) {
+        Ok(val) => Some(val),
+        Err(err) => {
+            child_ctx.push_error(err);
+            None
+        }
+    }
+}
+
+impl<K, V, C, DeK, DeV> DeserializeParam<C> for Entries<K, V, DeK, DeV>
+where
+    K: 'static,
+    V: 'static,
+    DeK: DeserializeParam<K>,
+    DeV: DeserializeParam<V>,
+    C: FromIterator<(K, V)>,
+{
+    const EXPECTING: BasicTypes = {
+        assert!(
+            DeK::EXPECTING.contains(BasicTypes::STRING)
+                || DeK::EXPECTING.contains(BasicTypes::INTEGER),
+            "map keys must be deserializable from strings or ints"
+        );
+        BasicTypes::OBJECT
+    };
+
+    fn describe(&self, description: &mut TypeDescription) {
+        description
+            .set_details("map")
+            .set_entries(&self.keys, &self.values);
     }
 
     fn deserialize_param(
         &self,
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
-    ) -> Result<BTreeMap<K, V>, ErrorWithOrigin> {
-        self.deserialize_map(ctx, param)
+    ) -> Result<C, ErrorWithOrigin> {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let Value::Object(map) = deserializer.value() else {
+            return Err(deserializer.invalid_type("object"));
+        };
+        self.deserialize_map(ctx, param, map, deserializer.origin())
     }
 }
 
 impl<K, V, S> WellKnown for HashMap<K, V, S>
 where
-    K: 'static + Eq + Hash + FromStr,
-    K::Err: fmt::Display,
-    V: WellKnown,
+    K: 'static + Eq + Hash + WellKnown,
+    V: 'static + WellKnown,
     S: 'static + Default + BuildHasher,
 {
-    type Deserializer = Repeated<V::Deserializer>;
-    const DE: Self::Deserializer = Repeated(V::DE);
+    type Deserializer = Entries<K, V, K::Deserializer, V::Deserializer>;
+    const DE: Self::Deserializer = Entries::new(K::DE, V::DE);
 }
 
 impl<K, V> WellKnown for BTreeMap<K, V>
 where
-    K: 'static + Eq + Ord + FromStr,
-    K::Err: fmt::Display,
-    V: WellKnown,
+    K: 'static + Eq + Ord + WellKnown,
+    V: 'static + WellKnown,
 {
-    type Deserializer = Repeated<V::Deserializer>;
-    const DE: Self::Deserializer = Repeated(V::DE);
+    type Deserializer = Entries<K, V, K::Deserializer, V::Deserializer>;
+    const DE: Self::Deserializer = Entries::new(K::DE, V::DE);
 }
 
 /// Deserializer that supports either an array of values, or a string in which values are delimited
@@ -359,8 +414,14 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
         base.or(BasicTypes::STRING)
     };
 
-    fn type_qualifiers(&self) -> TypeQualifiers {
-        TypeQualifiers::dynamic(format!("using {:?} delimiter", self.0))
+    fn describe(&self, description: &mut TypeDescription) {
+        T::DE.describe(description);
+        let details = if let Some(details) = description.details() {
+            format!("{details}; using {:?} delimiter", self.0)
+        } else {
+            format!("using {:?} delimiter", self.0)
+        };
+        description.set_details(details);
     }
 
     fn deserialize_param(
@@ -394,5 +455,191 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
         });
         let array = WithOrigin::new(Value::Array(array_items.collect()), array_origin);
         T::DE.deserialize_param(ctx.patched(&array), param)
+    }
+}
+
+/// Deserializer that supports either a map or an array of `{ key: _, value: _ }` tuples (with customizable
+/// key / value names). Created using [`Entries::named()`].
+///
+/// Unlike [`Entries`], [`NamedEntries`] doesn't require keys to be deserializable from strings (although
+/// if they don't, map inputs will not work).
+///
+/// # Examples
+///
+/// ```
+/// use std::{collections::HashMap, time::Duration};
+/// # use smart_config::{de::Entries, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(with = Entries::WELL_KNOWN.named("num", "value"))]
+///     entries: HashMap<u64, String>,
+///     /// Can also be used with "linear" containers with tuple items.
+///     #[config(with = Entries::WELL_KNOWN.named("method", "timeout"))]
+///     tuples: Vec<(String, Duration)>,
+/// }
+///
+/// // Parsing from maps:
+/// let map_input = smart_config::config!(
+///     "entries": serde_json::json!({ "2": "two", "3": "three" }),
+///     "tuples": serde_json::json!({ "getLogs": "2s" }),
+/// );
+/// let config: TestConfig = testing::test(map_input)?;
+/// assert_eq!(
+///     config.entries,
+///     HashMap::from([(2, "two".to_owned()), (3, "three".to_owned())])
+/// );
+/// assert_eq!(
+///     config.tuples,
+///    [("getLogs".to_owned(), Duration::from_secs(2))]
+/// );
+///
+/// // The equivalent input as named tuples:
+/// let tuples_input = smart_config::config!(
+///     "entries": serde_json::json!([
+///         { "num": 2, "value": "two" },
+///         { "num": 3, "value": "three" },
+///     ]),
+///     "tuples": serde_json::json!([
+///         { "method": "getLogs", "timeout": "2s" },
+///     ]),
+/// );
+/// let config: TestConfig = testing::test(tuples_input)?;
+/// # assert_eq!(
+/// #     config.entries,
+/// #     HashMap::from([(2, "two".to_owned()), (3, "three".to_owned())])
+/// # );
+/// # assert_eq!(
+/// #     config.tuples,
+/// #    [("getLogs".to_owned(), Duration::from_secs(2))]
+/// # );
+/// # anyhow::Ok(())
+/// ```
+pub struct NamedEntries<K, V, DeK, DeV> {
+    inner: Entries<K, V, DeK, DeV>,
+    keys_name: &'static str,
+    values_name: &'static str,
+}
+
+impl<K, V, DeK: fmt::Debug, DeV: fmt::Debug> fmt::Debug for NamedEntries<K, V, DeK, DeV> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NamedEntries")
+            .field("inner", &self.inner)
+            .field("keys_name", &self.keys_name)
+            .field("values_name", &self.values_name)
+            .finish()
+    }
+}
+
+impl<K, V, DeK, DeV> NamedEntries<K, V, DeK, DeV>
+where
+    DeK: DeserializeParam<K>,
+    DeV: DeserializeParam<V>,
+{
+    fn deserialize_entries<C: FromIterator<(K, V)>>(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+        array: &[WithOrigin],
+        array_origin: &Arc<ValueOrigin>,
+    ) -> Result<C, ErrorWithOrigin> {
+        let mut has_errors = false;
+        let items = array.iter().enumerate().filter_map(|(i, entry)| {
+            let idx_str = i.to_string();
+            let (key, value) = match self.parse_entry(entry) {
+                Ok(entry) => entry,
+                Err(err) => {
+                    ctx.child(&idx_str, ctx.location_in_config).push_error(err);
+                    has_errors = true;
+                    return None;
+                }
+            };
+
+            let parsed_key =
+                parse_key_or_value::<K, _>(&mut ctx, param, &idx_str, &self.inner.keys, key);
+            let parsed_value =
+                parse_key_or_value::<V, _>(&mut ctx, param, &idx_str, &self.inner.values, value);
+            has_errors |= parsed_key.is_none() || parsed_value.is_none();
+            Some((parsed_key?, parsed_value?)).filter(|_| !has_errors)
+        });
+        let items: C = items.collect();
+
+        if has_errors {
+            let origin = array_origin.clone();
+            Err(ErrorWithOrigin::new(LowLevelError::InvalidArray, origin))
+        } else {
+            Ok(items)
+        }
+    }
+
+    fn parse_entry<'a>(
+        &self,
+        entry: &'a WithOrigin,
+    ) -> Result<(&'a WithOrigin, &'a WithOrigin), ErrorWithOrigin> {
+        let Value::Object(obj) = &entry.inner else {
+            let expected = format!(
+                "{{ {:?}: _, {:?}: _ }} tuple",
+                self.keys_name, self.values_name
+            );
+            return Err(entry.invalid_type(&expected));
+        };
+
+        let key = obj.get(self.keys_name).ok_or_else(|| {
+            let err = DeError::missing_field(self.keys_name);
+            ErrorWithOrigin::json(err, entry.origin.clone())
+        })?;
+        let value = obj.get(self.values_name).ok_or_else(|| {
+            let err = DeError::missing_field(self.values_name);
+            ErrorWithOrigin::json(err, entry.origin.clone())
+        })?;
+
+        if obj.len() > 2 {
+            let expected = format!(
+                "{{ {:?}: _, {:?}: _ }} tuple",
+                self.keys_name, self.values_name
+            );
+            return Err(entry.invalid_type(&expected));
+        }
+        Ok((key, value))
+    }
+}
+
+impl<K, V, DeK, DeV, C> DeserializeParam<C> for NamedEntries<K, V, DeK, DeV>
+where
+    K: 'static,
+    V: 'static,
+    DeK: DeserializeParam<K>,
+    DeV: DeserializeParam<V>,
+    C: FromIterator<(K, V)>,
+{
+    const EXPECTING: BasicTypes = BasicTypes::OBJECT.or(BasicTypes::ARRAY);
+
+    fn describe(&self, description: &mut TypeDescription) {
+        let details = format!(
+            "map or array of {{ {:?}: _, {:?}: _ }} tuples",
+            self.keys_name, self.values_name
+        );
+        description
+            .set_details(details)
+            .set_entries(&self.inner.keys, &self.inner.values);
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<C, ErrorWithOrigin> {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        match deserializer.value() {
+            Value::Object(map) => {
+                self.inner
+                    .deserialize_map(ctx, param, map, deserializer.origin())
+            }
+            Value::Array(array) => {
+                self.deserialize_entries(ctx, param, array, deserializer.origin())
+            }
+            _ => Err(deserializer.invalid_type("object or array")),
+        }
     }
 }

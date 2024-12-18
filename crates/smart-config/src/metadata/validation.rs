@@ -3,6 +3,7 @@
 use compile_fmt::{clip, clip_ascii, compile_args, compile_panic, fmt, Ascii, CompileArgs};
 
 use super::{ConfigMetadata, NestedConfigMetadata, ParamMetadata};
+use crate::utils::const_eq;
 
 const fn is_valid_start_name_char(ch: u8) -> bool {
     ch == b'_' || ch.is_ascii_lowercase()
@@ -102,21 +103,6 @@ pub const fn assert_param_name(name: &str) {
             &err.fmt() => fmt::<&ErrorArgs>()
         );
     }
-}
-
-const fn const_eq(lhs: &[u8], rhs: &[u8]) -> bool {
-    if lhs.len() != rhs.len() {
-        return false;
-    }
-
-    let mut i = 0;
-    while i < lhs.len() {
-        if lhs[i] != rhs[i] {
-            return false;
-        }
-        i += 1;
-    }
-    true
 }
 
 #[track_caller]

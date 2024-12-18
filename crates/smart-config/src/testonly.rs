@@ -2,6 +2,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     num::NonZeroUsize,
     path::PathBuf,
     str::FromStr,
@@ -204,7 +205,7 @@ pub(crate) struct ConfigWithComplexTypes {
     pub assumed: Option<serde_json::Value>,
     #[config(default_t = Duration::from_millis(100), with = TimeUnit::Millis)]
     pub short_dur: Duration,
-    #[config(default_t = Duration::from_secs(5))]
+    #[config(default_t = Duration::from_secs(5), alias = "long_timeout")]
     pub long_dur: Duration,
     #[config(default_t = "./test".into())]
     pub path: PathBuf,
@@ -216,6 +217,10 @@ pub(crate) struct ConfigWithComplexTypes {
     pub paths: Vec<PathBuf>,
     #[config(default, with = de::OrString(Serde![object]))]
     pub map_or_string: MapOrString,
+    #[config(default_t = Ipv4Addr::LOCALHOST.into())]
+    pub ip_addr: IpAddr,
+    #[config(default_t = ([192, 168, 0, 1], 3000).into())]
+    pub socket_addr: SocketAddr,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -231,6 +236,8 @@ pub(crate) struct ComposedConfig {
     pub map_of_sizes: HashMap<String, ByteSize>,
     #[config(default)]
     pub map_of_ints: HashMap<u64, Duration>,
+    #[config(default, with = de::Entries::WELL_KNOWN.named("val", "timeout"))]
+    pub entry_map: HashMap<u64, Duration>,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]

@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    net::{Ipv4Addr, Ipv6Addr},
     num::NonZeroUsize,
     time::Duration,
 };
@@ -390,6 +391,8 @@ fn parsing_complex_types() {
             disk_size: None,
             paths: vec![],
             map_or_string: MapOrString::default(),
+            ip_addr: Ipv4Addr::LOCALHOST.into(),
+            socket_addr: ([192, 168, 0, 1], 3000).into(),
         }
     );
 
@@ -404,6 +407,8 @@ fn parsing_complex_types() {
         "memory_size_mb": 64,
         "disk_size": "4 GB",
         "map_or_string": "test=1,other=2",
+        "ip_addr": "10.10.0.103",
+        "socket_addr": "[::1]:4040",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -420,6 +425,8 @@ fn parsing_complex_types() {
             disk_size: Some(ByteSize::new(4, SizeUnit::GiB)),
             paths: vec!["/usr/bin".into(), "/usr/local/bin".into()],
             map_or_string: MapOrString(HashMap::from([("test".into(), 1), ("other".into(), 2),])),
+            ip_addr: [10, 10, 0, 103].into(),
+            socket_addr: (Ipv6Addr::LOCALHOST, 4040).into(),
         }
     );
 
@@ -437,6 +444,7 @@ fn parsing_complex_types() {
             "test": 42,
             "other": 23,
         }),
+        "socket_addr": "127.0.0.1:8000",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -453,6 +461,8 @@ fn parsing_complex_types() {
             disk_size: Some(ByteSize::new(256, SizeUnit::MiB)),
             paths: vec!["/usr/bin".into(), "/mnt".into()],
             map_or_string: MapOrString(HashMap::from([("test".into(), 42), ("other".into(), 23),])),
+            ip_addr: Ipv4Addr::LOCALHOST.into(),
+            socket_addr: ([127, 0, 0, 1], 8000).into(),
         }
     );
 }
@@ -489,6 +499,81 @@ fn parsing_composed_params() {
     let json = config!("map_of_ints": HashMap::from([(5, "30 sec")]));
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.map_of_ints[&5], Duration::from_secs(30));
+
+    let json = config!("entry_map": HashMap::from([(5, "30 sec")]));
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.entry_map[&5], Duration::from_secs(30));
+
+    let json = config!(
+        "entry_map": serde_json::json!([
+            { "val": 5, "timeout": "30s" },
+            { "val": 10, "timeout": "2min" },
+        ]),
+    );
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.entry_map[&5], Duration::from_secs(30));
+    assert_eq!(config.entry_map[&10], Duration::from_secs(120));
+}
+
+#[test]
+fn errors_parsing_named_entries() {
+    let json = config!("entry_map": "5");
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map");
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("invalid type") && inner.contains("expected object or array"),
+        "{inner}"
+    );
+
+    let json = config!("entry_map": ["5"]);
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("invalid type") && inner.contains(r#"{ "val": _, "timeout": _ }"#),
+        "{inner}"
+    );
+
+    let json = config!("entry_map": serde_json::json!([{ "val": 5 }]));
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("missing field `timeout`"), "{inner}");
+
+    let json = config!("entry_map": serde_json::json!([{ "timeout": "30s" }]));
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("missing field `val`"), "{inner}");
+
+    let json = config!("entry_map": serde_json::json!([{ "val": 5, "timeout": "30s", "?": () }]));
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("invalid type") && inner.contains(r#"{ "val": _, "timeout": _ }"#),
+        "{inner}"
+    );
+
+    let json = config!("entry_map": serde_json::json!([{ "val": 5, "timeout": 30 }]));
+    let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "entry_map.0");
+    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "entry_map.0.timeout");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("invalid type"), "{inner}");
 }
 
 #[test]
@@ -609,10 +694,11 @@ fn multiple_errors_for_composed_deserializers() {
     assert_eq!(errors.len(), 2);
     assert!(errors.iter().any(|err| {
         err.path() == "map_of_ints.what"
-            && err
-                .inner()
-                .to_string()
-                .starts_with("cannot deserialize key")
+            && matches!(
+                err.origin(),
+                ValueOrigin::Synthetic { transform, .. } if transform.contains("key")
+            )
+            && err.inner().to_string().starts_with("invalid digit")
     }));
     assert!(errors.iter().any(|err| {
         err.path() == "map_of_ints.what" && err.inner().to_string().starts_with("invalid type")
