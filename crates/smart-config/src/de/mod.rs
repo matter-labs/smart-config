@@ -162,7 +162,7 @@ impl<'a> DeserializeContext<'a> {
         }
     }
 
-    fn current_value(&self) -> Option<&'a WithOrigin> {
+    pub(crate) fn current_value(&self) -> Option<&'a WithOrigin> {
         self.patched_current_value
             .or_else(|| self.root_value.get(Pointer(&self.path)))
     }

@@ -239,6 +239,17 @@ impl<'a> ConfigRepository<'a> {
             _config: PhantomData,
         })
     }
+
+    /// Gets a parser for a configuration of the specified type mounted at the canonical `prefix`.
+    /// If the config is not present at `prefix`, returns `None`.
+    pub fn get<'s, C: DeserializeConfig>(&'s self, prefix: &'s str) -> Option<ConfigParser<'s, C>> {
+        let config_ref = self.schema.get(&C::DESCRIPTION, prefix)?;
+        Some(ConfigParser {
+            repo: self,
+            config_ref,
+            _config: PhantomData,
+        })
+    }
 }
 
 /// Parser of configuration input in a [`ConfigRepository`].
@@ -296,6 +307,22 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
     #[allow(clippy::redundant_closure_for_method_calls)] // doesn't work as an fn pointer because of the context lifetime
     pub fn parse(self) -> Result<C, ParseErrors> {
         self.with_context(|ctx| ctx.preprocess_and_deserialize::<C>())
+    }
+
+    /// Parses an optional config. Returns `None` if the config object is not present (i.e., none of the config params / sub-configs
+    /// are set); otherwise, tries to perform parsing.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors encountered during parsing.
+    pub fn parse_opt(self) -> Result<Option<C>, ParseErrors> {
+        self.with_context(|ctx| {
+            if ctx.current_value().is_none() {
+                Ok(None)
+            } else {
+                ctx.preprocess_and_deserialize::<C>().map(Some)
+            }
+        })
     }
 }
 
