@@ -156,11 +156,9 @@ pub struct Tester<C> {
 
 impl<C: DeserializeConfig> Default for Tester<C> {
     fn default() -> Self {
-        let mut schema = ConfigSchema::default();
-        schema.insert(&C::DESCRIPTION, "").unwrap();
         Self {
             de_options: DeserializerOptions::default(),
-            schema,
+            schema: ConfigSchema::new(&C::DESCRIPTION, ""),
             _config: PhantomData,
         }
     }

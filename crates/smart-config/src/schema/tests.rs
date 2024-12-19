@@ -137,9 +137,7 @@ fn using_multiple_aliases() {
 
 #[test]
 fn using_nesting() {
-    let mut schema = ConfigSchema::default();
-    schema.insert(&NestingConfig::DESCRIPTION, "").unwrap();
-
+    let schema = ConfigSchema::new(&NestingConfig::DESCRIPTION, "");
     let config_prefixes: Vec<_> = schema.locate(&NestingConfig::DESCRIPTION).collect();
     assert_eq!(config_prefixes, [""]);
     let config_prefixes: HashSet<_> = schema.locate(&TestConfig::DESCRIPTION).collect();

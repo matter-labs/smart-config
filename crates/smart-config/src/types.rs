@@ -11,6 +11,12 @@ pub struct ByteSize(pub u64);
 
 impl fmt::Debug for ByteSize {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, formatter)
+    }
+}
+
+impl fmt::Display for ByteSize {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.0 % (1 << 30) == 0 {
             write!(formatter, "{} GiB", self.0 >> 30)
         } else if self.0 % (1 << 20) == 0 {

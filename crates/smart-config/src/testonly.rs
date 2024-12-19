@@ -16,10 +16,11 @@ use secrecy::SecretString;
 use serde::Deserialize;
 
 use crate::{
+    alt,
+    alt::AltSource,
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
     metadata::{SizeUnit, TimeUnit},
-    source::ConfigContents,
-    value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
+    value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
 };
 
@@ -271,15 +272,29 @@ pub(crate) struct AliasedConfig {
     pub flat: NestedAliasedConfig,
 }
 
+const STR_SOURCE: &'static dyn AltSource =
+    &alt::Custom::new("filtered 'SMART_CONFIG_STR' env var", || {
+        alt::Env("SMART_CONFIG_STR")
+            .provide_value()
+            .filter(|val| val.inner.as_plain_str() != Some("unset"))
+    });
+
+#[derive(DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ConfigWithAlternatives {
+    #[config(default_t = 42, alt = &alt::Env("SMART_CONFIG_INT"))]
+    pub int: u32,
+    #[config(alt = STR_SOURCE)]
+    pub str: Option<SecretString>,
+}
+
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
-    let ConfigContents::KeyValue(map) = env.into_contents() else {
-        unreachable!();
-    };
+    let map = env.into_contents().inner;
     let map = map.into_iter().map(|(key, value)| {
         (
             key,
             WithOrigin {
-                inner: Value::String(StrValue::Plain(value.inner)),
+                inner: value.inner.into(),
                 origin: value.origin,
             },
         )
