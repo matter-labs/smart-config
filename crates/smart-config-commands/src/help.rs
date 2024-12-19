@@ -75,6 +75,17 @@ impl ParamRef<'_> {
                 "{INDENT}{FIELD}Default{FIELD:#}: {DEFAULT_VAL}{default:?}{DEFAULT_VAL:#}"
             )?;
         }
+        if let Some(alt) = self.param.alt {
+            write!(writer, "{INDENT}{FIELD}Alternatives{FIELD:#}: ")?;
+            let alt = alt.to_string();
+            let mut lines = alt.lines();
+            if let Some(first_line) = lines.next() {
+                writeln!(writer, "{first_line}")?;
+                for line in lines {
+                    writeln!(writer, "{INDENT}  {line}")?;
+                }
+            }
+        }
 
         if !self.param.help.is_empty() {
             for line in self.param.help.lines() {

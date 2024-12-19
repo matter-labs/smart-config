@@ -40,9 +40,9 @@
   <circle cx="37" cy="-9" r="7" style="fill: #ffc706;"/>
   <circle cx="57" cy="-9" r="7" style="fill: #38b54a;"/>
     <svg x="0" y="10" width="860" height="540" viewBox="0 0 860 540">
-      <animate attributeName="viewBox" values="0 0 860 540;0 72 860 540;0 144 860 540;0 216 860 540;0 288 860 540;0 360 860 540;0 432 860 540;0 504 860 540;0 576 860 540;0 648 860 540;0 720 860 540;0 792 860 540;0 864 860 540;0 936 860 540" dur="52.0s" repeatCount="indefinite" calcMode="discrete" />
+      <animate attributeName="viewBox" values="0 0 860 540;0 72 860 540;0 144 860 540;0 216 860 540;0 288 860 540;0 360 860 540;0 432 860 540;0 504 860 540;0 576 860 540;0 648 860 540;0 720 860 540;0 792 860 540;0 864 860 540;0 936 860 540;0 1008 860 540;0 1080 860 540" dur="60.0s" repeatCount="indefinite" calcMode="discrete" />
       <g class="input-bg"></g>
-      <text class="container fg7 line-numbers"><tspan x="34" y="14">1</tspan><tspan x="34" y="32">2</tspan><tspan x="34" y="50">3</tspan><tspan x="34" y="68">4</tspan><tspan x="34" y="86">5</tspan><tspan x="34" y="104">6</tspan><tspan x="34" y="122">7</tspan><tspan x="34" y="140">8</tspan><tspan x="34" y="158">9</tspan><tspan x="34" y="176">10</tspan><tspan x="34" y="194">11</tspan><tspan x="34" y="212">12</tspan><tspan x="34" y="230">13</tspan><tspan x="34" y="248">14</tspan><tspan x="34" y="266">15</tspan><tspan x="34" y="284">16</tspan><tspan x="34" y="302">17</tspan><tspan x="34" y="320">18</tspan><tspan x="34" y="338">19</tspan><tspan x="34" y="356">20</tspan><tspan x="34" y="374">21</tspan><tspan x="34" y="392">22</tspan><tspan x="34" y="410">23</tspan><tspan x="34" y="428">24</tspan><tspan x="34" y="446">25</tspan><tspan x="34" y="464">26</tspan><tspan x="34" y="482">27</tspan><tspan x="34" y="500">28</tspan><tspan x="34" y="518">29</tspan><tspan x="34" y="536">30</tspan><tspan x="34" y="554">31</tspan><tspan x="34" y="572">32</tspan><tspan x="34" y="590">33</tspan><tspan x="34" y="608">34</tspan><tspan x="34" y="626">35</tspan><tspan x="34" y="644">36</tspan><tspan x="34" y="662">37</tspan><tspan x="34" y="680">38</tspan><tspan x="34" y="698">39</tspan><tspan x="34" y="716">40</tspan><tspan x="34" y="734">41</tspan><tspan x="34" y="752">42</tspan><tspan x="34" y="770">43</tspan><tspan x="34" y="788">44</tspan><tspan x="34" y="806">45</tspan><tspan x="34" y="824">46</tspan><tspan x="34" y="842">47</tspan><tspan x="34" y="860">48</tspan><tspan x="34" y="878">49</tspan><tspan x="34" y="896">50</tspan><tspan x="34" y="914">51</tspan><tspan x="34" y="932">52</tspan><tspan x="34" y="950">53</tspan><tspan x="34" y="968">54</tspan><tspan x="34" y="986">55</tspan><tspan x="34" y="1004">56</tspan><tspan x="34" y="1022">57</tspan><tspan x="34" y="1040">58</tspan><tspan x="34" y="1058">59</tspan><tspan x="34" y="1076">60</tspan><tspan x="34" y="1094">61</tspan><tspan x="34" y="1112">62</tspan><tspan x="34" y="1130">63</tspan><tspan x="34" y="1148">64</tspan><tspan x="34" y="1166">65</tspan><tspan x="34" y="1184">66</tspan><tspan x="34" y="1202">67</tspan><tspan x="34" y="1220">68</tspan><tspan x="34" y="1238">69</tspan><tspan x="34" y="1256">70</tspan><tspan x="34" y="1274">71</tspan><tspan x="34" y="1292">72</tspan><tspan x="34" y="1310">73</tspan><tspan x="34" y="1328">74</tspan><tspan x="34" y="1346">75</tspan><tspan x="34" y="1364">76</tspan><tspan x="34" y="1382">77</tspan><tspan x="34" y="1400">78</tspan><tspan x="34" y="1418">79</tspan><tspan x="34" y="1436">80</tspan><tspan x="34" y="1454">81</tspan></text>
+      <text class="container fg7 line-numbers"><tspan x="34" y="14">1</tspan><tspan x="34" y="32">2</tspan><tspan x="34" y="50">3</tspan><tspan x="34" y="68">4</tspan><tspan x="34" y="86">5</tspan><tspan x="34" y="104">6</tspan><tspan x="34" y="122">7</tspan><tspan x="34" y="140">8</tspan><tspan x="34" y="158">9</tspan><tspan x="34" y="176">10</tspan><tspan x="34" y="194">11</tspan><tspan x="34" y="212">12</tspan><tspan x="34" y="230">13</tspan><tspan x="34" y="248">14</tspan><tspan x="34" y="266">15</tspan><tspan x="34" y="284">16</tspan><tspan x="34" y="302">17</tspan><tspan x="34" y="320">18</tspan><tspan x="34" y="338">19</tspan><tspan x="34" y="356">20</tspan><tspan x="34" y="374">21</tspan><tspan x="34" y="392">22</tspan><tspan x="34" y="410">23</tspan><tspan x="34" y="428">24</tspan><tspan x="34" y="446">25</tspan><tspan x="34" y="464">26</tspan><tspan x="34" y="482">27</tspan><tspan x="34" y="500">28</tspan><tspan x="34" y="518">29</tspan><tspan x="34" y="536">30</tspan><tspan x="34" y="554">31</tspan><tspan x="34" y="572">32</tspan><tspan x="34" y="590">33</tspan><tspan x="34" y="608">34</tspan><tspan x="34" y="626">35</tspan><tspan x="34" y="644">36</tspan><tspan x="34" y="662">37</tspan><tspan x="34" y="680">38</tspan><tspan x="34" y="698">39</tspan><tspan x="34" y="716">40</tspan><tspan x="34" y="734">41</tspan><tspan x="34" y="752">42</tspan><tspan x="34" y="770">43</tspan><tspan x="34" y="788">44</tspan><tspan x="34" y="806">45</tspan><tspan x="34" y="824">46</tspan><tspan x="34" y="842">47</tspan><tspan x="34" y="860">48</tspan><tspan x="34" y="878">49</tspan><tspan x="34" y="896">50</tspan><tspan x="34" y="914">51</tspan><tspan x="34" y="932">52</tspan><tspan x="34" y="950">53</tspan><tspan x="34" y="968">54</tspan><tspan x="34" y="986">55</tspan><tspan x="34" y="1004">56</tspan><tspan x="34" y="1022">57</tspan><tspan x="34" y="1040">58</tspan><tspan x="34" y="1058">59</tspan><tspan x="34" y="1076">60</tspan><tspan x="34" y="1094">61</tspan><tspan x="34" y="1112">62</tspan><tspan x="34" y="1130">63</tspan><tspan x="34" y="1148">64</tspan><tspan x="34" y="1166">65</tspan><tspan x="34" y="1184">66</tspan><tspan x="34" y="1202">67</tspan><tspan x="34" y="1220">68</tspan><tspan x="34" y="1238">69</tspan><tspan x="34" y="1256">70</tspan><tspan x="34" y="1274">71</tspan><tspan x="34" y="1292">72</tspan><tspan x="34" y="1310">73</tspan><tspan x="34" y="1328">74</tspan><tspan x="34" y="1346">75</tspan><tspan x="34" y="1364">76</tspan><tspan x="34" y="1382">77</tspan><tspan x="34" y="1400">78</tspan><tspan x="34" y="1418">79</tspan><tspan x="34" y="1436">80</tspan><tspan x="34" y="1454">81</tspan><tspan x="34" y="1472">82</tspan><tspan x="34" y="1490">83</tspan><tspan x="34" y="1508">84</tspan><tspan x="34" y="1526">85</tspan><tspan x="34" y="1544">86</tspan><tspan x="34" y="1562">87</tspan></text>
       <text class="container fg7"><tspan xml:space="preserve" x="42" y="14" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">port</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="32" class="output"><tspan class="dimmed">test.</tspan>bind_to
 </tspan><tspan xml:space="preserve" x="42" y="50" class="output">  <tspan class="underline">Type</tspan>: integer <tspan class="dimmed">[Rust: u16]</tspan>
@@ -63,70 +63,76 @@
 </tspan><tspan xml:space="preserve" x="42" y="320" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">None</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="338" class="output">  Should be greater than 0.
 </tspan><tspan xml:space="preserve" x="42" y="356" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="374" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">dir_paths</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="392" class="output"><tspan class="dimmed">test.</tspan>dirs
-</tspan><tspan xml:space="preserve" x="42" y="410" class="output">  <tspan class="underline">Type</tspan>: string | array <tspan class="dimmed">[Rust: HashSet]</tspan>; set; using ":" delimiter
-</tspan><tspan xml:space="preserve" x="42" y="428" class="output">    <tspan class="underline">Array items</tspan>: string <tspan class="dimmed">[Rust: std::path::PathBuf]</tspan>; filesystem path
-</tspan><tspan xml:space="preserve" x="42" y="446" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">{}</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="464" class="output">  Paths to key directories.
-</tspan><tspan xml:space="preserve" x="42" y="482" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="500" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">timeout_sec</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="518" class="output">  <tspan class="underline">Type</tspan>: integer <tspan class="dimmed">[Rust: Duration]</tspan>; time duration; unit: <tspan class="fg6">seconds</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="536" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">60s</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="554" class="output">  Timeout for some operation.
-</tspan><tspan xml:space="preserve" x="42" y="572" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="590" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">cache_size</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="608" class="output">  <tspan class="underline">Type</tspan>: string | object <tspan class="dimmed">[Rust: ByteSize]</tspan>; size with unit, or object with single unit key
-</tspan><tspan xml:space="preserve" x="42" y="626" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">16 MiB</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="644" class="output">  In-memory cache size.
-</tspan><tspan xml:space="preserve" x="42" y="662" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="680" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">address</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="698" class="output"><tspan class="dimmed">test.funds.</tspan>address
-</tspan><tspan xml:space="preserve" x="42" y="716" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: Address]</tspan>; hex string with optional 0x prefix
-</tspan><tspan xml:space="preserve" x="42" y="734" class="output">  Ethereum-like address to fund.
-</tspan><tspan xml:space="preserve" x="42" y="752" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="770" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">balance</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="788" class="output"><tspan class="dimmed">test.funds.</tspan>balance
-</tspan><tspan xml:space="preserve" x="42" y="806" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: U256]</tspan>; 0x-prefixed hex number
-</tspan><tspan xml:space="preserve" x="42" y="824" class="output">  Initial balance for the address.
-</tspan><tspan xml:space="preserve" x="42" y="842" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="860" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">api_key</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="878" class="output"><tspan class="dimmed">test.funds.</tspan>api_key
-</tspan><tspan xml:space="preserve" x="42" y="896" class="output-bg">        <tspan class="fg6">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="896" class="output">  <tspan class="underline">Type</tspan>: <tspan class="bg6">secret</tspan> string <tspan class="dimmed">[Rust: Option]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="914" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">None</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="932" class="output">  Secret string value.
+</tspan><tspan xml:space="preserve" x="42" y="374" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">temp_dir</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="392" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: PathBuf]</tspan>; filesystem path
+</tspan><tspan xml:space="preserve" x="42" y="410" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">"/tmp"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="428" class="output">  <tspan class="underline">Alternatives</tspan>: env var "TMPDIR"
+</tspan><tspan xml:space="preserve" x="42" y="446" class="output">  Directory for temporary stuff.
+</tspan><tspan xml:space="preserve" x="42" y="464" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="482" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">dir_paths</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="500" class="output"><tspan class="dimmed">test.</tspan>dirs
+</tspan><tspan xml:space="preserve" x="42" y="518" class="output">  <tspan class="underline">Type</tspan>: string | array <tspan class="dimmed">[Rust: HashSet]</tspan>; set; using ":" delimiter
+</tspan><tspan xml:space="preserve" x="42" y="536" class="output">    <tspan class="underline">Array items</tspan>: string <tspan class="dimmed">[Rust: std::path::PathBuf]</tspan>; filesystem path
+</tspan><tspan xml:space="preserve" x="42" y="554" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">{}</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="572" class="output">  Paths to key directories.
+</tspan><tspan xml:space="preserve" x="42" y="590" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="608" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">timeout_sec</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="626" class="output">  <tspan class="underline">Type</tspan>: integer <tspan class="dimmed">[Rust: Duration]</tspan>; time duration; unit: <tspan class="fg6">seconds</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="644" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">60s</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="662" class="output">  Timeout for some operation.
+</tspan><tspan xml:space="preserve" x="42" y="680" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="698" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">cache_size</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="716" class="output">  <tspan class="underline">Type</tspan>: string | object <tspan class="dimmed">[Rust: ByteSize]</tspan>; size with unit, or object with single unit key
+</tspan><tspan xml:space="preserve" x="42" y="734" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">16 MiB</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="752" class="output">  In-memory cache size.
+</tspan><tspan xml:space="preserve" x="42" y="770" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="788" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">address</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="806" class="output"><tspan class="dimmed">test.funds.</tspan>address
+</tspan><tspan xml:space="preserve" x="42" y="824" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: Address]</tspan>; hex string with optional 0x prefix
+</tspan><tspan xml:space="preserve" x="42" y="842" class="output">  Ethereum-like address to fund.
+</tspan><tspan xml:space="preserve" x="42" y="860" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="878" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">balance</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="896" class="output"><tspan class="dimmed">test.funds.</tspan>balance
+</tspan><tspan xml:space="preserve" x="42" y="914" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: U256]</tspan>; 0x-prefixed hex number
+</tspan><tspan xml:space="preserve" x="42" y="932" class="output">  Initial balance for the address.
 </tspan><tspan xml:space="preserve" x="42" y="950" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="968" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">secret_key</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="986" class="output"><tspan class="dimmed">test.funds.</tspan>secret_key
+</tspan><tspan xml:space="preserve" x="42" y="968" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">api_key</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="986" class="output"><tspan class="dimmed">test.funds.</tspan>api_key
 </tspan><tspan xml:space="preserve" x="42" y="1004" class="output-bg">        <tspan class="fg6">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="1004" class="output">  <tspan class="underline">Type</tspan>: <tspan class="bg6">secret</tspan> string <tspan class="dimmed">[Rust: Option]</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="1022" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">None</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1040" class="output">  Secret key.
+</tspan><tspan xml:space="preserve" x="42" y="1040" class="output">  Secret string value.
 </tspan><tspan xml:space="preserve" x="42" y="1058" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1076" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">exit_on_error</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1094" class="output">  <tspan class="underline">Type</tspan>: Boolean <tspan class="dimmed">[Rust: bool]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1112" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">true</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1130" class="output">  Whether to exit the application on error.
-</tspan><tspan xml:space="preserve" x="42" y="1148" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1166" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">complex</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1184" class="output">  <tspan class="underline">Type</tspan>: object <tspan class="dimmed">[Rust: ComplexParam]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1202" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">ComplexParam { array: [], map: {} }</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1220" class="output">  Complex parameter deserialized from an object.
-</tspan><tspan xml:space="preserve" x="42" y="1238" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1256" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">more_timeouts</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1274" class="output"><tspan class="dimmed">test.nested.</tspan>timeouts
-</tspan><tspan xml:space="preserve" x="42" y="1292" class="output">  <tspan class="underline">Type</tspan>: string | array <tspan class="dimmed">[Rust: Vec]</tspan>; using "," delimiter
-</tspan><tspan xml:space="preserve" x="42" y="1310" class="output">    <tspan class="underline">Array items</tspan>: string | object <tspan class="dimmed">[Rust: core::time::Duration]</tspan>; duration with unit, or object with single unit key
-</tspan><tspan xml:space="preserve" x="42" y="1328" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">[]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1076" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">secret_key</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1094" class="output"><tspan class="dimmed">test.funds.</tspan>secret_key
+</tspan><tspan xml:space="preserve" x="42" y="1112" class="output-bg">        <tspan class="fg6">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="1112" class="output">  <tspan class="underline">Type</tspan>: <tspan class="bg6">secret</tspan> string <tspan class="dimmed">[Rust: Option]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1130" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">None</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1148" class="output">  Secret key.
+</tspan><tspan xml:space="preserve" x="42" y="1166" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="1184" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">exit_on_error</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1202" class="output">  <tspan class="underline">Type</tspan>: Boolean <tspan class="dimmed">[Rust: bool]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1220" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">true</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1238" class="output">  Whether to exit the application on error.
+</tspan><tspan xml:space="preserve" x="42" y="1256" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="1274" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">complex</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1292" class="output">  <tspan class="underline">Type</tspan>: object <tspan class="dimmed">[Rust: ComplexParam]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1310" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">ComplexParam { array: [], map: {} }</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1328" class="output">  Complex parameter deserialized from an object.
 </tspan><tspan xml:space="preserve" x="42" y="1346" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1364" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">method_limits</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1382" class="output">  <tspan class="underline">Type</tspan>: array | object <tspan class="dimmed">[Rust: HashMap]</tspan>; map or array of { "method": _, "rps": _ } tuples
-</tspan><tspan xml:space="preserve" x="42" y="1400" class="output">    <tspan class="underline">Map keys</tspan>: string <tspan class="dimmed">[Rust: alloc::string::String]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">    <tspan class="underline">Map values</tspan>: integer <tspan class="dimmed">[Rust: core::num::nonzero::NonZero&lt;u32&gt;]</tspan>; non-zero
-</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">{}</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1454" class="output">  Can be deserialized either from a map or an array of tuples.
+</tspan><tspan xml:space="preserve" x="42" y="1364" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">more_timeouts</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1382" class="output"><tspan class="dimmed">test.nested.</tspan>timeouts
+</tspan><tspan xml:space="preserve" x="42" y="1400" class="output">  <tspan class="underline">Type</tspan>: string | array <tspan class="dimmed">[Rust: Vec]</tspan>; using "," delimiter
+</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">    <tspan class="underline">Array items</tspan>: string | object <tspan class="dimmed">[Rust: core::time::Duration]</tspan>; duration with unit, or object with single unit key
+</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">[]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1454" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="1472" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">method_limits</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1490" class="output">  <tspan class="underline">Type</tspan>: array | object <tspan class="dimmed">[Rust: HashMap]</tspan>; map or array of { "method": _, "rps": _ } tuples
+</tspan><tspan xml:space="preserve" x="42" y="1508" class="output">    <tspan class="underline">Map keys</tspan>: string <tspan class="dimmed">[Rust: alloc::string::String]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1526" class="output">    <tspan class="underline">Map values</tspan>: integer <tspan class="dimmed">[Rust: core::num::nonzero::NonZero&lt;u32&gt;]</tspan>; non-zero
+</tspan><tspan xml:space="preserve" x="42" y="1544" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">{}</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1562" class="output">  Can be deserialized either from a map or an array of tuples.
 </tspan></text>
     </svg>
   <rect class="scrollbar" x="853" y="10" width="5" height="40">
-    <animateTransform attributeName="transform" attributeType="XML" type="translate" values="0 0;0 38;0 76;0 115;0 153;0 192;0 230;0 269;0 307;0 346;0 384;0 423;0 461;0 500" dur="52.0s" repeatCount="indefinite" calcMode="discrete" />
+    <animateTransform attributeName="transform" attributeType="XML" type="translate" values="0 0;0 33;0 66;0 100;0 133;0 166;0 200;0 233;0 266;0 300;0 333;0 366;0 400;0 433;0 466;0 500" dur="60.0s" repeatCount="indefinite" calcMode="discrete" />
   </rect>
 </svg>
