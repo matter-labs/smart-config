@@ -77,7 +77,7 @@ macro_rules! parse_int_value {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct ValueDeserializer<'a> {
+pub struct ValueDeserializer<'a> {
     value: &'a WithOrigin,
     options: &'a DeserializerOptions,
 }

@@ -1,5 +1,7 @@
 //! Test-only functionality shared among multiple test modules.
 
+// FIXME: test custom deserializers
+
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, Ipv4Addr, SocketAddr},

@@ -56,8 +56,10 @@ use serde::de::Error as DeError;
 use self::deserializer::ValueDeserializer;
 pub use self::{
     deserializer::DeserializerOptions,
-    macros::Serde,
-    param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
+    macros::{Custom, Serde},
+    param::{
+        Custom, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault,
+    },
     repeated::{Delimited, Entries, NamedEntries, Repeated},
     secret::{FromSecretString, Secret},
     units::WithUnit,
@@ -167,7 +169,12 @@ impl<'a> DeserializeContext<'a> {
             .or_else(|| self.root_value.get(Pointer(&self.path)))
     }
 
-    fn current_value_deserializer(
+    /// Returns a `serde` deserializer for the current value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the current value is missing.
+    pub fn current_value_deserializer(
         &self,
         name: &'static str,
     ) -> Result<ValueDeserializer<'a>, ErrorWithOrigin> {

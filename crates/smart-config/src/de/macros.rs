@@ -32,23 +32,46 @@
 #[macro_export]
 #[allow(non_snake_case)]
 macro_rules! Serde {
+    (*) => {
+        $crate::de::Serde::<{ $crate::metadata::BasicTypes::ANY.raw() }>
+    };
+    ($($expecting:tt),+ $(,)?) => {
+        $crate::de::Serde::<{ $crate::basic_types!($($expecting)+) }>
+    };
+}
+
+/// FIXME
+#[macro_export]
+#[allow(non_snake_case)]
+macro_rules! Custom {
+    (*) => {
+        $crate::de::Custom::<_, { $crate::metadata::BasicTypes::ANY.raw() }>
+    };
+    ($($expecting:tt),+ $(,)?) => {
+        $crate::de::Custom::<_, { $crate::basic_types!($($expecting)+) }>
+    };
+}
+
+/// FIXME
+#[macro_export]
+macro_rules! basic_types {
     (@expand bool $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::BOOL.or($crate::Serde!(@expand $($tail)+))
+        $crate::metadata::BasicTypes::BOOL.or($crate::basic_types!($($tail)+))
     };
     (@expand int $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::INTEGER.or($crate::Serde!(@expand $($tail)+))
+        $crate::metadata::BasicTypes::INTEGER.or($crate::basic_types!(@expand $($tail)+))
     };
     (@expand float $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::FLOAT.or($crate::Serde!(@expand $($tail)+))
+        $crate::metadata::BasicTypes::FLOAT.or($crate::basic_types!(@expand $($tail)+))
     };
     (@expand str $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::STRING.or($crate::Serde!(@expand $($tail)+))
+        $crate::metadata::BasicTypes::STRING.or($crate::basic_types!(@expand $($tail)+))
     };
     (@expand array $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::ARRAY.or($crate::Serde!(@expand $($tail)+))
+        $crate::metadata::BasicTypes::ARRAY.or($crate::basic_types!(@expand $($tail)+))
     };
     (@expand object $($tail:tt)+) => {
-        $crate::metadata::BasicTypes::OBJECT.or($crate::Serde!(@expand $($tail)+))
+        $crate::metadata::BasicTypes::OBJECT.or($crate::basic_types!(@expand $($tail)+))
     };
 
     (@expand bool) => {
@@ -71,11 +94,12 @@ macro_rules! Serde {
     };
 
     (*) => {
-        $crate::de::Serde::<{ $crate::metadata::BasicTypes::ANY.raw() }>
+         $crate::metadata::BasicTypes::ANY.raw()
     };
     ($($expecting:tt),+ $(,)?) => {
-        $crate::de::Serde::<{ $crate::metadata::BasicTypes::raw($crate::Serde!(@expand $($expecting)+)) }>
+        $crate::metadata::BasicTypes::raw($crate::basic_types!(@expand $($expecting)+))
     };
 }
 
+pub use Custom;
 pub use Serde;

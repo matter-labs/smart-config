@@ -300,7 +300,7 @@ pub use smart_config_derive::DeserializeConfig;
 use self::metadata::ConfigMetadata;
 pub use self::{
     de::DeserializeConfig,
-    error::{DeserializeConfigError, ParseError, ParseErrors},
+    error::{DeserializeConfigError, ErrorWithOrigin, ParseError, ParseErrors},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
     source::{
         ConfigContents, ConfigParser, ConfigRepository, ConfigSource, ConfigSources, Environment,

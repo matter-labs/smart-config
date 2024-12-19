@@ -53,7 +53,8 @@ impl fmt::Display for LowLevelError {
     }
 }
 
-pub(crate) type ErrorWithOrigin = WithOrigin<LowLevelError>;
+/// Error together with its origin.
+pub type ErrorWithOrigin = WithOrigin<LowLevelError>;
 
 impl ErrorWithOrigin {
     pub(crate) fn json(err: serde_json::Error, origin: Arc<ValueOrigin>) -> Self {
