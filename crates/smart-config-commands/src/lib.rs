@@ -110,11 +110,15 @@ pub struct ParamRef<'a> {
 impl ParamRef<'_> {
     /// Returns canonical path to the param.
     pub fn canonical_path(&self) -> String {
-        format!(
-            "{prefix}.{name}",
-            prefix = self.config.prefix(),
-            name = self.param.name
-        )
+        if self.config.prefix().is_empty() {
+            self.param.name.to_owned()
+        } else {
+            format!(
+                "{prefix}.{name}",
+                prefix = self.config.prefix(),
+                name = self.param.name
+            )
+        }
     }
 
     pub(crate) fn all_paths_inner(&self) -> impl Iterator<Item = (&str, &str)> + '_ {
@@ -132,8 +136,13 @@ impl ParamRef<'_> {
 
     /// Iterates over all paths to the param.
     pub fn all_paths(&self) -> impl Iterator<Item = String> + '_ {
-        self.all_paths_inner()
-            .map(|(prefix, name)| format!("{prefix}.{name}"))
+        self.all_paths_inner().map(|(prefix, name)| {
+            if prefix.is_empty() {
+                name.to_owned()
+            } else {
+                format!("{prefix}.{name}")
+            }
+        })
     }
 }
 
