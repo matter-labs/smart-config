@@ -60,6 +60,11 @@ impl ErrorWithOrigin {
     pub(crate) fn json(err: serde_json::Error, origin: Arc<ValueOrigin>) -> Self {
         Self::new(err.into(), origin)
     }
+
+    /// Creates a custom error.
+    pub fn custom(message: impl fmt::Display) -> Self {
+        Self::json(de::Error::custom(message), Arc::default())
+    }
 }
 
 impl de::Error for ErrorWithOrigin {
@@ -204,6 +209,15 @@ impl ParseErrors {
     #[allow(clippy::missing_panics_doc)] // false positive
     pub fn first(&self) -> &ParseError {
         self.errors.first().expect("no errors")
+    }
+}
+
+impl IntoIterator for ParseErrors {
+    type Item = ParseError;
+    type IntoIter = std::vec::IntoIter<ParseError>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.errors.into_iter()
     }
 }
 

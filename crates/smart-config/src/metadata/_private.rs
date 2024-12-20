@@ -1,11 +1,42 @@
 //! Metadata validations performed in compile time.
 
-use std::{any, fmt};
+use std::{any, fmt, marker::PhantomData};
 
 use compile_fmt::{clip, clip_ascii, compile_args, compile_panic, Ascii, CompileArgs};
 
 use super::{ConfigMetadata, NestedConfigMetadata, ParamMetadata, Validate};
-use crate::{utils::const_eq, ErrorWithOrigin};
+use crate::{
+    de::DeserializeContext, utils::const_eq, DeserializeConfig, DeserializeConfigError,
+    ErrorWithOrigin,
+};
+
+pub type BoxedDeserializer =
+    fn(DeserializeContext<'_>) -> Result<Box<dyn any::Any>, DeserializeConfigError>;
+
+pub trait DeserializeBoxedConfig {
+    fn deserialize_boxed_config(
+        &self,
+        ctx: DeserializeContext<'_>,
+    ) -> Result<Box<dyn any::Any>, DeserializeConfigError>;
+}
+
+impl<T: DeserializeConfig> DeserializeBoxedConfig for PhantomData<T> {
+    fn deserialize_boxed_config(
+        &self,
+        ctx: DeserializeContext<'_>,
+    ) -> Result<Box<dyn any::Any>, DeserializeConfigError> {
+        T::deserialize_config(ctx).map(|config| Box::new(config) as Box<dyn any::Any>)
+    }
+}
+
+impl<T> DeserializeBoxedConfig for &PhantomData<T> {
+    fn deserialize_boxed_config(
+        &self,
+        _ctx: DeserializeContext<'_>,
+    ) -> Result<Box<dyn any::Any>, DeserializeConfigError> {
+        Err(DeserializeConfigError::new())
+    }
+}
 
 /// Typed [`Validate`] implementation.
 #[derive(Clone, Copy)]

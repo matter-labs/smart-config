@@ -204,6 +204,11 @@ impl ConfigContainer {
                     help: #help,
                     params: &[#(#params,)*],
                     nested_configs: &[#(#nested_configs,)*],
+                    deserializer: |ctx| {
+                        use #cr::metadata::_private::DeserializeBoxedConfig as _;
+                        let receiver = &::core::marker::PhantomData::<#name>;
+                        receiver.deserialize_boxed_config(ctx)
+                    },
                     validations: &[#(#config_validations,)*],
                 };
             }

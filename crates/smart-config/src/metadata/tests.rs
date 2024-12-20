@@ -2,8 +2,10 @@ use std::collections::HashSet;
 
 use super::*;
 use crate::{
+    config,
+    de::{DeserializeContext, DeserializerOptions},
     testonly::{ConfigWithComplexTypes, DefaultingEnumConfig, EnumConfig},
-    DescribeConfig,
+    DescribeConfig, ParseErrors,
 };
 
 #[test]
@@ -40,6 +42,25 @@ fn describing_enum_config() {
         .find(|param| param.name == "type")
         .unwrap();
     assert_eq!(tag_param.expecting, BasicTypes::STRING);
+}
+
+#[test]
+fn deserializing_config_using_deserializer() {
+    let deserializer = EnumConfig::DESCRIPTION.deserializer;
+
+    let mut errors = ParseErrors::default();
+    let json = config!("type": "first");
+    let config = deserializer(DeserializeContext::new(
+        &DeserializerOptions::default(),
+        json.inner(),
+        String::new(),
+        &EnumConfig::DESCRIPTION,
+        &mut errors,
+    ))
+    .unwrap();
+
+    let config: EnumConfig = *config.downcast().unwrap();
+    assert_eq!(config, EnumConfig::First);
 }
 
 #[test]

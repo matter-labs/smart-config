@@ -2,6 +2,7 @@
 
 use std::{any, borrow::Cow, fmt};
 
+use self::_private::BoxedDeserializer;
 use crate::{
     de::{DeserializeParam, _private::ErasedDeserializer},
     fallback::FallbackSource,
@@ -29,6 +30,8 @@ pub struct ConfigMetadata {
     pub params: &'static [ParamMetadata],
     /// Nested configs included in the config.
     pub nested_configs: &'static [NestedConfigMetadata],
+    #[doc(hidden)] // implementation detail
+    pub deserializer: BoxedDeserializer,
     #[doc(hidden)] // implementation detail
     pub validations: &'static [&'static dyn Validate<dyn any::Any>],
 }
@@ -100,7 +103,8 @@ impl RustType {
         }
     }
 
-    pub(crate) fn id(&self) -> any::TypeId {
+    /// Returns the unique ID of this type.
+    pub fn id(&self) -> any::TypeId {
         (self.id)()
     }
 
