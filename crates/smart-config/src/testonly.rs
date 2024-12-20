@@ -1,7 +1,5 @@
 //! Test-only functionality shared among multiple test modules.
 
-// FIXME: test custom deserializers
-
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -15,7 +13,7 @@ use std::{
 use anyhow::Context as _;
 use assert_matches::assert_matches;
 use secrecy::SecretString;
-use serde::Deserialize;
+use serde::{de::Error as DeError, Deserialize};
 
 use crate::{
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
@@ -196,6 +194,15 @@ impl FromStr for MapOrString {
     }
 }
 
+const CUSTOM_DE: de::Custom![usize; str] = de::Custom![_; str](|ctx, param| {
+    let de = ctx.current_value_deserializer(param.name)?;
+    let len = String::deserialize(de)?.len();
+    if len > 5 {
+        return Err(DeError::custom("string is too long"));
+    }
+    Ok(len)
+});
+
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ConfigWithComplexTypes {
@@ -224,6 +231,8 @@ pub(crate) struct ConfigWithComplexTypes {
     pub ip_addr: IpAddr,
     #[config(default_t = ([192, 168, 0, 1], 3000).into())]
     pub socket_addr: SocketAddr,
+    #[config(default, with = CUSTOM_DE)]
+    pub with_custom_deserializer: usize,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]

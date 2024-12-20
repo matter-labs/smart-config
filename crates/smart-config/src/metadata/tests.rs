@@ -100,4 +100,11 @@ fn describing_complex_types() {
     let description = dur_param.type_description();
     assert_eq!(description.details().unwrap(), "time duration");
     assert_eq!(description.unit(), Some(TimeUnit::Millis.into()));
+
+    let custom_de_param = metadata
+        .params
+        .iter()
+        .find(|param| param.name == "with_custom_deserializer")
+        .unwrap();
+    assert_eq!(custom_de_param.expecting, BasicTypes::STRING);
 }

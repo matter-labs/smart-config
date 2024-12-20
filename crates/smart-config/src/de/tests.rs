@@ -393,6 +393,7 @@ fn parsing_complex_types() {
             map_or_string: MapOrString::default(),
             ip_addr: Ipv4Addr::LOCALHOST.into(),
             socket_addr: ([192, 168, 0, 1], 3000).into(),
+            with_custom_deserializer: 0,
         }
     );
 
@@ -409,6 +410,7 @@ fn parsing_complex_types() {
         "map_or_string": "test=1,other=2",
         "ip_addr": "10.10.0.103",
         "socket_addr": "[::1]:4040",
+        "with_custom_deserializer": "what",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -427,6 +429,7 @@ fn parsing_complex_types() {
             map_or_string: MapOrString(HashMap::from([("test".into(), 1), ("other".into(), 2),])),
             ip_addr: [10, 10, 0, 103].into(),
             socket_addr: (Ipv6Addr::LOCALHOST, 4040).into(),
+            with_custom_deserializer: 4,
         }
     );
 
@@ -445,6 +448,7 @@ fn parsing_complex_types() {
             "other": 23,
         }),
         "socket_addr": "127.0.0.1:8000",
+        "with_custom_deserializer": "!",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -463,6 +467,7 @@ fn parsing_complex_types() {
             map_or_string: MapOrString(HashMap::from([("test".into(), 42), ("other".into(), 23),])),
             ip_addr: Ipv4Addr::LOCALHOST.into(),
             socket_addr: ([127, 0, 0, 1], 8000).into(),
+            with_custom_deserializer: 1,
         }
     );
 }
@@ -656,6 +661,16 @@ fn parsing_complex_types_errors() {
     );
     assert_eq!(err.path(), "assumed");
     assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "assumed");
+}
+
+#[test]
+fn error_from_custom_deserializer() {
+    let json = config!("array": [2, 3], "with_custom_deserializer": "very long string");
+    let errors = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    let err = errors.first();
+    assert_eq!(err.path(), "with_custom_deserializer");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("string is too long"), "{inner}");
 }
 
 #[test]

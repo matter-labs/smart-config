@@ -154,7 +154,8 @@ impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXP
 type DeserializeFn<T> =
     fn(DeserializeContext<'_>, &'static ParamMetadata) -> Result<T, ErrorWithOrigin>;
 
-/// FIXME
+/// Custom deserializer for a specific type. Usually created with the help of [`Custom!`](crate::Custom!) macro;
+/// see its docs for the examples of usage.
 pub struct Custom<T, const EXPECTING: u8>(pub DeserializeFn<T>);
 
 impl<T: 'static, const EXPECTING: u8> fmt::Debug for Custom<T, EXPECTING> {
