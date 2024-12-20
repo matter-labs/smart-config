@@ -1,4 +1,5 @@
 use std::{
+    any,
     collections::{HashMap, HashSet},
     time::Duration,
 };
@@ -13,9 +14,9 @@ use crate::{
     testing::MockEnvGuard,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, AliasedConfig, ComposedConfig,
-        CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks, ConfigWithNesting,
-        DefaultingConfig, EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum,
-        ValueCoercingConfig,
+        CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks, ConfigWithNestedValidations,
+        ConfigWithNesting, ConfigWithValidations, DefaultingConfig, EnumConfig, KvTestConfig,
+        NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
     },
     value::StrValue,
     ByteSize, DescribeConfig,
@@ -1281,4 +1282,52 @@ fn reading_env_vars_using_env_source() {
         .unwrap();
     assert_eq!(config.simple_enum, SimpleEnum::First);
     assert_eq!(config.other_int, 23);
+}
+
+#[test]
+fn config_validations() {
+    let json = config!("len": 4, "secret": "test");
+    let config: ConfigWithValidations = testing::test(json).unwrap();
+    assert_eq!(config.len, 4);
+    assert_eq!(config.secret.expose_secret(), "test");
+
+    let json = config!("len": 3, "secret": "test");
+    let err = testing::test::<ConfigWithValidations>(json).unwrap_err();
+    assert_eq!(err.len(), 1, "{err:?}");
+    let err = err.first();
+    assert_eq!(err.path(), "");
+    assert_eq!(
+        err.config().ty.id(),
+        any::TypeId::of::<ConfigWithValidations>()
+    );
+    assert!(err.param().is_none());
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("`len` doesn't correspond to `secret`"),
+        "{inner}"
+    );
+}
+
+#[test]
+fn config_nested_validations() {
+    let json = config!("nested.len": 4, "nested.secret": "test");
+    let config: ConfigWithNestedValidations = testing::test(json).unwrap();
+    assert_eq!(config.nested.len, 4);
+    assert_eq!(config.nested.secret.expose_secret(), "test");
+
+    let json = config!("nested.len": 3, "nested.secret": "test");
+    let err = testing::test::<ConfigWithNestedValidations>(json).unwrap_err();
+    assert_eq!(err.len(), 1, "{err:?}");
+    let err = err.first();
+    assert_eq!(err.path(), "nested");
+    assert_eq!(
+        err.config().ty.id(),
+        any::TypeId::of::<ConfigWithValidations>()
+    );
+    assert!(err.param().is_none());
+    let inner = err.inner().to_string();
+    assert!(
+        inner.contains("`len` doesn't correspond to `secret`"),
+        "{inner}"
+    );
 }

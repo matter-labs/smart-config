@@ -128,6 +128,8 @@
 // Linter settings
 #![warn(missing_docs)]
 
+extern crate core;
+
 /// Derives the [`DescribeConfig`](trait@DescribeConfig) trait for a type.
 ///
 /// This macro supports both structs and enums. It is conceptually similar to `Deserialize` macro from `serde`.

@@ -1,9 +1,36 @@
 //! Metadata validations performed in compile time.
 
-use compile_fmt::{clip, clip_ascii, compile_args, compile_panic, fmt, Ascii, CompileArgs};
+use std::{any, fmt};
 
-use super::{ConfigMetadata, NestedConfigMetadata, ParamMetadata};
-use crate::utils::const_eq;
+use compile_fmt::{clip, clip_ascii, compile_args, compile_panic, Ascii, CompileArgs};
+
+use super::{ConfigMetadata, NestedConfigMetadata, ParamMetadata, Validate};
+use crate::{utils::const_eq, ErrorWithOrigin};
+
+/// Typed [`Validate`] implementation.
+#[derive(Clone, Copy)]
+pub struct Validation<T>(pub &'static str, pub fn(&T) -> Result<(), ErrorWithOrigin>);
+
+impl<T: 'static> fmt::Display for Validation<T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+impl<T: 'static> fmt::Debug for Validation<T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.debug_tuple("Validation").field(&self.0).finish()
+    }
+}
+
+impl<T: 'static> Validate<dyn any::Any> for Validation<T> {
+    fn validate(&self, target: &dyn any::Any) -> Result<(), ErrorWithOrigin> {
+        let target = target
+            .downcast_ref()
+            .expect("Internal error: validation target has incorrect type");
+        (self.1)(target)
+    }
+}
 
 const fn is_valid_start_name_char(ch: u8) -> bool {
     ch == b'_' || ch.is_ascii_lowercase()
@@ -52,12 +79,12 @@ impl ValidationError {
             Self::NonAscii { pos } => compile_args!(
                 capacity: ErrorArgs::CAPACITY,
                 "name contains non-ASCII chars, first at position ",
-                pos => fmt::<usize>()
+                pos => compile_fmt::fmt::<usize>()
             ),
             Self::DisallowedChar { pos, ch, allowed } => compile_args!(
                 "name contains a disallowed char '",
-                ch => fmt::<char>(),
-                "' at position ", pos => fmt::<usize>(),
+                ch => compile_fmt::fmt::<char>(),
+                "' at position ", pos => compile_fmt::fmt::<usize>(),
                 "; allowed chars are ",
                 allowed.as_str() => clip_ascii(10, "")
             ),
@@ -100,7 +127,7 @@ pub const fn assert_param_name(name: &str) {
     if let Err(err) = validate_name(name) {
         compile_panic!(
             "Param / config name `", name => clip(32, "…"), "` is invalid: ",
-            &err.fmt() => fmt::<&ErrorArgs>()
+            &err.fmt() => compile_fmt::fmt::<&ErrorArgs>()
         );
     }
 }
@@ -321,8 +348,8 @@ pub const fn assert_paths(paths: &[&str]) {
         let path = paths[i];
         if let Err(err) = validate_path(path) {
             compile_panic!(
-                "Path #", i => fmt::<usize>(), " `", path => clip(32, "…"), "` is invalid: ",
-                &err.fmt() => fmt::<&ErrorArgs>()
+                "Path #", i => compile_fmt::fmt::<usize>(), " `", path => clip(32, "…"), "` is invalid: ",
+                &err.fmt() => compile_fmt::fmt::<&ErrorArgs>()
             );
         }
         i += 1;
@@ -342,8 +369,8 @@ pub const fn assert_paths(paths: &[&str]) {
                 };
 
                 compile_panic!(
-                    "Path #", short_i => fmt::<usize>(), " `", short => clip(32, "…"), "` is a prefix of path #",
-                    long_i => fmt::<usize>(), " `", long => clip(32, "…"), "`"
+                    "Path #", short_i => compile_fmt::fmt::<usize>(), " `", short => clip(32, "…"), "` is a prefix of path #",
+                    long_i => compile_fmt::fmt::<usize>(), " `", long => clip(32, "…"), "`"
                 );
             }
             j += 1;

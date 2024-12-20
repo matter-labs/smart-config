@@ -248,7 +248,23 @@ impl<'a> DeserializeContext<'a> {
                 return Err(DeserializeConfigError::new());
             }
         }
-        T::deserialize_config(self)
+        let config = T::deserialize_config(self.borrow())?;
+
+        let mut has_errors = false;
+        for &validation in T::DESCRIPTION.validations {
+            let _span = tracing::trace_span!("validation", %validation).entered();
+            if let Err(err) = validation.validate(&config) {
+                tracing::info!(%validation, origin = %err.origin, "config validation failed: {}", err.inner);
+                self.push_error(err);
+                has_errors = true;
+            }
+        }
+
+        if has_errors {
+            Err(DeserializeConfigError::new())
+        } else {
+            Ok(config)
+        }
     }
 }
 

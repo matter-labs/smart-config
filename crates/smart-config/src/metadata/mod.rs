@@ -5,12 +5,18 @@ use std::{any, borrow::Cow, fmt};
 use crate::{
     de::{DeserializeParam, _private::ErasedDeserializer},
     fallback::FallbackSource,
+    ErrorWithOrigin,
 };
 
 #[doc(hidden)] // used in the derive macros
 pub mod _private;
 #[cfg(test)]
 mod tests;
+
+#[doc(hidden)]
+pub trait Validate<T: ?Sized>: 'static + fmt::Debug + fmt::Display {
+    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin>;
+}
 
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]
@@ -23,6 +29,8 @@ pub struct ConfigMetadata {
     pub params: &'static [ParamMetadata],
     /// Nested configs included in the config.
     pub nested_configs: &'static [NestedConfigMetadata],
+    #[doc(hidden)] // implementation detail
+    pub validations: &'static [&'static dyn Validate<dyn any::Any>],
 }
 
 /// Metadata for a specific configuration parameter.

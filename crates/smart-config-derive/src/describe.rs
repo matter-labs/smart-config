@@ -5,7 +5,7 @@ use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, LitStr, Type};
 
 use crate::utils::{
-    wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigField, DefaultValue,
+    wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigField, DefaultValue, Validation,
 };
 
 impl DefaultValue {
@@ -140,6 +140,16 @@ impl ConfigField {
     }
 }
 
+impl Validation {
+    fn to_validation(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let description = &self.description;
+        let path = &self.path;
+        quote_spanned! {description.span()=>
+            &#cr::metadata::_private::Validation(#description, #path)
+        }
+    }
+}
+
 impl ConfigContainer {
     fn derive_describe_config(&self) -> proc_macro2::TokenStream {
         let name = &self.name;
@@ -181,6 +191,12 @@ impl ConfigContainer {
             None
         });
 
+        let config_validations = self
+            .attrs
+            .validations
+            .iter()
+            .map(|val| val.to_validation(&cr));
+
         quote! {
             impl #cr::DescribeConfig for #name {
                 const DESCRIPTION: #cr::metadata::ConfigMetadata = #cr::metadata::ConfigMetadata {
@@ -188,6 +204,7 @@ impl ConfigContainer {
                     help: #help,
                     params: &[#(#params,)*],
                     nested_configs: &[#(#nested_configs,)*],
+                    validations: &[#(#config_validations,)*],
                 };
             }
 

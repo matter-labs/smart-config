@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::Context as _;
 use assert_matches::assert_matches;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{de::Error as DeError, Deserialize};
 
 use crate::{
@@ -21,7 +21,8 @@ use crate::{
     fallback::FallbackSource,
     metadata::{SizeUnit, TimeUnit},
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
+    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
+    ParseErrors,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
@@ -297,6 +298,30 @@ pub(crate) struct ConfigWithFallbacks {
     pub int: u32,
     #[config(fallback = STR_SOURCE)]
     pub str: Option<SecretString>,
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+#[config(validate("`len` must match `secret` length", Self::validate_len))]
+pub(crate) struct ConfigWithValidations {
+    pub len: usize,
+    pub secret: SecretString,
+}
+
+impl ConfigWithValidations {
+    fn validate_len(&self) -> Result<(), ErrorWithOrigin> {
+        if self.len != self.secret.expose_secret().len() {
+            return Err(DeError::custom("`len` doesn't correspond to `secret`"));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ConfigWithNestedValidations {
+    #[config(nest)]
+    pub nested: ConfigWithValidations,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
