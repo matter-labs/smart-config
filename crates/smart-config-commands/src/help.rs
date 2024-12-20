@@ -4,10 +4,10 @@ use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
     metadata::{BasicTypes, TypeDescription},
-    ConfigSchema,
+    ConfigRef, ConfigSchema,
 };
 
-use crate::{ParamRef, Printer};
+use crate::{ParamRef, Printer, CONFIG_PATH};
 
 const INDENT: &str = "  ";
 const DIMMED: Style = Style::new().dimmed();
@@ -32,12 +32,21 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
     ) -> io::Result<()> {
         let mut writer = self.writer;
         for config in schema.iter() {
-            let filtered_params = config
+            let filtered_params: Vec<_> = config
                 .metadata()
                 .params
                 .iter()
                 .map(|param| ParamRef { config, param })
-                .filter(|&param_ref| filter(param_ref));
+                .filter(|&param_ref| filter(param_ref))
+                .collect();
+            if filtered_params.is_empty() {
+                continue;
+            }
+
+            let validations = config.metadata().validations;
+            if !validations.is_empty() {
+                write_config_help(&mut writer, config)?;
+            }
 
             for param_ref in filtered_params {
                 param_ref.write_help(&mut writer)?;
@@ -46,6 +55,29 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
         }
         Ok(())
     }
+}
+
+fn write_config_help(writer: &mut impl io::Write, config: ConfigRef<'_>) -> io::Result<()> {
+    writeln!(
+        writer,
+        "{MAIN_NAME}{CONFIG_PATH}{}{CONFIG_PATH:#}{MAIN_NAME:#}",
+        config.prefix()
+    )?;
+    for alias in config.aliases() {
+        writeln!(writer, "{CONFIG_PATH}{alias}{CONFIG_PATH:#}")?;
+    }
+    writeln!(
+        writer,
+        "{INDENT}{FIELD}Config{FIELD:#}: {}",
+        config.metadata().ty.name_in_code()
+    )?;
+
+    writeln!(writer, "{INDENT}{FIELD}Validations{FIELD:#}:")?;
+    for &validation in config.metadata().validations {
+        let description = validation.to_string();
+        writeln!(writer, "{INDENT}- {description}")?;
+    }
+    Ok(())
 }
 
 impl ParamRef<'_> {

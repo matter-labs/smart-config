@@ -1,16 +1,20 @@
-use std::io::{self, Write as _};
+use std::{
+    collections::{HashMap, HashSet},
+    io::{self, Write as _},
+};
 
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
     value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
-    ConfigRepository, ParseError, ParseErrors,
+    ConfigRepository, ParseError,
 };
 
-use crate::{ParamRef, Printer};
+use crate::{ParamRef, Printer, CONFIG_PATH};
 
 const SECTION: Style = Style::new().bold();
 const ARROW: Style = Style::new().bold();
+const RUST: Style = Style::new().dimmed();
 const JSON_FILE: Style = Style::new()
     .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
     .fg_color(None);
@@ -50,24 +54,71 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
             writeln!(&mut writer, ", {} param(s)", source.param_count)?;
         }
 
+        let mut errors_by_param = HashMap::<_, Vec<_>>::new();
+        let mut errors_by_config = HashMap::<_, Vec<_>>::new();
+        for config_parser in repo.iter() {
+            if let Err(errors) = config_parser.parse() {
+                // Only insert errors for a certain param / config if errors for it were not encountered before.
+                let mut new_params = HashSet::new();
+                let mut new_configs = HashSet::new();
+
+                for err in errors {
+                    let config_id = err.config().ty.id();
+                    if let Some(param) = err.param() {
+                        let key = (config_id, param.rust_field_name);
+                        if !errors_by_param.contains_key(&key) || new_params.contains(&key) {
+                            errors_by_param.entry(key).or_default().push(err);
+                            new_params.insert(key);
+                        }
+                    } else if !errors_by_config.contains_key(&config_id)
+                        || new_configs.contains(&config_id)
+                    {
+                        errors_by_config.entry(config_id).or_default().push(err);
+                        new_configs.insert(config_id);
+                    }
+                }
+            }
+        }
+
         writeln!(&mut writer)?;
         writeln!(&mut writer, "{SECTION}Values:{SECTION:#}")?;
 
         let merged = repo.merged();
         for config_parser in repo.iter() {
             let config = config_parser.config();
-            for (i, param) in config.metadata().params.iter().enumerate() {
+            let config_name = config.metadata().ty.name_in_code();
+            let config_id = config.metadata().ty.id();
+
+            if let Some(errors) = errors_by_config.get(&config_id) {
+                writeln!(
+                    writer,
+                    "{CONFIG_PATH}{}{CONFIG_PATH:#} {RUST}[Rust: {config_name}]{RUST:#}, config",
+                    config.prefix()
+                )?;
+                write_de_errors(&mut writer, errors)?;
+            }
+
+            for param in config.metadata().params {
                 let param_ref = ParamRef { config, param };
                 if !filter(param_ref) {
                     continue;
                 }
                 let canonical_path = param_ref.canonical_path();
 
+                let mut param_written = false;
                 if let Some(value) = merged.pointer(&canonical_path) {
-                    write_param(&mut writer, &canonical_path, value)?;
-                    if let Err(err) = config_parser.parse_param(i) {
-                        write_de_errors(&mut writer, &err)?;
+                    write_param(&mut writer, param_ref, &canonical_path, value)?;
+                    param_written = true;
+                }
+                let field_name = param.rust_field_name;
+                if let Some(errors) = errors_by_param.get(&(config_id, field_name)) {
+                    if !param_written {
+                        writeln!(
+                            writer,
+                            "{canonical_path} {RUST}[Rust: {config_name}.{field_name}]{RUST:#}"
+                        )?;
                     }
+                    write_de_errors(&mut writer, errors)?;
                 }
             }
         }
@@ -108,8 +159,18 @@ fn write_origin(writer: &mut impl io::Write, origin: &ValueOrigin) -> io::Result
     }
 }
 
-fn write_param(writer: &mut impl io::Write, path: &str, value: &WithOrigin) -> io::Result<()> {
-    write!(writer, "{path} = ")?;
+fn write_param(
+    writer: &mut impl io::Write,
+    param_ref: ParamRef<'_>,
+    path: &str,
+    value: &WithOrigin,
+) -> io::Result<()> {
+    write!(
+        writer,
+        "{path} {RUST}[Rust: {}.{}]{RUST:#} = ",
+        param_ref.config.metadata().ty.name_in_code(),
+        param_ref.param.rust_field_name
+    )?;
     write_value(writer, value, 0)?;
 
     writeln!(writer)?;
@@ -155,13 +216,13 @@ fn write_value(writer: &mut impl io::Write, value: &WithOrigin, ident: usize) ->
     }
 }
 
-fn write_de_errors(writer: &mut impl io::Write, errors: &ParseErrors) -> io::Result<()> {
+fn write_de_errors(writer: &mut impl io::Write, errors: &[ParseError]) -> io::Result<()> {
     if errors.len() == 1 {
         write!(writer, "  {ERROR_LABEL}Error:{ERROR_LABEL:#} ")?;
-        write_de_error(writer, errors.first())
+        write_de_error(writer, &errors[0])
     } else {
         writeln!(writer, "  {ERROR_LABEL}Errors:{ERROR_LABEL:#}")?;
-        for err in errors.iter() {
+        for err in errors {
             write!(writer, "  - ")?;
             write_de_error(writer, err)?;
         }
@@ -171,20 +232,15 @@ fn write_de_errors(writer: &mut impl io::Write, errors: &ParseErrors) -> io::Res
 
 fn write_de_error(writer: &mut impl io::Write, err: &ParseError) -> io::Result<()> {
     writeln!(writer, "{}", err.inner())?;
-
-    let maybe_param = if let Some(param) = err.param() {
-        format!(".{}", param.rust_field_name)
-    } else {
-        String::new()
-    };
     writeln!(
         writer,
-        "    at {SECTION}{path}{SECTION:#}, {config}{maybe_param}",
-        path = err.path(),
-        config = err.config().ty.name_in_code()
+        "    at {SECTION}{path}{SECTION:#}",
+        path = err.path()
     )?;
-    write!(writer, "    ")?;
-
-    write_origin(writer, err.origin())?;
-    writeln!(writer)
+    if !matches!(err.origin(), ValueOrigin::Unknown) {
+        write!(writer, "    ")?;
+        write_origin(writer, err.origin())?;
+        writeln!(writer)?;
+    }
+    Ok(())
 }

@@ -54,10 +54,13 @@ use std::{
 };
 
 use anstream::{stream::RawStream, AutoStream};
+use anstyle::{AnsiColor, Color, Style};
 use smart_config::{metadata::ParamMetadata, ConfigRef};
 
 mod debug;
 mod help;
+
+const CONFIG_PATH: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
 
 /// Wrapper around an I/O writer. Will style the output with ANSI sequences if appropriate.
 ///
