@@ -46,6 +46,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
             let validations = config.metadata().validations;
             if !validations.is_empty() {
                 write_config_help(&mut writer, config)?;
+                writeln!(&mut writer)?;
             }
 
             for param_ref in filtered_params {
