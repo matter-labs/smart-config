@@ -316,12 +316,6 @@ pub struct ConfigParser<'a, C> {
 }
 
 impl ConfigParser<'_, ()> {
-    #[doc(hidden)] // Not stable yet
-    pub fn parse_param(&self, index: usize) -> Result<(), ParseErrors> {
-        self.with_context(|mut ctx| ctx.deserialize_any_param(index))
-            .map(drop)
-    }
-
     #[doc(hidden)]
     pub fn parse(&self) -> Result<(), ParseErrors> {
         self.with_context(|ctx| ctx.deserialize_any_config().map(drop))

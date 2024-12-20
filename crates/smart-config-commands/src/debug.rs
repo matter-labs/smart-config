@@ -57,6 +57,13 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
         let mut errors_by_param = HashMap::<_, Vec<_>>::new();
         let mut errors_by_config = HashMap::<_, Vec<_>>::new();
         for config_parser in repo.iter() {
+            if !config_parser.config().is_top_level() {
+                // The config should be parsed as a part of the parent config. Filtering out these configs
+                // might not be sufficient to prevent error duplication because a parent config may be inserted after
+                // the config itself, so we perform additional deduplication below.
+                continue;
+            }
+
             if let Err(errors) = config_parser.parse() {
                 // Only insert errors for a certain param / config if errors for it were not encountered before.
                 let mut new_params = HashSet::new();

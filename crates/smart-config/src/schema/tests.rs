@@ -115,6 +115,7 @@ fn using_multiple_aliases() {
     let config_ref = schema.single(&TestConfig::DESCRIPTION).unwrap();
     assert_eq!(config_ref.prefix(), "test");
     assert_eq!(config_ref.aliases().count(), 2);
+    assert!(config_ref.is_top_level());
 
     let env = Environment::from_iter(
         "APP_",
@@ -145,14 +146,20 @@ fn using_nesting() {
 
     let refs: Vec<_> = schema
         .iter()
-        .map(|config_ref| (config_ref.prefix, config_ref.metadata().ty.name_in_code()))
+        .map(|config_ref| {
+            (
+                config_ref.prefix,
+                config_ref.is_top_level(),
+                config_ref.metadata().ty.name_in_code(),
+            )
+        })
         .collect();
     assert_eq!(
         refs,
         [
-            ("", "NestingConfig"),
-            ("", "TestConfig"),
-            ("hierarchical", "TestConfig")
+            ("", true, "NestingConfig"),
+            ("", false, "TestConfig"),
+            ("hierarchical", false, "TestConfig")
         ]
     );
 
@@ -422,6 +429,10 @@ fn aliasing_does_not_change_config_depth() {
         .unwrap()
         .push_alias("alias")
         .unwrap();
+    assert!(!schema
+        .get(&NestedAliasedConfig::DESCRIPTION, "test")
+        .unwrap()
+        .is_top_level());
 
     assert_eq!(schema.configs["test"].by_depth, expected_index_by_depth);
     assert_eq!(
