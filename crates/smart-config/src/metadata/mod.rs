@@ -7,10 +7,10 @@ use crate::{
     fallback::FallbackSource,
 };
 
+#[doc(hidden)] // used in the derive macros
+pub mod _private;
 #[cfg(test)]
 mod tests;
-#[doc(hidden)] // used in the derive macro
-pub mod validation;
 
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]

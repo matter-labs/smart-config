@@ -54,14 +54,14 @@ impl ConfigField {
         let name_validation_span = self.attrs.rename.as_ref().map_or(name_span, LitStr::span);
         let cr = parent.cr(name_validation_span);
         let name_validation = quote_spanned! {name_validation_span=>
-            const _: () = #cr::metadata::validation::assert_param_name(#param_name);
+            const _: () = #cr::metadata::_private::assert_param_name(#param_name);
         };
 
         let aliases = self.attrs.aliases.iter();
         let aliases_validation = aliases.map(|alias| {
             let cr = parent.cr(alias.span());
             quote_spanned! {alias.span()=>
-                const _: () = #cr::metadata::validation::assert_param_name(#alias);
+                const _: () = #cr::metadata::_private::assert_param_name(#alias);
             }
         });
 
