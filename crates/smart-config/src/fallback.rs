@@ -128,7 +128,7 @@ impl FallbackSource for Env {
 /// // Value source combining two env variables. It usually makes sense to split off
 /// // the definition like this so that it's more readable.
 /// const COMBINED_VARS: &'static dyn fallback::FallbackSource =
-///     &fallback::Custom::new("$TEST_ENV - $TEST_NETWORK", || {
+///     &fallback::Manual::new("$TEST_ENV - $TEST_NETWORK", || {
 ///         let env = fallback::Env("TEST_ENV").get_raw()?;
 ///         let network = fallback::Env("TEST_NETWORK").get_raw()?;
 ///         let origin = Arc::new(ValueOrigin::EnvVars);
@@ -148,12 +148,12 @@ impl FallbackSource for Env {
 /// # anyhow::Ok(())
 /// ```
 #[derive(Debug)]
-pub struct Custom {
+pub struct Manual {
     description: &'static str,
     getter: fn() -> Option<WithOrigin>,
 }
 
-impl Custom {
+impl Manual {
     /// Creates a provider with the specified human-readable description and a getter function.
     pub const fn new(description: &'static str, getter: fn() -> Option<WithOrigin>) -> Self {
         Self {
@@ -163,13 +163,13 @@ impl Custom {
     }
 }
 
-impl fmt::Display for Custom {
+impl fmt::Display for Manual {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.description)
     }
 }
 
-impl FallbackSource for Custom {
+impl FallbackSource for Manual {
     fn provide_value(&self) -> Option<WithOrigin> {
         (self.getter)()
     }

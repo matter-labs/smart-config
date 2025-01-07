@@ -273,7 +273,7 @@ pub(crate) struct AliasedConfig {
 }
 
 const STR_SOURCE: &'static dyn FallbackSource =
-    &fallback::Custom::new("filtered 'SMART_CONFIG_STR' env var", || {
+    &fallback::Manual::new("filtered 'SMART_CONFIG_STR' env var", || {
         fallback::Env("SMART_CONFIG_STR")
             .provide_value()
             .filter(|val| val.inner.as_plain_str() != Some("unset"))
