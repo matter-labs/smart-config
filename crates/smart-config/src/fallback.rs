@@ -141,7 +141,21 @@ impl FallbackSource for Env {
     }
 }
 
-/// Custom [value provider](FallbackSource).
+/// Custom [fallback value provider](FallbackSource).
+///
+/// # Use cases
+///
+/// This provider is useful when configuration parameter deserialization logic is hard to express
+/// using conventional methods, such as:
+///
+/// - Composite configuration parameters that rely on several environment variables.
+///   In this case, you can use the getter closure to access variables via [`Env`] and combine
+///   them into a single value.
+/// - Configuration values that need additional validation to make the configuration object
+///   correct by construction. For example, if your config has an optional field, which should
+///   be `None` _either_ if it's absent or set to the `"unset"` value, you can first get it via `Env`,
+///   and then only provide value if it's not equal to `"unset"`. You can think of it as a `filter` or
+///   `map` function in this case.
 ///
 /// # Examples
 ///
