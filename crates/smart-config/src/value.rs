@@ -39,7 +39,7 @@ pub enum ValueOrigin {
     /// Environment variables.
     EnvVars,
     /// Alternative values for config params.
-    Alternatives,
+    Fallbacks,
     /// File source.
     File {
         /// Filename; may not correspond to a real filesystem path.
@@ -68,7 +68,7 @@ impl fmt::Display for ValueOrigin {
         match self {
             Self::Unknown => formatter.write_str("unknown"),
             Self::EnvVars => formatter.write_str("env variables"),
-            Self::Alternatives => formatter.write_str("alternatives"),
+            Self::Fallbacks => formatter.write_str("alternatives"),
             Self::File { name, format } => {
                 write!(formatter, "{format} file '{name}'")
             }

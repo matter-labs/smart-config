@@ -8,7 +8,7 @@ use secrecy::ExposeSecret;
 
 use super::*;
 use crate::{
-    alt::MockEnvGuard,
+    fallback::MockEnvGuard,
     metadata::SizeUnit,
     testing,
     testonly::{
@@ -1242,7 +1242,7 @@ fn reading_alternatives() {
     ]);
     let repo = ConfigRepository::new(&schema);
     assert_eq!(repo.sources().len(), 1);
-    assert_matches!(repo.sources()[0].origin.as_ref(), ValueOrigin::Alternatives);
+    assert_matches!(repo.sources()[0].origin.as_ref(), ValueOrigin::Fallbacks);
     assert_eq!(repo.sources()[0].param_count, 2);
     drop(guard);
 

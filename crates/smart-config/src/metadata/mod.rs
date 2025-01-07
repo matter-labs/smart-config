@@ -3,8 +3,8 @@
 use std::{any, borrow::Cow, fmt};
 
 use crate::{
-    alt::AltSource,
     de::{DeserializeParam, _private::ErasedDeserializer},
+    fallback::FallbackSource,
 };
 
 #[cfg(test)]
@@ -45,7 +45,7 @@ pub struct ParamMetadata {
     #[doc(hidden)] // implementation detail
     pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
     #[doc(hidden)]
-    pub alt: Option<&'static dyn AltSource>,
+    pub fallback: Option<&'static dyn FallbackSource>,
 }
 
 impl ParamMetadata {

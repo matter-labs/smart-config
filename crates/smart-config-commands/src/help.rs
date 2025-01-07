@@ -75,7 +75,7 @@ impl ParamRef<'_> {
                 "{INDENT}{FIELD}Default{FIELD:#}: {DEFAULT_VAL}{default:?}{DEFAULT_VAL:#}"
             )?;
         }
-        if let Some(alt) = self.param.alt {
+        if let Some(alt) = self.param.fallback {
             write!(writer, "{INDENT}{FIELD}Alternatives{FIELD:#}: ")?;
             let alt = alt.to_string();
             let mut lines = alt.lines();

@@ -207,11 +207,11 @@
 ///
 /// Allows to specify the default typed value for the param. The provided expression doesn't need to be constant.
 ///
-/// ## `alt`
+/// ## `fallback`
 ///
-/// **Type:** constant expression evaluating to `&'static dyn `[`AltSource`](alt::AltSource)
+/// **Type:** constant expression evaluating to `&'static dyn `[`FallbackSource`](fallback::FallbackSource)
 ///
-/// Allows to provide an alternative source for the param. See the [`alt`] module docs for the discussion of alternatives
+/// Allows to provide a fallback source for the param. See the [`fallback`] module docs for the discussion of fallbacks
 /// and intended use cases.
 ///
 /// ## `with`
@@ -309,9 +309,9 @@ pub use self::{
     types::ByteSize,
 };
 
-pub mod alt;
 pub mod de;
 mod error;
+pub mod fallback;
 pub mod metadata;
 mod schema;
 mod source;

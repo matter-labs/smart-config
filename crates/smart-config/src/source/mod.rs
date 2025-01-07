@@ -7,8 +7,8 @@ use std::{
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
-    alt::Alternatives,
     de::{DeserializeContext, DeserializerOptions},
+    fallback::Fallbacks,
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
@@ -204,7 +204,7 @@ impl<'a> ConfigRepository<'a> {
                 origin: Arc::default(),
             },
         };
-        if let Some(alternatives) = Alternatives::new(schema) {
+        if let Some(alternatives) = Fallbacks::new(schema) {
             this.with(alternatives)
         } else {
             this

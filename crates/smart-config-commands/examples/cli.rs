@@ -10,7 +10,7 @@ use clap::Parser;
 use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Deserializer};
 use smart_config::{
-    alt, de,
+    de, fallback,
     metadata::{SizeUnit, TimeUnit},
     value::SecretString,
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
@@ -34,7 +34,7 @@ pub struct TestConfig {
     #[config(default)]
     pub scaling_factor: Option<f32>,
     /// Directory for temporary stuff.
-    #[config(default_t = "/tmp".into(), alt = &alt::Env("TMPDIR"))]
+    #[config(default_t = "/tmp".into(), fallback = &fallback::Env("TMPDIR"))]
     pub temp_dir: PathBuf,
     /// Paths to key directories.
     #[config(default, alias = "dirs", with = de::Delimited(":"))]

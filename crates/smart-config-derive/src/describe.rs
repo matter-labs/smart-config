@@ -92,12 +92,12 @@ impl ConfigField {
             quote_spanned!(name_span=> ::core::option::Option::None)
         };
 
-        let alt = self
+        let fallback = self
             .attrs
             .alt
             .as_ref()
             .map(quote::ToTokens::to_token_stream);
-        let alt = wrap_in_option(alt);
+        let fallback = wrap_in_option(fallback);
 
         let cr = parent.cr(name_span);
         let deserializer = self.deserializer(&cr);
@@ -113,7 +113,7 @@ impl ConfigField {
                 expecting: #cr::de::_private::extract_expected_types::<#ty, _>(&deserializer),
                 deserializer: &#cr::de::_private::Erased::<#ty, _>::new(deserializer),
                 default_value: #default_value,
-                alt: #alt,
+                fallback: #fallback,
             }
         }}
     }

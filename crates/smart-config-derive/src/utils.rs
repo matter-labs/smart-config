@@ -139,7 +139,7 @@ impl ConfigFieldAttrs {
         let mut rename = None;
         let mut aliases = vec![];
         let mut default = None;
-        let mut alt = None;
+        let mut fallback = None;
         let mut nested_span = None;
         let mut flatten_span = None;
         let mut with = None;
@@ -162,8 +162,8 @@ impl ConfigFieldAttrs {
                 } else if meta.path.is_ident("default_t") {
                     default = Some(DefaultValue::Expr(meta.value()?.parse()?));
                     Ok(())
-                } else if meta.path.is_ident("alt") {
-                    alt = Some(meta.value()?.parse::<Expr>()?);
+                } else if meta.path.is_ident("fallback") {
+                    fallback = Some(meta.value()?.parse::<Expr>()?);
                     Ok(())
                 } else if meta.path.is_ident("flatten") {
                     flatten_span = Some(meta.path.span());
@@ -195,9 +195,9 @@ impl ConfigFieldAttrs {
             let msg = "cannot specify `with` for a `nest`ed / `flatten`ed configuration";
             return Err(syn::Error::new(with.span(), msg));
         }
-        if let (Some(alt), true) = (&alt, nest) {
-            let msg = "cannot specify `alt` for a `nest`ed / `flatten`ed configuration";
-            return Err(syn::Error::new(alt.span(), msg));
+        if let (Some(fallback), true) = (&fallback, nest) {
+            let msg = "cannot specify `fallback` for a `nest`ed / `flatten`ed configuration";
+            return Err(syn::Error::new(fallback.span(), msg));
         }
 
         if let (Some(flatten_span), Some(_)) = (flatten_span, &rename) {
@@ -221,7 +221,7 @@ impl ConfigFieldAttrs {
             rename,
             aliases,
             default,
-            alt,
+            alt: fallback,
             flatten,
             nest,
             with,

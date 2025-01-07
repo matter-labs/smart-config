@@ -16,9 +16,9 @@ use secrecy::SecretString;
 use serde::Deserialize;
 
 use crate::{
-    alt,
-    alt::AltSource,
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
+    fallback,
+    fallback::FallbackSource,
     metadata::{SizeUnit, TimeUnit},
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
@@ -272,9 +272,9 @@ pub(crate) struct AliasedConfig {
     pub flat: NestedAliasedConfig,
 }
 
-const STR_SOURCE: &'static dyn AltSource =
-    &alt::Custom::new("filtered 'SMART_CONFIG_STR' env var", || {
-        alt::Env("SMART_CONFIG_STR")
+const STR_SOURCE: &'static dyn FallbackSource =
+    &fallback::Custom::new("filtered 'SMART_CONFIG_STR' env var", || {
+        fallback::Env("SMART_CONFIG_STR")
             .provide_value()
             .filter(|val| val.inner.as_plain_str() != Some("unset"))
     });
@@ -282,9 +282,9 @@ const STR_SOURCE: &'static dyn AltSource =
 #[derive(DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ConfigWithAlternatives {
-    #[config(default_t = 42, alt = &alt::Env("SMART_CONFIG_INT"))]
+    #[config(default_t = 42, fallback = &fallback::Env("SMART_CONFIG_INT"))]
     pub int: u32,
-    #[config(alt = STR_SOURCE)]
+    #[config(fallback = STR_SOURCE)]
     pub str: Option<SecretString>,
 }
 
