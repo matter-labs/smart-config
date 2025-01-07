@@ -13,7 +13,7 @@ use crate::{
     testing,
     testonly::{
         extract_env_var_name, extract_json_name, test_deserialize, AliasedConfig, ComposedConfig,
-        CompoundConfig, ConfigWithAlternatives, ConfigWithComplexTypes, ConfigWithNesting,
+        CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks, ConfigWithNesting,
         DefaultingConfig, EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum,
         ValueCoercingConfig,
     },
@@ -1228,11 +1228,11 @@ fn aliasing_for_nested_config() {
 }
 
 #[test]
-fn reading_alternatives() {
-    let schema = ConfigSchema::new(&ConfigWithAlternatives::DESCRIPTION, "test");
+fn reading_fallbacks() {
+    let schema = ConfigSchema::new(&ConfigWithFallbacks::DESCRIPTION, "test");
     let repo = ConfigRepository::new(&schema);
     assert!(repo.sources().is_empty());
-    let config: ConfigWithAlternatives = repo.single().unwrap().parse().unwrap();
+    let config: ConfigWithFallbacks = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.int, 42);
     assert!(config.str.is_none());
 
@@ -1255,17 +1255,17 @@ fn reading_alternatives() {
         Value::String(StrValue::Secret(_))
     );
 
-    let config: ConfigWithAlternatives = repo.single().unwrap().parse().unwrap();
+    let config: ConfigWithFallbacks = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.int, 23);
     assert_eq!(config.str.unwrap().expose_secret(), "correct horse");
 
     // Mock env vars are read in `test::*` methods as well
     let _guard = MockEnvGuard::new([("SMART_CONFIG_INT", "23"), ("SMART_CONFIG_STR", "unset")]);
-    let config: ConfigWithAlternatives = testing::test(config!()).unwrap();
+    let config: ConfigWithFallbacks = testing::test(config!()).unwrap();
     assert_eq!(config.int, 23);
     assert!(config.str.is_none());
 
-    let config: ConfigWithAlternatives = testing::test(config!("int": 555)).unwrap();
+    let config: ConfigWithFallbacks = testing::test(config!("int": 555)).unwrap();
     assert_eq!(config.int, 555);
     assert!(config.str.is_none());
 }

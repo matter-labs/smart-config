@@ -216,15 +216,15 @@ impl Fallbacks {
         let mut inner = HashMap::new();
         for (prefix, config) in schema.iter_ll() {
             for param in config.metadata.params {
-                let Some(alt) = param.fallback else {
+                let Some(fallback) = param.fallback else {
                     continue;
                 };
-                if let Some(mut val) = alt.provide_value() {
+                if let Some(mut val) = fallback.provide_value() {
                     tracing::trace!(
                         prefix = prefix.0,
                         config = ?config.metadata.ty,
                         param = param.rust_field_name,
-                        provider = ?alt,
+                        provider = ?fallback,
                         "got fallback for param"
                     );
 

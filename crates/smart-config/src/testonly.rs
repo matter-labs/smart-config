@@ -281,7 +281,7 @@ const STR_SOURCE: &'static dyn FallbackSource =
 
 #[derive(DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
-pub(crate) struct ConfigWithAlternatives {
+pub(crate) struct ConfigWithFallbacks {
     #[config(default_t = 42, fallback = &fallback::Env("SMART_CONFIG_INT"))]
     pub int: u32,
     #[config(fallback = STR_SOURCE)]

@@ -66,7 +66,7 @@
 </tspan><tspan xml:space="preserve" x="42" y="374" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">temp_dir</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="392" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: PathBuf]</tspan>; filesystem path
 </tspan><tspan xml:space="preserve" x="42" y="410" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">"/tmp"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="428" class="output">  <tspan class="underline">Alternatives</tspan>: env var "TMPDIR"
+</tspan><tspan xml:space="preserve" x="42" y="428" class="output">  <tspan class="underline">Fallbacks</tspan>: env var "TMPDIR"
 </tspan><tspan xml:space="preserve" x="42" y="446" class="output">  Directory for temporary stuff.
 </tspan><tspan xml:space="preserve" x="42" y="464" class="output">
 </tspan><tspan xml:space="preserve" x="42" y="482" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">dir_paths</tspan>

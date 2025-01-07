@@ -204,8 +204,8 @@ impl<'a> ConfigRepository<'a> {
                 origin: Arc::default(),
             },
         };
-        if let Some(alternatives) = Fallbacks::new(schema) {
-            this.with(alternatives)
+        if let Some(fallbacks) = Fallbacks::new(schema) {
+            this.with(fallbacks)
         } else {
             this
         }

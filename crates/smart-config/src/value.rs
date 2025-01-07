@@ -38,7 +38,7 @@ pub enum ValueOrigin {
     Unknown,
     /// Environment variables.
     EnvVars,
-    /// Alternative values for config params.
+    /// Fallbacks for config params.
     Fallbacks,
     /// File source.
     File {
@@ -68,7 +68,7 @@ impl fmt::Display for ValueOrigin {
         match self {
             Self::Unknown => formatter.write_str("unknown"),
             Self::EnvVars => formatter.write_str("env variables"),
-            Self::Fallbacks => formatter.write_str("alternatives"),
+            Self::Fallbacks => formatter.write_str("fallbacks"),
             Self::File { name, format } => {
                 write!(formatter, "{format} file '{name}'")
             }
