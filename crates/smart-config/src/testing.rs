@@ -1,6 +1,6 @@
 //! Testing tools for configurations.
 
-use std::{collections::HashMap, marker::PhantomData};
+use std::{cell::RefCell, collections::HashMap, marker::PhantomData};
 
 use crate::{
     de::DeserializerOptions,
@@ -9,6 +9,48 @@ use crate::{
     value::{Pointer, WithOrigin},
     ConfigRepository, ConfigSource, DeserializeConfig, ParseErrors,
 };
+
+// We don't actually use `std::env::set_var()` because it is unsafe (and will be marked as such in future Rust editions).
+// On non-Windows OSes, env access is not synchronized across threads.
+thread_local! {
+    pub(crate) static MOCK_ENV_VARS: RefCell<HashMap<String, String>> = RefCell::default();
+}
+
+#[derive(Debug)]
+pub(crate) struct MockEnvGuard {
+    _not_send: PhantomData<*mut ()>,
+}
+
+impl Default for MockEnvGuard {
+    fn default() -> Self {
+        MOCK_ENV_VARS.with_borrow(|vars| {
+            assert!(
+                vars.is_empty(),
+                "Cannot define mock env vars while another `Tester` is active"
+            );
+        });
+
+        Self {
+            _not_send: PhantomData,
+        }
+    }
+}
+
+impl MockEnvGuard {
+    #[allow(clippy::unused_self)] // used for better type safety
+    pub(crate) fn set_env<S: Into<String>>(&self, new_vars: impl IntoIterator<Item = (S, S)>) {
+        let new_vars = new_vars
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into()));
+        MOCK_ENV_VARS.with_borrow_mut(|vars| vars.extend(new_vars));
+    }
+}
+
+impl Drop for MockEnvGuard {
+    fn drop(&mut self) {
+        MOCK_ENV_VARS.take(); // Remove all mocked env vars
+    }
+}
 
 /// Tests config deserialization from the provided `sample`. Takes into account param aliases,
 /// performs `sample` preprocessing etc.
@@ -151,6 +193,7 @@ fn check_params(
 pub struct Tester<C> {
     de_options: DeserializerOptions,
     schema: ConfigSchema,
+    env_guard: MockEnvGuard,
     _config: PhantomData<C>,
 }
 
@@ -159,6 +202,7 @@ impl<C: DeserializeConfig> Default for Tester<C> {
         Self {
             de_options: DeserializerOptions::default(),
             schema: ConfigSchema::new(&C::DESCRIPTION, ""),
+            env_guard: MockEnvGuard::default(),
             _config: PhantomData,
         }
     }
@@ -168,6 +212,18 @@ impl<C: DeserializeConfig> Tester<C> {
     /// Enables coercion of enum variant names.
     pub fn coerce_variant_names(&mut self) -> &mut Self {
         self.de_options.coerce_variant_names = true;
+        self
+    }
+
+    /// Sets mock environment variables that will be recognized by [`Environment`](crate::Environment)
+    /// and [`Env`](crate::fallback::Env) fallbacks.
+    ///
+    /// Beware that env variable overrides are thread-local; for this reason, `Tester` is not `Send` (cannot be sent to another thread).
+    pub fn set_env<S: Into<String>>(
+        &mut self,
+        vars: impl IntoIterator<Item = (S, S)>,
+    ) -> &mut Self {
+        self.env_guard.set_env(vars);
         self
     }
 

@@ -3,7 +3,10 @@ use std::{env, sync::Arc};
 use anyhow::Context as _;
 
 use super::ConfigSource;
-use crate::value::{FileFormat, Map, ValueOrigin, WithOrigin};
+use crate::{
+    testing::MOCK_ENV_VARS,
+    value::{FileFormat, Map, ValueOrigin, WithOrigin},
+};
 
 /// Configuration sourced from environment variables.
 #[derive(Debug, Clone)]
@@ -24,7 +27,12 @@ impl Default for Environment {
 impl Environment {
     /// Loads environment variables with the specified prefix.
     pub fn prefixed(prefix: &str) -> Self {
-        Self::from_iter(prefix, env::vars())
+        MOCK_ENV_VARS.with_borrow(|mock_vars| {
+            let mock_vars = mock_vars
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()));
+            Self::from_iter(prefix, env::vars().chain(mock_vars))
+        })
     }
 
     /// Creates a custom environment.

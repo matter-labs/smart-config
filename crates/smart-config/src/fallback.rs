@@ -19,9 +19,10 @@
 //!   regardless of where the param containing it is placed (including the case when it has multiple copies!).
 //! - Fallbacks always have lower priority than all other config sources.
 
-use std::{cell::RefCell, collections::HashMap, env, fmt, sync::Arc};
+use std::{collections::HashMap, env, fmt, sync::Arc};
 
 use crate::{
+    testing::MOCK_ENV_VARS,
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     ConfigSchema, ConfigSource,
 };
@@ -32,49 +33,6 @@ pub trait FallbackSource: 'static + Send + Sync + fmt::Debug + fmt::Display {
     ///
     /// Implementations should return `None` (vs `Some(Value::Null)` etc.) if the source doesn't have a value.
     fn provide_value(&self) -> Option<WithOrigin>;
-}
-
-thread_local! {
-    static MOCK_ENV_VARS: RefCell<HashMap<String, String>> = RefCell::default();
-}
-
-/// Thread-local guard for mock env variables read by the [`Env`] value provider.
-///
-/// While a guard is active, all vars defined [when creating it](Self::new()) will be used in place of
-/// the corresponding env vars.
-///
-/// # Examples
-///
-/// See [`Env`] for the examples of usage.
-#[derive(Debug)]
-pub struct MockEnvGuard(());
-
-impl MockEnvGuard {
-    /// Creates a guard that defines the specified env vars.
-    ///
-    /// # Panics
-    ///
-    /// Panics if another guard is active for the same thread.
-    pub fn new<S: Into<String>>(vars: impl IntoIterator<Item = (S, S)>) -> Self {
-        MOCK_ENV_VARS.with(|cell| {
-            let mut map = cell.borrow_mut();
-            assert!(
-                map.is_empty(),
-                "Cannot define mock env vars while another `MockEnvGuard` is active"
-            );
-            *map = vars
-                .into_iter()
-                .map(|(key, value)| (key.into(), value.into()))
-                .collect();
-        });
-        Self(())
-    }
-}
-
-impl Drop for MockEnvGuard {
-    fn drop(&mut self) {
-        MOCK_ENV_VARS.take(); // Remove all mocked env vars
-    }
 }
 
 /// Gets a string value from the specified env variable.
@@ -94,18 +52,19 @@ impl Drop for MockEnvGuard {
 ///     log_directives: String,
 /// }
 ///
-/// let config: TestConfig = testing::test(smart_config::config!())?;
+/// let mut tester = testing::Tester::default();
+/// let config: TestConfig = tester.test(smart_config::config!())?;
 /// // Without env var set or other sources, the param will assume the default value.
 /// assert_eq!(config.log_directives, "info");
 ///
-/// let _guard = fallback::MockEnvGuard::new([("RUST_LOG", "warn")]);
-/// let config: TestConfig = testing::test(smart_config::config!())?;
+/// tester.set_env([("RUST_LOG", "warn")]);
+/// let config: TestConfig = tester.test(smart_config::config!())?;
 /// assert_eq!(config.log_directives, "warn");
 ///
 /// // Mock env vars are still set here, but fallbacks have lower priority
 /// // than other sources.
 /// let input = smart_config::config!("log_directives": "info,my_crate=debug");
-/// let config: TestConfig = testing::test(input)?;
+/// let config = tester.test(input)?;
 /// assert_eq!(config.log_directives, "info,my_crate=debug");
 /// # anyhow::Ok(())
 /// ```
@@ -182,11 +141,9 @@ impl FallbackSource for Env {
 ///     app: String,
 /// }
 ///
-/// let _guard = fallback::MockEnvGuard::new([
-///     ("TEST_ENV", "stage"),
-///     ("TEST_NETWORK", "goerli"),
-/// ]);
-/// let config: TestConfig = testing::test(smart_config::config!())?;
+/// let config: TestConfig = testing::Tester::default()
+///     .set_env([("TEST_ENV", "stage"), ("TEST_NETWORK", "goerli")])
+///     .test(smart_config::config!())?;
 /// assert_eq!(config.app, "stage - goerli");
 /// # anyhow::Ok(())
 /// ```
