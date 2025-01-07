@@ -10,11 +10,11 @@ use clap::Parser;
 use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Deserializer};
 use smart_config::{
-    de,
+    de, fallback,
     metadata::{SizeUnit, TimeUnit},
     value::SecretString,
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
-    Yaml,
+    Prefixed, Yaml,
 };
 use smart_config_commands::{ParamRef, Printer};
 
@@ -33,6 +33,9 @@ pub struct TestConfig {
     /// Should be greater than 0.
     #[config(default)]
     pub scaling_factor: Option<f32>,
+    /// Directory for temporary stuff.
+    #[config(default_t = "/tmp".into(), fallback = &fallback::Env("TMPDIR"))]
+    pub temp_dir: PathBuf,
     /// Paths to key directories.
     #[config(default, alias = "dirs", with = de::Delimited(":"))]
     pub dir_paths: HashSet<PathBuf>,
@@ -106,15 +109,13 @@ pub struct FundingConfig {
 
 const JSON: &str = r#"
 {
-  "test": {
-    "scaling_factor": 4.2,
-    "cache_size": { "kb": 256 },
-    "nested": {
-      "exit_on_error": false
-    },
-    "funding": {
-      "api_key": "correct horse"
-    }
+  "scaling_factor": 4.2,
+  "cache_size": { "kb": 256 },
+  "nested": {
+    "exit_on_error": false
+  },
+  "funding": {
+    "api_key": "correct horse"
   }
 }
 "#;
@@ -144,13 +145,14 @@ test:
 fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> {
     let json = serde_json::from_str(JSON).unwrap();
     let json = Json::new("/config/base.json", json);
+    let json = Prefixed::new(json, "test");
     let yaml = serde_yaml::from_str(YAML).unwrap();
     let yaml = Yaml::new("/config/test.yml", yaml).unwrap();
     let env_vars = Environment::from_iter(
         "APP_",
         [
             ("APP_TEST_APP_NAME", "test"),
-            ("APP_TEST_DIRS", "/usr/bin:usr/local/bin"),
+            ("APP_TEST_DIRS", "/usr/bin:/usr/local/bin"),
             ("APP_TEST_CACHE_SIZE", "128 MiB"),
             ("APP_TEST_FUNDS_API_KEY", "correct horse battery staple"),
             (
@@ -200,9 +202,7 @@ enum Cli {
 
 fn main() {
     let cli = Cli::parse();
-
-    let mut schema = ConfigSchema::default();
-    schema.insert(&TestConfig::DESCRIPTION, "test").unwrap();
+    let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
 
     match cli {
         Cli::Print { filter } => {

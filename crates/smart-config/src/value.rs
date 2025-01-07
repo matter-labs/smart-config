@@ -38,6 +38,8 @@ pub enum ValueOrigin {
     Unknown,
     /// Environment variables.
     EnvVars,
+    /// Fallbacks for config params.
+    Fallbacks,
     /// File source.
     File {
         /// Filename; may not correspond to a real filesystem path.
@@ -66,6 +68,7 @@ impl fmt::Display for ValueOrigin {
         match self {
             Self::Unknown => formatter.write_str("unknown"),
             Self::EnvVars => formatter.write_str("env variables"),
+            Self::Fallbacks => formatter.write_str("fallbacks"),
             Self::File { name, format } => {
                 write!(formatter, "{format} file '{name}'")
             }
@@ -134,7 +137,7 @@ impl fmt::Display for StrValue {
 }
 
 /// JSON value with additional origin information.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub enum Value {
     /// `null`.
     #[default]
@@ -149,6 +152,89 @@ pub enum Value {
     Array(Vec<WithOrigin>),
     /// Object / map of values.
     Object(Map),
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Null => formatter.write_str("null"),
+            Self::Bool(value) => fmt::Display::fmt(value, formatter),
+            Self::Number(value) => fmt::Display::fmt(value, formatter),
+            Self::String(value) => fmt::Debug::fmt(value, formatter),
+            Self::Array(array) => formatter.debug_list().entries(array).finish(),
+            Self::Object(map) => formatter.debug_map().entries(map).finish(),
+        }
+    }
+}
+
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl PartialEq<bool> for Value {
+    fn eq(&self, other: &bool) -> bool {
+        match self {
+            Self::Bool(val) => val == other,
+            _ => false,
+        }
+    }
+}
+
+impl From<serde_json::Number> for Value {
+    fn from(value: serde_json::Number) -> Self {
+        Self::Number(value)
+    }
+}
+
+impl PartialEq<serde_json::Number> for Value {
+    fn eq(&self, other: &serde_json::Number) -> bool {
+        match self {
+            Self::Number(num) => num == other,
+            _ => false,
+        }
+    }
+}
+
+macro_rules! impl_traits_for_number {
+    ($num:ty) => {
+        impl From<$num> for Value {
+            fn from(value: $num) -> Self {
+                Self::Number(value.into())
+            }
+        }
+
+        impl PartialEq<$num> for Value {
+            fn eq(&self, other: &$num) -> bool {
+                match self {
+                    Self::Number(num) => *num == (*other).into(),
+                    _ => false,
+                }
+            }
+        }
+    };
+}
+
+impl_traits_for_number!(u64);
+impl_traits_for_number!(i64);
+
+impl From<String> for Value {
+    fn from(value: String) -> Self {
+        Self::String(StrValue::Plain(value))
+    }
+}
+
+impl From<Vec<WithOrigin>> for Value {
+    fn from(array: Vec<WithOrigin>) -> Self {
+        Self::Array(array)
+    }
+}
+
+impl From<Map> for Value {
+    fn from(map: Map) -> Self {
+        Self::Object(map)
+    }
 }
 
 impl Value {
@@ -169,6 +255,14 @@ impl Value {
             }
             Self::Array(_) => types.contains(BasicTypes::ARRAY),
             Self::Object(_) => types.contains(BasicTypes::OBJECT),
+        }
+    }
+
+    /// Attempts to convert this value to a plain (non-secret) string.
+    pub fn as_plain_str(&self) -> Option<&str> {
+        match self {
+            Self::String(StrValue::Plain(s)) => Some(s),
+            _ => None,
         }
     }
 
@@ -194,7 +288,8 @@ pub struct WithOrigin<T = Value> {
 }
 
 impl<T> WithOrigin<T> {
-    pub(crate) fn new(inner: T, origin: Arc<ValueOrigin>) -> Self {
+    /// Creates a new value with origin.
+    pub fn new(inner: T, origin: Arc<ValueOrigin>) -> Self {
         Self { inner, origin }
     }
 
@@ -203,6 +298,13 @@ impl<T> WithOrigin<T> {
             self.origin = origin.clone();
         }
         self
+    }
+
+    pub(crate) fn map<U>(self, map_fn: impl FnOnce(T) -> U) -> WithOrigin<U> {
+        WithOrigin {
+            inner: map_fn(self.inner),
+            origin: self.origin,
+        }
     }
 }
 
@@ -230,6 +332,52 @@ impl WithOrigin {
                 Value::Array(array) => array.get_mut(segment.parse::<usize>().ok()?),
                 _ => None,
             })
+    }
+
+    /// Ensures that there is an object (possibly empty) at the specified location.
+    pub(crate) fn ensure_object(
+        &mut self,
+        at: Pointer<'_>,
+        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
+    ) -> &mut Map {
+        for ancestor_path in at.with_ancestors() {
+            self.ensure_object_step(ancestor_path, &mut create_origin);
+        }
+
+        let Value::Object(map) = &mut self.get_mut(at).unwrap().inner else {
+            unreachable!(); // Ensured by calls above
+        };
+        map
+    }
+
+    fn ensure_object_step(
+        &mut self,
+        at: Pointer<'_>,
+        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
+    ) {
+        let Some((parent, last_segment)) = at.split_last() else {
+            // Nothing to do.
+            return;
+        };
+
+        // `unwrap()` is safe since `ensure_object()` is always called for the parent
+        let parent = &mut self.get_mut(parent).unwrap().inner;
+        if !matches!(parent, Value::Object(_)) {
+            *parent = Value::Object(Map::new());
+        }
+        let Value::Object(parent_object) = parent else {
+            unreachable!();
+        };
+
+        if !parent_object.contains_key(last_segment) {
+            parent_object.insert(
+                last_segment.to_owned(),
+                WithOrigin {
+                    inner: Value::Object(Map::new()),
+                    origin: create_origin(at),
+                },
+            );
+        }
     }
 
     /// Deep-merges self and `other`, with `other` having higher priority. Only objects are meaningfully merged;

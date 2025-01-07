@@ -8,9 +8,10 @@ use std::{
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
+    fallback::Fallbacks,
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
-    value::{Map, Pointer, StrValue, Value, ValueOrigin, WithOrigin},
+    value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     DeserializeConfig, DeserializeConfigError, ParseError, ParseErrors,
 };
 
@@ -23,7 +24,7 @@ mod tests;
 mod yaml;
 
 /// Contents of a [`ConfigSource`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum ConfigContents {
     /// Key–value / flat configuration.
@@ -32,15 +33,84 @@ pub enum ConfigContents {
     Hierarchical(Map),
 }
 
-/// Source of configuration parameters that can be added to a [`ConfigRepository`].
-pub trait ConfigSource {
-    /// Returns the origin of the entire source (e.g., [`ValueOrigin::File`] for JSON and YAML files).
-    fn origin(&self) -> Arc<ValueOrigin>;
-    /// Converts this source into config contents.
-    fn into_contents(self) -> ConfigContents;
+impl From<Map> for ConfigContents {
+    fn from(map: Map) -> Self {
+        Self::Hierarchical(map)
+    }
 }
 
-/// Information about a source returned from [].
+impl From<Map<String>> for ConfigContents {
+    fn from(map: Map<String>) -> Self {
+        Self::KeyValue(map)
+    }
+}
+
+/// Source of configuration parameters that can be added to a [`ConfigRepository`].
+pub trait ConfigSource {
+    /// Map of values produced by this source.
+    type Map: Into<ConfigContents>;
+
+    /// Converts this source into config contents.
+    fn into_contents(self) -> WithOrigin<Self::Map>;
+}
+
+/// Wraps a hierarchical source into a prefix.
+#[derive(Debug, Clone)]
+pub struct Prefixed<T> {
+    inner: T,
+    prefix: String,
+}
+
+impl<T: ConfigSource<Map = Map>> Prefixed<T> {
+    /// Wraps the provided source.
+    pub fn new(inner: T, prefix: impl Into<String>) -> Self {
+        Self {
+            inner,
+            prefix: prefix.into(),
+        }
+    }
+}
+
+impl<T: ConfigSource<Map = Map>> ConfigSource for Prefixed<T> {
+    type Map = Map;
+
+    fn into_contents(self) -> WithOrigin<Self::Map> {
+        let contents = self.inner.into_contents();
+
+        let origin = Arc::new(ValueOrigin::Synthetic {
+            source: contents.origin.clone(),
+            transform: format!("prefixed with `{}`", self.prefix),
+        });
+
+        if let Some((parent, key_in_parent)) = Pointer(&self.prefix).split_last() {
+            let mut root = WithOrigin::new(Value::Object(Map::new()), origin.clone());
+            root.ensure_object(parent, |_| origin.clone())
+                .insert(key_in_parent.to_owned(), contents.map(Value::Object));
+            root.map(|value| match value {
+                Value::Object(map) => map,
+                _ => unreachable!(), // guaranteed by `ensure_object`
+            })
+        } else {
+            contents
+        }
+    }
+}
+
+/// Prioritized list of configuration sources. Can be used to push multiple sources at once
+/// into a [`ConfigRepository`].
+#[derive(Debug, Clone, Default)]
+pub struct ConfigSources {
+    inner: Vec<WithOrigin<ConfigContents>>,
+}
+
+impl ConfigSources {
+    /// Pushes a configuration source at the end of the list.
+    pub fn push(&mut self, source: impl ConfigSource) {
+        self.inner.push(source.into_contents().map(Into::into));
+    }
+}
+
+/// Information about a source returned from [`ConfigRepository::sources()`].
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct SourceInfo {
@@ -124,7 +194,7 @@ impl<'a> ConfigRepository<'a> {
             .chain([Pointer("")])
             .collect();
 
-        Self {
+        let this = Self {
             schema,
             prefixes_for_canonical_configs,
             de_options: DeserializerOptions::default(),
@@ -133,6 +203,11 @@ impl<'a> ConfigRepository<'a> {
                 inner: Value::Object(Map::default()),
                 origin: Arc::default(),
             },
+        };
+        if let Some(fallbacks) = Fallbacks::new(schema) {
+            this.with(fallbacks)
+        } else {
+            this
         }
     }
 
@@ -149,23 +224,41 @@ impl<'a> ConfigRepository<'a> {
     /// Extends this environment with a new configuration source.
     #[must_use]
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
-        let source_origin = source.origin();
-        let mut source_value = match source.into_contents() {
-            ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &source_origin),
+        self.insert_inner(source.into_contents().map(Into::into));
+        self
+    }
+
+    #[tracing::instrument(
+        level = "debug",
+        name = "ConfigRepository::insert",
+        skip(self, contents)
+    )]
+    fn insert_inner(&mut self, contents: WithOrigin<ConfigContents>) {
+        let mut source_value = match contents.inner {
+            ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &contents.origin),
             ConfigContents::Hierarchical(map) => WithOrigin {
                 inner: Value::Object(map),
-                origin: source_origin.clone(),
+                origin: contents.origin.clone(),
             },
         };
 
         let param_count =
             source_value.preprocess_source(self.schema, &self.prefixes_for_canonical_configs);
+        tracing::debug!(param_count, "Inserted source into config repo");
         self.merged
             .guided_merge(source_value, self.schema, Pointer(""));
         self.sources.push(SourceInfo {
-            origin: source_origin,
+            origin: contents.origin,
             param_count,
         });
+    }
+
+    ///  Extends this environment with a multiple configuration sources.
+    #[must_use]
+    pub fn with_all(mut self, sources: ConfigSources) -> Self {
+        for contents in sources.inner {
+            self.insert_inner(contents);
+        }
         self
     }
 
@@ -196,6 +289,17 @@ impl<'a> ConfigRepository<'a> {
     pub fn single<C: DeserializeConfig>(&self) -> anyhow::Result<ConfigParser<'_, C>> {
         let config_ref = self.schema.single(&C::DESCRIPTION)?;
         Ok(ConfigParser {
+            repo: self,
+            config_ref,
+            _config: PhantomData,
+        })
+    }
+
+    /// Gets a parser for a configuration of the specified type mounted at the canonical `prefix`.
+    /// If the config is not present at `prefix`, returns `None`.
+    pub fn get<'s, C: DeserializeConfig>(&'s self, prefix: &'s str) -> Option<ConfigParser<'s, C>> {
+        let config_ref = self.schema.get(&C::DESCRIPTION, prefix)?;
+        Some(ConfigParser {
             repo: self,
             config_ref,
             _config: PhantomData,
@@ -259,6 +363,22 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
     pub fn parse(self) -> Result<C, ParseErrors> {
         self.with_context(|ctx| ctx.preprocess_and_deserialize::<C>())
     }
+
+    /// Parses an optional config. Returns `None` if the config object is not present (i.e., none of the config params / sub-configs
+    /// are set); otherwise, tries to perform parsing.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors encountered during parsing.
+    pub fn parse_opt(self) -> Result<Option<C>, ParseErrors> {
+        self.with_context(|ctx| {
+            if ctx.current_value().is_none() {
+                Ok(None)
+            } else {
+                ctx.preprocess_and_deserialize::<C>().map(Some)
+            }
+        })
+    }
 }
 
 impl WithOrigin {
@@ -274,11 +394,19 @@ impl WithOrigin {
         self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
             let canonical_map = match self.get(prefix).map(|val| &val.inner) {
                 Some(Value::Object(map)) => Some(map),
-                Some(_) => continue, // TODO: log warning
+                Some(_) => {
+                    tracing::warn!(
+                        prefix = prefix.0,
+                        config = ?config_data.metadata.ty,
+                        "canonical config location contains a non-object"
+                    );
+                    continue;
+                }
                 None => None,
             };
 
@@ -323,6 +451,15 @@ impl WithOrigin {
                         }
 
                         if !new_values.contains_key(canonical_key) {
+                            tracing::trace!(
+                                prefix = prefix.0,
+                                config = ?config_data.metadata.ty,
+                                param = param.rust_field_name,
+                                name,
+                                ?origin,
+                                canonical_key,
+                                "copied aliased param"
+                            );
                             new_values.insert(canonical_key.to_owned(), val.clone());
                             if new_map_origin.is_none() {
                                 new_map_origin = origin.cloned();
@@ -355,52 +492,6 @@ impl WithOrigin {
             .filter(|suffix| !suffix.is_empty())
     }
 
-    /// Ensures that there is an object (possibly empty) at the specified location.
-    fn ensure_object(
-        &mut self,
-        at: Pointer<'_>,
-        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
-    ) -> &mut Map {
-        for ancestor_path in at.with_ancestors() {
-            self.ensure_object_step(ancestor_path, &mut create_origin);
-        }
-
-        let Value::Object(map) = &mut self.get_mut(at).unwrap().inner else {
-            unreachable!(); // Ensured by calls above
-        };
-        map
-    }
-
-    fn ensure_object_step(
-        &mut self,
-        at: Pointer<'_>,
-        mut create_origin: impl FnMut(Pointer<'_>) -> Arc<ValueOrigin>,
-    ) {
-        let Some((parent, last_segment)) = at.split_last() else {
-            // Nothing to do.
-            return;
-        };
-
-        // `unwrap()` is safe since `ensure_object()` is always called for the parent
-        let parent = &mut self.get_mut(parent).unwrap().inner;
-        if !matches!(parent, Value::Object(_)) {
-            *parent = Value::Object(Map::new());
-        }
-        let Value::Object(parent_object) = parent else {
-            unreachable!();
-        };
-
-        if !parent_object.contains_key(last_segment) {
-            parent_object.insert(
-                last_segment.to_owned(),
-                WithOrigin {
-                    inner: Value::Object(Map::new()),
-                    origin: create_origin(at),
-                },
-            );
-        }
-    }
-
     /// Wraps secret string values into `Value::SecretString(_)`.
     fn mark_secrets(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
@@ -421,9 +512,21 @@ impl WithOrigin {
                 };
 
                 if let Value::String(str) = &mut value.inner {
+                    tracing::trace!(
+                        prefix = prefix.0,
+                        config = ?config_data.metadata.ty,
+                        param = param.rust_field_name,
+                        "marked param as secret"
+                    );
                     str.make_secret();
+                } else {
+                    tracing::warn!(
+                        prefix = prefix.0,
+                        config = ?config_data.metadata.ty,
+                        param = param.rust_field_name,
+                        "param marked as secret has non-string value"
+                    );
                 }
-                // TODO: log warning otherwise
             }
         }
     }
@@ -466,6 +569,7 @@ impl WithOrigin {
     /// For example, we have an object param at `test.param` and a source with a value at `test.param_ms`.
     /// This transform will copy this value to `test.param.ms` (i.e., inside the param object), provided that
     /// the source doesn't contain `test.param` or contains an object at this path.
+    #[tracing::instrument(level = "debug", skip_all)]
     fn nest_object_params_and_sub_configs(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
             let Some(config_object) = self.get_mut(prefix) else {
@@ -515,6 +619,14 @@ impl WithOrigin {
                     continue;
                 }
 
+                tracing::trace!(
+                    prefix = prefix.0,
+                    config = ?config_data.metadata.ty,
+                    child_name,
+                    fields = ?matching_fields.iter().map(|(name, _)| name).collect::<Vec<_>>(),
+                    "nesting for object param / config"
+                );
+
                 if !config_object.contains_key(child_name) {
                     let origin = Arc::new(ValueOrigin::Synthetic {
                         source: config_origin.clone(),
@@ -538,6 +650,7 @@ impl WithOrigin {
     ///
     /// For example, we have an array param at `test.param` and a source with values at `test.param_0`, `test.param_1`, `test.param_2`
     /// (and no `test.param`). This transform will copy these values as a 3-element array at `test.param`.
+    #[tracing::instrument(level = "debug", skip_all)]
     fn nest_array_params(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
             let Some(config_object) = self.get_mut(prefix) else {
@@ -574,8 +687,23 @@ impl WithOrigin {
                 };
 
                 if last_idx != matching_fields.len() - 1 {
-                    continue; // Fields are not sequential; TODO: log
+                    tracing::info!(
+                        prefix = prefix.0,
+                        config = ?config_data.metadata.ty,
+                        param = param.rust_field_name,
+                        indexes = ?matching_fields.keys().copied().collect::<Vec<_>>(),
+                        "indexes for array nesting are not sequential"
+                    );
+                    continue;
                 }
+
+                tracing::trace!(
+                    prefix = prefix.0,
+                    config = ?config_data.metadata.ty,
+                    param = param.rust_field_name,
+                    len = matching_fields.len(),
+                    "nesting for array param"
+                );
 
                 let origin = Arc::new(ValueOrigin::Synthetic {
                     source: config_origin.clone(),
@@ -591,6 +719,7 @@ impl WithOrigin {
     /// Nests a flat key–value map into a structured object using the provided `schema`.
     ///
     /// Has complexity `O(kvs.len() * log(n_params))`, which seems about the best possible option if `kvs` is not presorted.
+    #[tracing::instrument(level = "debug", skip_all)]
     fn nest_kvs(kvs: Map<String>, schema: &ConfigSchema, source_origin: &Arc<ValueOrigin>) -> Self {
         let mut dest = Self {
             inner: Value::Object(Map::new()),
@@ -598,7 +727,7 @@ impl WithOrigin {
         };
 
         for (key, value) in kvs {
-            let value = Self::new(Value::String(StrValue::Plain(value.inner)), value.origin);
+            let value = Self::new(value.inner.into(), value.origin);
 
             // Get all params with full paths matching a prefix of `key` split on one of `_`s. E.g.,
             // for `key = "very_long_prefix_value"`, we'll try "very_long_prefix_value", "very_long_prefix", ..., "very".
@@ -613,6 +742,13 @@ impl WithOrigin {
                 for (param_path, expecting) in schema.params_with_kv_path(key_prefix) {
                     let should_copy = key_prefix == key || expecting.contains(BasicTypes::OBJECT);
                     if should_copy {
+                        tracing::trace!(
+                            param_path = param_path.0,
+                            ?expecting,
+                            key,
+                            key_prefix,
+                            "copied key–value entry"
+                        );
                         dest.copy_kv_entry(source_origin, param_path, &key, value.clone());
                     }
                 }

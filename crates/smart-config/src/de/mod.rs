@@ -162,7 +162,7 @@ impl<'a> DeserializeContext<'a> {
         }
     }
 
-    fn current_value(&self) -> Option<&'a WithOrigin> {
+    pub(crate) fn current_value(&self) -> Option<&'a WithOrigin> {
         self.patched_current_value
             .or_else(|| self.root_value.get(Pointer(&self.path)))
     }
@@ -223,6 +223,11 @@ impl<'a> DeserializeContext<'a> {
         });
     }
 
+    #[tracing::instrument(
+        level = "trace",
+        skip_all,
+        fields(path = self.path, config = ?self.current_config.ty)
+    )]
     pub(crate) fn preprocess_and_deserialize<T: DeserializeConfig>(
         mut self,
     ) -> Result<T, DeserializeConfigError> {
@@ -268,11 +273,18 @@ impl DeserializeContext<'_> {
         child_ctx.preprocess_and_deserialize().map(Some)
     }
 
+    #[tracing::instrument(
+        level = "trace",
+        name = "deserialize_param",
+        skip_all,
+        fields(path = self.path, config = ?self.current_config.ty, param)
+    )]
     pub(crate) fn deserialize_any_param(
         &mut self,
         index: usize,
     ) -> Result<Box<dyn any::Any>, DeserializeConfigError> {
         let (mut child_ctx, param) = self.for_param(index);
+        tracing::Span::current().record("param", param.rust_field_name);
 
         // Coerce value to the expected type.
         let maybe_coerced = child_ctx
@@ -283,6 +295,11 @@ impl DeserializeContext<'_> {
         } else {
             child_ctx
         };
+        tracing::trace!(
+            deserializer = ?param.deserializer,
+            value = ?child_ctx.current_value(),
+            "deserializing param"
+        );
 
         match param
             .deserializer
@@ -290,6 +307,7 @@ impl DeserializeContext<'_> {
         {
             Ok(param) => Ok(param),
             Err(err) => {
+                tracing::info!(origin = %err.origin, "deserialization failed: {}", err.inner);
                 child_ctx.push_error(err);
                 Err(DeserializeConfigError::new())
             }
@@ -308,7 +326,7 @@ impl DeserializeContext<'_> {
 }
 
 impl WithOrigin {
-    // TODO: log coercion errors
+    #[tracing::instrument(level = "trace", skip(self))]
     fn coerce_value_type(&self, expecting: BasicTypes) -> Option<Self> {
         const STRUCTURED: BasicTypes = BasicTypes::ARRAY.or(BasicTypes::OBJECT);
 
@@ -320,21 +338,32 @@ impl WithOrigin {
         match expecting {
             // We intentionally use exact comparisons; if a type supports multiple primitive representations,
             // we do nothing.
-            BasicTypes::BOOL => {
-                if let Ok(bool_value) = str.parse::<bool>() {
-                    return Some(Self::new(Value::Bool(bool_value), self.origin.clone()));
+            BasicTypes::BOOL => match str.parse::<bool>() {
+                Ok(bool_value) => {
+                    return Some(Self::new(bool_value.into(), self.origin.clone()));
                 }
-            }
-            BasicTypes::INTEGER | BasicTypes::FLOAT => {
-                if let Ok(number) = str.parse::<serde_json::Number>() {
-                    return Some(Self::new(Value::Number(number), self.origin.clone()));
+                Err(err) => {
+                    tracing::info!(%expecting, "failed coercing value: {err}");
                 }
-            }
+            },
+            BasicTypes::INTEGER | BasicTypes::FLOAT => match str.parse::<serde_json::Number>() {
+                Ok(number) => {
+                    return Some(Self::new(number.into(), self.origin.clone()));
+                }
+                Err(err) => {
+                    tracing::info!(%expecting, "failed coercing value: {err}");
+                }
+            },
 
             ty if STRUCTURED.contains(ty) => {
-                let Ok(val) = serde_json::from_str::<serde_json::Value>(str) else {
-                    return None;
+                let val = match serde_json::from_str::<serde_json::Value>(str) {
+                    Ok(val) => val,
+                    Err(err) => {
+                        tracing::info!(%expecting, "failed coercing value to JSON: {err}");
+                        return None;
+                    }
                 };
+
                 let is_value_supported = (val.is_array() && ty.contains(BasicTypes::ARRAY))
                     || (val.is_object() && ty.contains(BasicTypes::OBJECT));
                 if is_value_supported {
@@ -344,6 +373,7 @@ impl WithOrigin {
                     });
                     return Some(Json::map_value(val, &root_origin, String::new()));
                 }
+                tracing::info!(%expecting, "parsed JSON has unexpected shape");
             }
             _ => { /* do nothing */ }
         }

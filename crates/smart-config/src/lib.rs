@@ -69,8 +69,7 @@
 //!     pub tracing: bool,
 //! }
 //!
-//! let mut schema = ConfigSchema::default();
-//! schema.insert(&TestConfig::DESCRIPTION, "test")?;
+//! let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
 //! // Assume we use two config sources: a YAML file and env vars,
 //! // the latter having higher priority.
 //! let yaml = r"
@@ -192,8 +191,8 @@
 ///
 /// **Type:** string
 ///
-/// Have the same meaning as in `serde`; i.e. allow to rename / specify additional names for the param.
-/// Param names are [validated](#validations) in compile time.
+/// Have the same meaning as in `serde`; i.e. allow to rename / specify additional names for the param or a nested config.
+/// Names are [validated](#validations) in compile time.
 ///
 /// ## `default`
 ///
@@ -207,6 +206,13 @@
 /// **Type:** expression with param type
 ///
 /// Allows to specify the default typed value for the param. The provided expression doesn't need to be constant.
+///
+/// ## `fallback`
+///
+/// **Type:** constant expression evaluating to `&'static dyn `[`FallbackSource`](fallback::FallbackSource)
+///
+/// Allows to provide a fallback source for the param. See the [`fallback`] module docs for the discussion of fallbacks
+/// and intended use cases.
 ///
 /// ## `with`
 ///
@@ -296,12 +302,16 @@ pub use self::{
     de::DeserializeConfig,
     error::{DeserializeConfigError, ParseError, ParseErrors},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
-    source::{ConfigParser, ConfigRepository, ConfigSource, Environment, Json, SourceInfo, Yaml},
+    source::{
+        ConfigContents, ConfigParser, ConfigRepository, ConfigSource, ConfigSources, Environment,
+        Json, Prefixed, SourceInfo, Yaml,
+    },
     types::ByteSize,
 };
 
 pub mod de;
 mod error;
+pub mod fallback;
 pub mod metadata;
 mod schema;
 mod source;
