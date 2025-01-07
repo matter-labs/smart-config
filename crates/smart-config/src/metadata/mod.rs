@@ -14,8 +14,9 @@ pub mod _private;
 #[cfg(test)]
 mod tests;
 
+/// Generic post-validation for a configuration parameter.
 #[doc(hidden)]
-pub trait Validate<T: ?Sized>: 'static + fmt::Debug + fmt::Display {
+pub trait Validate<T: ?Sized>: 'static + Send + Sync + fmt::Debug + fmt::Display {
     fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin>;
 }
 
