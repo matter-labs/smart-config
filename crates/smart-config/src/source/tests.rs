@@ -1238,10 +1238,8 @@ fn reading_fallbacks() {
     assert!(config.str.is_none());
 
     let guard = MockEnvGuard::default();
-    guard.set_env([
-        ("SMART_CONFIG_INT", "23"),
-        ("SMART_CONFIG_STR", "correct horse"),
-    ]);
+    guard.set_env("SMART_CONFIG_INT".into(), "23".into());
+    guard.set_env("SMART_CONFIG_STR".into(), "correct horse".into());
     let repo = ConfigRepository::new(&schema);
     assert_eq!(repo.sources().len(), 1);
     assert_matches!(repo.sources()[0].origin.as_ref(), ValueOrigin::Fallbacks);
@@ -1263,7 +1261,9 @@ fn reading_fallbacks() {
 
     // Mock env vars are read in `test::*` methods as well
     let mut tester = testing::Tester::default();
-    tester.set_env([("SMART_CONFIG_INT", "23"), ("SMART_CONFIG_STR", "unset")]);
+    tester
+        .set_env("SMART_CONFIG_INT", "23")
+        .set_env("SMART_CONFIG_STR", "unset");
     let config: ConfigWithFallbacks = tester.test(config!()).unwrap();
     assert_eq!(config.int, 23);
     assert!(config.str.is_none());
@@ -1276,7 +1276,8 @@ fn reading_fallbacks() {
 #[test]
 fn reading_env_vars_using_env_source() {
     let config: NestedConfig = testing::Tester::default()
-        .set_env([("APP_RENAMED", "FIRST"), ("APP_OTHER_INT", "23")])
+        .set_env("APP_RENAMED", "FIRST")
+        .set_env("APP_OTHER_INT", "23")
         .coerce_variant_names()
         .test(Environment::prefixed("APP_"))
         .unwrap();

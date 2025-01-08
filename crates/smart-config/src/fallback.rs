@@ -55,7 +55,7 @@ pub trait FallbackSource: 'static + Send + Sync + fmt::Debug + fmt::Display {
 /// // Without env var set or other sources, the param will assume the default value.
 /// assert_eq!(config.log_directives, "info");
 ///
-/// tester.set_env([("RUST_LOG", "warn")]);
+/// tester.set_env("RUST_LOG", "warn");
 /// let config: TestConfig = tester.test(smart_config::config!())?;
 /// assert_eq!(config.log_directives, "warn");
 ///
@@ -142,7 +142,8 @@ impl FallbackSource for Env {
 /// }
 ///
 /// let config: TestConfig = testing::Tester::default()
-///     .set_env([("TEST_ENV", "stage"), ("TEST_NETWORK", "goerli")])
+///     .set_env("TEST_ENV", "stage")
+///     .set_env("TEST_NETWORK", "goerli")
 ///     .test(smart_config::config!())?;
 /// assert_eq!(config.app, "stage - goerli");
 /// # anyhow::Ok(())
