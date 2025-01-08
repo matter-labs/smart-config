@@ -2,15 +2,23 @@
 
 use std::{any, borrow::Cow, fmt};
 
+use self::_private::BoxedDeserializer;
 use crate::{
     de::{DeserializeParam, _private::ErasedDeserializer},
     fallback::FallbackSource,
+    ErrorWithOrigin,
 };
 
+#[doc(hidden)] // used in the derive macros
+pub mod _private;
 #[cfg(test)]
 mod tests;
-#[doc(hidden)] // used in the derive macro
-pub mod validation;
+
+/// Generic post-validation for a configuration parameter.
+#[doc(hidden)]
+pub trait Validate<T: ?Sized>: 'static + Send + Sync + fmt::Debug + fmt::Display {
+    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin>;
+}
 
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]
@@ -23,6 +31,10 @@ pub struct ConfigMetadata {
     pub params: &'static [ParamMetadata],
     /// Nested configs included in the config.
     pub nested_configs: &'static [NestedConfigMetadata],
+    #[doc(hidden)] // implementation detail
+    pub deserializer: BoxedDeserializer,
+    #[doc(hidden)] // implementation detail
+    pub validations: &'static [&'static dyn Validate<dyn any::Any>],
 }
 
 /// Metadata for a specific configuration parameter.
@@ -92,7 +104,8 @@ impl RustType {
         }
     }
 
-    pub(crate) fn id(&self) -> any::TypeId {
+    /// Returns the unique ID of this type.
+    pub fn id(&self) -> any::TypeId {
         (self.id)()
     }
 

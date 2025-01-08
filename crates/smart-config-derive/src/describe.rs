@@ -5,7 +5,7 @@ use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, LitStr, Type};
 
 use crate::utils::{
-    wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigField, DefaultValue,
+    wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigField, DefaultValue, Validation,
 };
 
 impl DefaultValue {
@@ -54,14 +54,14 @@ impl ConfigField {
         let name_validation_span = self.attrs.rename.as_ref().map_or(name_span, LitStr::span);
         let cr = parent.cr(name_validation_span);
         let name_validation = quote_spanned! {name_validation_span=>
-            const _: () = #cr::metadata::validation::assert_param_name(#param_name);
+            const _: () = #cr::metadata::_private::assert_param_name(#param_name);
         };
 
         let aliases = self.attrs.aliases.iter();
         let aliases_validation = aliases.map(|alias| {
             let cr = parent.cr(alias.span());
             quote_spanned! {alias.span()=>
-                const _: () = #cr::metadata::validation::assert_param_name(#alias);
+                const _: () = #cr::metadata::_private::assert_param_name(#alias);
             }
         });
 
@@ -140,6 +140,16 @@ impl ConfigField {
     }
 }
 
+impl Validation {
+    fn to_validation(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let description = &self.description;
+        let path = &self.path;
+        quote_spanned! {description.span()=>
+            &#cr::metadata::_private::Validation(#description, #path)
+        }
+    }
+}
+
 impl ConfigContainer {
     fn derive_describe_config(&self) -> proc_macro2::TokenStream {
         let name = &self.name;
@@ -181,6 +191,12 @@ impl ConfigContainer {
             None
         });
 
+        let config_validations = self
+            .attrs
+            .validations
+            .iter()
+            .map(|val| val.to_validation(&cr));
+
         quote! {
             impl #cr::DescribeConfig for #name {
                 const DESCRIPTION: #cr::metadata::ConfigMetadata = #cr::metadata::ConfigMetadata {
@@ -188,6 +204,12 @@ impl ConfigContainer {
                     help: #help,
                     params: &[#(#params,)*],
                     nested_configs: &[#(#nested_configs,)*],
+                    deserializer: |ctx| {
+                        use #cr::metadata::_private::DeserializeBoxedConfig as _;
+                        let receiver = &::core::marker::PhantomData::<#name>;
+                        receiver.deserialize_boxed_config(ctx)
+                    },
+                    validations: &[#(#config_validations,)*],
                 };
             }
 

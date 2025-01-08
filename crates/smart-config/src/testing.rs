@@ -38,11 +38,8 @@ impl Default for MockEnvGuard {
 
 impl MockEnvGuard {
     #[allow(clippy::unused_self)] // used for better type safety
-    pub(crate) fn set_env<S: Into<String>>(&self, new_vars: impl IntoIterator<Item = (S, S)>) {
-        let new_vars = new_vars
-            .into_iter()
-            .map(|(key, value)| (key.into(), value.into()));
-        MOCK_ENV_VARS.with_borrow_mut(|vars| vars.extend(new_vars));
+    pub(crate) fn set_env(&self, name: String, value: String) {
+        MOCK_ENV_VARS.with_borrow_mut(|vars| vars.insert(name, value));
     }
 }
 
@@ -219,11 +216,8 @@ impl<C: DeserializeConfig> Tester<C> {
     /// and [`Env`](crate::fallback::Env) fallbacks.
     ///
     /// Beware that env variable overrides are thread-local; for this reason, `Tester` is not `Send` (cannot be sent to another thread).
-    pub fn set_env<S: Into<String>>(
-        &mut self,
-        vars: impl IntoIterator<Item = (S, S)>,
-    ) -> &mut Self {
-        self.env_guard.set_env(vars);
+    pub fn set_env(&mut self, var_name: impl Into<String>, value: impl Into<String>) -> &mut Self {
+        self.env_guard.set_env(var_name.into(), value.into());
         self
     }
 

@@ -37,8 +37,6 @@ pub trait FallbackSource: 'static + Send + Sync + fmt::Debug + fmt::Display {
 
 /// Gets a string value from the specified env variable.
 ///
-/// This [`FallbackSource`] is aware of mock env vars provided via [`MockEnvGuard`].
-///
 /// # Examples
 ///
 /// ```
@@ -57,7 +55,7 @@ pub trait FallbackSource: 'static + Send + Sync + fmt::Debug + fmt::Display {
 /// // Without env var set or other sources, the param will assume the default value.
 /// assert_eq!(config.log_directives, "info");
 ///
-/// tester.set_env([("RUST_LOG", "warn")]);
+/// tester.set_env("RUST_LOG", "warn");
 /// let config: TestConfig = tester.test(smart_config::config!())?;
 /// assert_eq!(config.log_directives, "warn");
 ///
@@ -78,7 +76,9 @@ impl fmt::Display for Env {
 }
 
 impl Env {
-    /// Gets the raw string value of the env var, taking [mock vars](MockEnvGuard) into account.
+    /// Gets the raw string value of the env var, taking [mock vars] into account.
+    ///
+    /// [mock vars]: crate::testing::Tester::set_env()
     pub fn get_raw(&self) -> Option<String> {
         MOCK_ENV_VARS
             .with(|cell| cell.borrow().get(self.0).cloned())
@@ -142,7 +142,8 @@ impl FallbackSource for Env {
 /// }
 ///
 /// let config: TestConfig = testing::Tester::default()
-///     .set_env([("TEST_ENV", "stage"), ("TEST_NETWORK", "goerli")])
+///     .set_env("TEST_ENV", "stage")
+///     .set_env("TEST_NETWORK", "goerli")
 ///     .test(smart_config::config!())?;
 /// assert_eq!(config.app, "stage - goerli");
 /// # anyhow::Ok(())

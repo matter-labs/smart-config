@@ -316,10 +316,9 @@ pub struct ConfigParser<'a, C> {
 }
 
 impl ConfigParser<'_, ()> {
-    #[doc(hidden)] // Not stable yet
-    pub fn parse_param(&self, index: usize) -> Result<(), ParseErrors> {
-        self.with_context(|mut ctx| ctx.deserialize_any_param(index))
-            .map(drop)
+    #[doc(hidden)]
+    pub fn parse(&self) -> Result<(), ParseErrors> {
+        self.with_context(|ctx| ctx.deserialize_any_config().map(drop))
     }
 }
 
@@ -361,7 +360,7 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
     /// there is no short-circuiting on encountering an error).
     #[allow(clippy::redundant_closure_for_method_calls)] // doesn't work as an fn pointer because of the context lifetime
     pub fn parse(self) -> Result<C, ParseErrors> {
-        self.with_context(|ctx| ctx.preprocess_and_deserialize::<C>())
+        self.with_context(|ctx| ctx.deserialize_config::<C>())
     }
 
     /// Parses an optional config. Returns `None` if the config object is not present (i.e., none of the config params / sub-configs
@@ -375,7 +374,7 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
             if ctx.current_value().is_none() {
                 Ok(None)
             } else {
-                ctx.preprocess_and_deserialize::<C>().map(Some)
+                ctx.deserialize_config::<C>().map(Some)
             }
         })
     }

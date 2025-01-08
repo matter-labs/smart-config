@@ -12,8 +12,8 @@ use std::{
 
 use anyhow::Context as _;
 use assert_matches::assert_matches;
-use secrecy::SecretString;
-use serde::Deserialize;
+use secrecy::{ExposeSecret, SecretString};
+use serde::{de::Error as DeError, Deserialize};
 
 use crate::{
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
@@ -21,7 +21,8 @@ use crate::{
     fallback::FallbackSource,
     metadata::{SizeUnit, TimeUnit},
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ParseErrors,
+    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
+    ParseErrors,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
@@ -194,6 +195,15 @@ impl FromStr for MapOrString {
     }
 }
 
+const CUSTOM_DE: de::Custom![usize; str] = de::Custom![_; str](|ctx, param| {
+    let de = ctx.current_value_deserializer(param.name)?;
+    let len = String::deserialize(de)?.len();
+    if len > 5 {
+        return Err(DeError::custom("string is too long"));
+    }
+    Ok(len)
+});
+
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ConfigWithComplexTypes {
@@ -222,6 +232,8 @@ pub(crate) struct ConfigWithComplexTypes {
     pub ip_addr: IpAddr,
     #[config(default_t = ([192, 168, 0, 1], 3000).into())]
     pub socket_addr: SocketAddr,
+    #[config(default, with = CUSTOM_DE)]
+    pub with_custom_deserializer: usize,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -286,6 +298,30 @@ pub(crate) struct ConfigWithFallbacks {
     pub int: u32,
     #[config(fallback = STR_SOURCE)]
     pub str: Option<SecretString>,
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+#[config(validate("`len` must match `secret` length", Self::validate_len))]
+pub(crate) struct ConfigWithValidations {
+    pub len: usize,
+    pub secret: SecretString,
+}
+
+impl ConfigWithValidations {
+    fn validate_len(&self) -> Result<(), ErrorWithOrigin> {
+        if self.len != self.secret.expose_secret().len() {
+            return Err(DeError::custom("`len` doesn't correspond to `secret`"));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ConfigWithNestedValidations {
+    #[config(nest)]
+    pub nested: ConfigWithValidations,
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {

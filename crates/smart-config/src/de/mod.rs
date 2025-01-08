@@ -56,8 +56,10 @@ use serde::de::Error as DeError;
 use self::deserializer::ValueDeserializer;
 pub use self::{
     deserializer::DeserializerOptions,
-    macros::Serde,
-    param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
+    macros::{Custom, Serde},
+    param::{
+        Custom, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault,
+    },
     repeated::{Delimited, Entries, NamedEntries, Repeated},
     secret::{FromSecretString, Secret},
     units::WithUnit,
@@ -167,7 +169,12 @@ impl<'a> DeserializeContext<'a> {
             .or_else(|| self.root_value.get(Pointer(&self.path)))
     }
 
-    fn current_value_deserializer(
+    /// Returns a `serde` deserializer for the current value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the current value is missing.
+    pub fn current_value_deserializer(
         &self,
         name: &'static str,
     ) -> Result<ValueDeserializer<'a>, ErrorWithOrigin> {
@@ -228,9 +235,9 @@ impl<'a> DeserializeContext<'a> {
         skip_all,
         fields(path = self.path, config = ?self.current_config.ty)
     )]
-    pub(crate) fn preprocess_and_deserialize<T: DeserializeConfig>(
+    pub(crate) fn deserialize_any_config(
         mut self,
-    ) -> Result<T, DeserializeConfigError> {
+    ) -> Result<Box<dyn any::Any>, DeserializeConfigError> {
         // It is technically possible to coerce a value to an object here, but this would make merging sources not obvious:
         // should a config specified as a string override / be overridden atomically? (Probably not, but if so, it needs to be coerced to an object
         // before the merge, potentially recursively.)
@@ -241,7 +248,31 @@ impl<'a> DeserializeContext<'a> {
                 return Err(DeserializeConfigError::new());
             }
         }
-        T::deserialize_config(self)
+        let config = (self.current_config.deserializer)(self.borrow())?;
+
+        let mut has_errors = false;
+        for &validation in self.current_config.validations {
+            let _span = tracing::trace_span!("validation", %validation).entered();
+            if let Err(err) = validation.validate(config.as_ref()) {
+                tracing::info!(%validation, origin = %err.origin, "config validation failed: {}", err.inner);
+                self.push_error(err);
+                has_errors = true;
+            }
+        }
+
+        if has_errors {
+            Err(DeserializeConfigError::new())
+        } else {
+            Ok(config)
+        }
+    }
+
+    /// Caller is responsible to downcast the config to the correct type.
+    pub(crate) fn deserialize_config<C: 'static>(self) -> Result<C, DeserializeConfigError> {
+        Ok(*self
+            .deserialize_any_config()?
+            .downcast::<C>()
+            .expect("Internal error: config deserializer output has wrong type"))
     }
 }
 
@@ -259,7 +290,7 @@ impl DeserializeContext<'_> {
                 return Ok(default());
             }
         }
-        child_ctx.preprocess_and_deserialize()
+        child_ctx.deserialize_config()
     }
 
     pub fn deserialize_nested_config_opt<T: DeserializeConfig>(
@@ -270,7 +301,7 @@ impl DeserializeContext<'_> {
         if child_ctx.current_value().is_none() {
             return Ok(None);
         }
-        child_ctx.preprocess_and_deserialize().map(Some)
+        child_ctx.deserialize_config().map(Some)
     }
 
     #[tracing::instrument(

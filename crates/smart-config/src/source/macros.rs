@@ -34,7 +34,7 @@ macro_rules! config {
     ($($path:tt : $value:expr),* $(,)?) => {
         {
             const _:() = {
-                $crate::metadata::validation::assert_paths(&[$($path,)*]);
+                $crate::metadata::_private::assert_paths(&[$($path,)*]);
             };
 
             #[allow(unused_mut)]

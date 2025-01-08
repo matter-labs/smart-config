@@ -2,8 +2,10 @@ use std::collections::HashSet;
 
 use super::*;
 use crate::{
+    config,
+    de::{DeserializeContext, DeserializerOptions},
     testonly::{ConfigWithComplexTypes, DefaultingEnumConfig, EnumConfig},
-    DescribeConfig,
+    DescribeConfig, ParseErrors,
 };
 
 #[test]
@@ -40,6 +42,25 @@ fn describing_enum_config() {
         .find(|param| param.name == "type")
         .unwrap();
     assert_eq!(tag_param.expecting, BasicTypes::STRING);
+}
+
+#[test]
+fn deserializing_config_using_deserializer() {
+    let deserializer = EnumConfig::DESCRIPTION.deserializer;
+
+    let mut errors = ParseErrors::default();
+    let json = config!("type": "first");
+    let config = deserializer(DeserializeContext::new(
+        &DeserializerOptions::default(),
+        json.inner(),
+        String::new(),
+        &EnumConfig::DESCRIPTION,
+        &mut errors,
+    ))
+    .unwrap();
+
+    let config: EnumConfig = *config.downcast().unwrap();
+    assert_eq!(config, EnumConfig::First);
 }
 
 #[test]
@@ -100,4 +121,11 @@ fn describing_complex_types() {
     let description = dur_param.type_description();
     assert_eq!(description.details().unwrap(), "time duration");
     assert_eq!(description.unit(), Some(TimeUnit::Millis.into()));
+
+    let custom_de_param = metadata
+        .params
+        .iter()
+        .find(|param| param.name == "with_custom_deserializer")
+        .unwrap();
+    assert_eq!(custom_de_param.expecting, BasicTypes::STRING);
 }

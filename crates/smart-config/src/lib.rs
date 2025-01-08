@@ -128,6 +128,8 @@
 // Linter settings
 #![warn(missing_docs)]
 
+extern crate core;
+
 /// Derives the [`DescribeConfig`](trait@DescribeConfig) trait for a type.
 ///
 /// This macro supports both structs and enums. It is conceptually similar to `Deserialize` macro from `serde`.
@@ -138,6 +140,14 @@
 /// or a sub-config (if `#[config(nest)]` or `#[config(flatten)]` is present for the field).
 ///
 /// # Container attributes
+///
+/// ## `validate`
+///
+/// **Type:** human-readable description + path to a function / method with the `fn(&Self) -> Result<(), ErrorWithOrigin>` signature
+/// (see [the example below](#defining-validations)).
+///
+/// Specifies a post-deserialization validation for the config. This is useful to check invariants involving multiple params.
+/// Multiple validations are supported by specifying the attribute multiple times.
 ///
 /// ## `tag`
 ///
@@ -290,6 +300,40 @@
 ///     const fn default_array() -> [f32; 2] { [1.0, 2.0] }
 /// }
 /// ```
+///
+/// ## Defining validations
+///
+/// ```
+/// use secrecy::{ExposeSecret, SecretString};
+/// # use smart_config::{testing, DescribeConfig, DeserializeConfig, ErrorWithOrigin};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// #[config(validate(
+///     "secret key must have expected length",
+///     Self::validate_secret_key
+/// ))]
+/// struct ValidatedConfig {
+///     secret_key: SecretString,
+///     /// Reference key length. If specified, the secret key length
+///     /// will be checked against it.
+///     secret_key_len: Option<usize>,
+/// }
+///
+/// impl ValidatedConfig {
+///     fn validate_secret_key(&self) -> Result<(), ErrorWithOrigin> {
+///         if let Some(expected_len) = self.secret_key_len {
+///             let actual_len = self.secret_key.expose_secret().len();
+///             if expected_len != actual_len {
+///                 return Err(ErrorWithOrigin::custom(format!(
+///                     "unexpected `secret_key` length ({actual_len}); \
+///                      expected {expected_len}"
+///                 )));
+///             }
+///         }
+///         Ok(())
+///     }
+/// }
+/// ```
 pub use smart_config_derive::DescribeConfig;
 /// Derives the [`DeserializeConfig`](trait@DeserializeConfig) trait for a type.
 ///
@@ -300,7 +344,7 @@ pub use smart_config_derive::DeserializeConfig;
 use self::metadata::ConfigMetadata;
 pub use self::{
     de::DeserializeConfig,
-    error::{DeserializeConfigError, ParseError, ParseErrors},
+    error::{DeserializeConfigError, ErrorWithOrigin, ParseError, ParseErrors},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
     source::{
         ConfigContents, ConfigParser, ConfigRepository, ConfigSource, ConfigSources, Environment,

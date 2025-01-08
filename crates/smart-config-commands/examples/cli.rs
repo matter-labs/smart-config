@@ -13,14 +13,13 @@ use smart_config::{
     de, fallback,
     metadata::{SizeUnit, TimeUnit},
     value::SecretString,
-    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
-    Prefixed, Yaml,
+    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
+    ErrorWithOrigin, Json, Prefixed, Yaml,
 };
 use smart_config_commands::{ParamRef, Printer};
 
 /// Configuration with type params of several types.
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
-#[config(derive(Default))]
 pub struct TestConfig {
     /// Port to bind to.
     #[config(default_t = 8080, alias = "bind_to")]
@@ -49,6 +48,8 @@ pub struct TestConfig {
     pub nested: NestedConfig,
     #[config(nest, alias = "funds")]
     pub funding: Option<FundingConfig>,
+    /// Required param.
+    pub required: u64,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -95,16 +96,31 @@ impl<'de> Deserialize<'de> for SecretKey {
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(validate(
+    "`address` should be non-zero for non-zero `balance`",
+    Self::validate_address
+))]
 pub struct FundingConfig {
     /// Ethereum-like address to fund.
+    #[config(default)]
     pub address: Address,
     /// Initial balance for the address.
+    #[config(default)]
     pub balance: U256,
     /// Secret string value.
     pub api_key: Option<SecretString>,
     /// Secret key.
     #[config(secret, with = de::Optional(de::Serde![str]))]
     pub secret_key: Option<SecretKey>,
+}
+
+impl FundingConfig {
+    fn validate_address(&self) -> Result<(), ErrorWithOrigin> {
+        if self.balance > 0.into() && self.address.is_zero() {
+            return Err(ErrorWithOrigin::custom("address shouldn't be zero"));
+        }
+        Ok(())
+    }
 }
 
 const JSON: &str = r#"
@@ -148,19 +164,22 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
     let json = Prefixed::new(json, "test");
     let yaml = serde_yaml::from_str(YAML).unwrap();
     let yaml = Yaml::new("/config/test.yml", yaml).unwrap();
-    let env_vars = Environment::from_iter(
-        "APP_",
-        [
-            ("APP_TEST_APP_NAME", "test"),
-            ("APP_TEST_DIRS", "/usr/bin:/usr/local/bin"),
-            ("APP_TEST_CACHE_SIZE", "128 MiB"),
-            ("APP_TEST_FUNDS_API_KEY", "correct horse battery staple"),
-            (
-                "APP_TEST_FUNDS_SECRET_KEY",
-                "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
-            ),
-        ],
-    );
+
+    let mut env_vars = vec![
+        ("APP_TEST_APP_NAME", "test"),
+        ("APP_TEST_DIRS", "/usr/bin:/usr/local/bin"),
+        ("APP_TEST_CACHE_SIZE", "128 MiB"),
+        ("APP_TEST_FUNDS_API_KEY", "correct horse battery staple"),
+        (
+            "APP_TEST_FUNDS_SECRET_KEY",
+            "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
+        ),
+    ];
+    if !bogus {
+        env_vars.push(("APP_TEST_REQUIRED", "123"));
+    }
+    let env_vars = Environment::from_iter("APP_", env_vars);
+
     let mut repo = ConfigRepository::new(schema)
         .with(json)
         .with(yaml)
@@ -175,7 +194,10 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
                 ("BOGUS_TEST_NESTED_COMPLEX", r#"{ "array": [1, true] }"#),
                 ("BOGUS_TEST_NESTED_METHOD_LIMITS", r#"{ "eth_getLogs": 0 }"#),
                 ("BOGUS_TEST_CACHE_SIZE", "128 MiBis"),
-                ("BOGUS_TEST_FUNDING_SECRET_KEY", "not a key"),
+                (
+                    "BOGUS_TEST_FUNDS_ADDRESS",
+                    "0x0000000000000000000000000000000000000000",
+                ),
             ],
         );
         repo = repo.with(bogus_vars);

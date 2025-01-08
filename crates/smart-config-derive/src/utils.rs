@@ -8,9 +8,9 @@ use std::{
 use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{
-    ext::IdentExt, spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr,
-    Field, Fields, GenericArgument, Index, Lit, LitStr, Member, Path, PathArguments, Type,
-    TypePath,
+    ext::IdentExt, parse::ParseStream, spanned::Spanned, Attribute, Data, DataEnum, DataStruct,
+    DeriveInput, Expr, Field, Fields, GenericArgument, Index, Lit, LitStr, Member, Path,
+    PathArguments, Token, Type, TypePath,
 };
 
 pub(crate) fn wrap_in_option(val: Option<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
@@ -413,10 +413,28 @@ impl RenameRule {
 }
 
 #[derive(Debug)]
+pub(crate) struct Validation {
+    pub(crate) description: LitStr,
+    pub(crate) path: Path,
+}
+
+impl Validation {
+    fn new(input: ParseStream<'_>) -> syn::Result<Self> {
+        let content;
+        syn::parenthesized!(content in input);
+        let description = content.parse()?;
+        content.parse::<Token![,]>()?;
+        let path = content.parse()?;
+        Ok(Self { description, path })
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct ConfigContainerAttrs {
     pub(crate) cr: Option<Path>,
     pub(crate) rename_all: Option<RenameRule>,
     pub(crate) tag: Option<LitStr>,
+    pub(crate) validations: Vec<Validation>,
     pub(crate) derive_default: bool,
 }
 
@@ -427,6 +445,7 @@ impl ConfigContainerAttrs {
         let mut cr = None;
         let mut rename_all = None;
         let mut tag = None;
+        let mut validations = vec![];
         let mut derive_default = false;
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
@@ -441,6 +460,9 @@ impl ConfigContainerAttrs {
                     Ok(())
                 } else if meta.path.is_ident("tag") {
                     tag = Some(meta.value()?.parse::<LitStr>()?);
+                    Ok(())
+                } else if meta.path.is_ident("validate") {
+                    validations.push(Validation::new(meta.input)?);
                     Ok(())
                 } else if meta.path.is_ident("derive") {
                     let content;
@@ -474,6 +496,7 @@ impl ConfigContainerAttrs {
             cr,
             rename_all: rename_all.map(|(_, parsed)| parsed),
             tag,
+            validations,
             derive_default,
         })
     }

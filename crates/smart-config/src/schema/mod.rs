@@ -21,7 +21,8 @@ mod tests;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ConfigData {
-    pub metadata: &'static ConfigMetadata,
+    pub(crate) metadata: &'static ConfigMetadata,
+    pub(crate) is_top_level: bool,
     all_paths: Vec<Cow<'static, str>>,
 }
 
@@ -47,6 +48,11 @@ impl<'a> ConfigRef<'a> {
     /// Gets the config metadata.
     pub fn metadata(&self) -> &'static ConfigMetadata {
         self.data.metadata
+    }
+
+    /// Checks whether this config is top-level (i.e., was included into the schema directly, rather than as a sub-config).
+    pub fn is_top_level(&self) -> bool {
+        self.data.is_top_level
     }
 
     /// Iterates over all aliases for this config.
@@ -348,6 +354,7 @@ impl<'a> PatchedSchema<'a> {
             true,
             ConfigData {
                 metadata,
+                is_top_level: true,
                 all_paths: vec![prefix.into()],
             },
         )
@@ -396,6 +403,7 @@ impl<'a> PatchedSchema<'a> {
             false,
             ConfigData {
                 metadata,
+                is_top_level: config_data.is_top_level,
                 all_paths: vec![alias.0.into()],
             },
         )
@@ -416,6 +424,7 @@ impl<'a> PatchedSchema<'a> {
 
             let config_data = ConfigData {
                 metadata: nested.meta,
+                is_top_level: false,
                 all_paths: all_paths.collect(),
             };
             (prefix.join(nested.name), config_data)
