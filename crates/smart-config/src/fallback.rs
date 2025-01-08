@@ -37,8 +37,6 @@ pub trait FallbackSource: 'static + Send + Sync + fmt::Debug + fmt::Display {
 
 /// Gets a string value from the specified env variable.
 ///
-/// This [`FallbackSource`] is aware of mock env vars provided via [`MockEnvGuard`].
-///
 /// # Examples
 ///
 /// ```
@@ -78,7 +76,9 @@ impl fmt::Display for Env {
 }
 
 impl Env {
-    /// Gets the raw string value of the env var, taking [mock vars](MockEnvGuard) into account.
+    /// Gets the raw string value of the env var, taking [mock vars] into account.
+    ///
+    /// [mock vars]: crate::testing::Tester::set_env()
     pub fn get_raw(&self) -> Option<String> {
         MOCK_ENV_VARS
             .with(|cell| cell.borrow().get(self.0).cloned())
