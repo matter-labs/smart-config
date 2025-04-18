@@ -28,7 +28,7 @@ jobs:
         with:
           toolchain: ${{ env.msrv }}
       - name: Install sccache
-        uses: mozilla-actions/sccache-action@v0.0.4
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Build libraries
         run: cargo build --workspace --lib --all-features
@@ -44,7 +44,7 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy, rust-src
       - name: Install sccache
-        uses: mozilla-actions/sccache-action@v0.0.4
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Format
         run: cargo fmt --all -- --check
@@ -71,7 +71,7 @@ jobs:
         with:
           toolchain: ${{ env.nightly }}
       - name: Install sccache
-        uses: mozilla-actions/sccache-action@v0.0.4
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Build docs
         run: |
