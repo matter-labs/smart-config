@@ -147,7 +147,7 @@ impl ConfigSchema {
     }
 
     pub(crate) fn contains_canonical_param(&self, at: Pointer<'_>) -> bool {
-        self.mounting_points.get(at.0).map_or(false, |mount| {
+        self.mounting_points.get(at.0).is_some_and(|mount| {
             matches!(
                 mount,
                 MountingPoint::Param {

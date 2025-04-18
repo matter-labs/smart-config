@@ -444,7 +444,7 @@ impl WithOrigin {
                             continue;
                         };
 
-                        if canonical_map.map_or(false, |map| map.contains_key(canonical_key)) {
+                        if canonical_map.is_some_and(|map| map.contains_key(canonical_key)) {
                             // Key is already present in the original map
                             continue;
                         }

@@ -91,7 +91,7 @@ impl fmt::Debug for RustType {
 
 impl PartialEq for RustType {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        (self.id)() == (other.id)()
     }
 }
 
