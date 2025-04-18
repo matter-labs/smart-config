@@ -359,6 +359,8 @@ pub enum TimeUnit {
     Hours,
     /// Day (86,400 seconds).
     Days,
+    /// Week (7 days).
+    Weeks,
     // No larger units since they are less useful and may be ambiguous (e.g., is a month 30 days? is a year 365 days or 365.25...)
 }
 
@@ -370,6 +372,7 @@ impl TimeUnit {
             TimeUnit::Minutes => "minutes",
             TimeUnit::Hours => "hours",
             TimeUnit::Days => "days",
+            TimeUnit::Weeks => "weeks",
         }
     }
 }

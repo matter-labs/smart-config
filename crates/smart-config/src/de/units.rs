@@ -27,6 +27,7 @@ impl TimeUnit {
         const SECONDS_IN_MINUTE: u64 = 60;
         const SECONDS_IN_HOUR: u64 = 3_600;
         const SECONDS_IN_DAY: u64 = 86_400;
+        const SECONDS_IN_WEEK: u64 = SECONDS_IN_DAY * 7;
 
         Ok(match self {
             Self::Millis => Duration::from_millis(raw_value),
@@ -46,6 +47,12 @@ impl TimeUnit {
             Self::Days => {
                 let val = raw_value
                     .checked_mul(SECONDS_IN_DAY)
+                    .ok_or_else(|| self.overflow_err(raw_value))?;
+                Duration::from_secs(val)
+            }
+            Self::Weeks => {
+                let val = raw_value
+                    .checked_mul(SECONDS_IN_WEEK)
                     .ok_or_else(|| self.overflow_err(raw_value))?;
                 Duration::from_secs(val)
             }
@@ -197,12 +204,14 @@ enum RawDuration {
     Millis(u64),
     #[serde(alias = "second", alias = "s", alias = "sec", alias = "secs")]
     Seconds(u64),
-    #[serde(alias = "minute", alias = "min", alias = "mins")]
+    #[serde(alias = "minute", alias = "min", alias = "mins", alias = "m")]
     Minutes(u64),
-    #[serde(alias = "hour", alias = "hr")]
+    #[serde(alias = "hour", alias = "hr", alias = "h")]
     Hours(u64),
     #[serde(alias = "day", alias = "d")]
     Days(u64),
+    #[serde(alias = "week", alias = "w")]
+    Weeks(u64),
 }
 
 impl RawDuration {
@@ -225,13 +234,14 @@ impl FromStr for RawDuration {
         Ok(match unit {
             "milliseconds" | "millis" | "ms" => Self::Millis(value),
             "seconds" | "second" | "secs" | "sec" | "s" => Self::Seconds(value),
-            "minutes" | "minute" | "mins" | "min" => Self::Minutes(value),
-            "hours" | "hour" | "hr" => Self::Hours(value),
+            "minutes" | "minute" | "mins" | "min" | "m" => Self::Minutes(value),
+            "hours" | "hour" | "hr" | "h" => Self::Hours(value),
             "days" | "day" | "d" => Self::Days(value),
+            "weeks" | "week" | "w" => Self::Weeks(value),
             _ => {
                 return Err(DeError::invalid_value(
                     Unexpected::Str(unit),
-                    &"duration unit, like 'ms', up to 'days'",
+                    &"duration unit, like 'ms', up to 'weeks'",
                 ))
             }
         })
@@ -248,6 +258,7 @@ impl TryFrom<RawDuration> for Duration {
             RawDuration::Minutes(val) => (TimeUnit::Minutes, val),
             RawDuration::Hours(val) => (TimeUnit::Hours, val),
             RawDuration::Days(val) => (TimeUnit::Days, val),
+            RawDuration::Weeks(val) => (TimeUnit::Weeks, val),
         };
         unit.into_duration(raw_value)
     }
@@ -389,12 +400,20 @@ mod tests {
         assert_eq!(duration, RawDuration::Seconds(40));
         let duration: RawDuration = "10 min".parse().unwrap();
         assert_eq!(duration, RawDuration::Minutes(10));
+        let duration: RawDuration = "10m".parse().unwrap();
+        assert_eq!(duration, RawDuration::Minutes(10));
         let duration: RawDuration = "12 hours".parse().unwrap();
+        assert_eq!(duration, RawDuration::Hours(12));
+        let duration: RawDuration = "12h".parse().unwrap();
         assert_eq!(duration, RawDuration::Hours(12));
         let duration: RawDuration = "30d".parse().unwrap();
         assert_eq!(duration, RawDuration::Days(30));
         let duration: RawDuration = "1 day".parse().unwrap();
         assert_eq!(duration, RawDuration::Days(1));
+        let duration: RawDuration = "2 weeks".parse().unwrap();
+        assert_eq!(duration, RawDuration::Weeks(2));
+        let duration: RawDuration = "3w".parse().unwrap();
+        assert_eq!(duration, RawDuration::Weeks(3));
     }
 
     #[test]
