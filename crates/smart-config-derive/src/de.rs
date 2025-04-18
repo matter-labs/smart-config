@@ -55,7 +55,7 @@ impl ConfigContainer {
             } else {
                 index = *param_index;
                 *param_index += 1;
-            };
+            }
 
             let name = &field.name;
             let value = field.deserialize_param(index);
