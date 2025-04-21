@@ -29,12 +29,36 @@ pub struct ConfigMetadata {
     pub help: &'static str,
     /// Parameters included in the config.
     pub params: &'static [ParamMetadata],
+    /// Tag for enumeration configs.
+    pub tag: Option<ConfigTag>,
     /// Nested configs included in the config.
     pub nested_configs: &'static [NestedConfigMetadata],
     #[doc(hidden)] // implementation detail
     pub deserializer: BoxedDeserializer,
     #[doc(hidden)] // implementation detail
     pub validations: &'static [&'static dyn Validate<dyn any::Any>],
+}
+
+/// Information about a config tag.
+#[derive(Debug, Clone, Copy)]
+pub struct ConfigTag {
+    /// Parameter of the enclosing config corresponding to the tag.
+    pub param: &'static ParamMetadata,
+    /// Variants for the tag.
+    pub variants: &'static [ConfigVariant],
+}
+
+/// Variant of a [`ConfigTag`].
+#[derive(Debug, Clone, Copy)]
+pub struct ConfigVariant {
+    /// Canonical param name in the config sources. Not necessarily the Rust name!
+    pub name: &'static str,
+    /// Param aliases.
+    pub aliases: &'static [&'static str],
+    /// Name of the corresponding enum variant in Rust code.
+    pub rust_name: &'static str,
+    /// Human-readable param help parsed from the doc comment.
+    pub help: &'static str,
 }
 
 /// Metadata for a specific configuration parameter.
@@ -52,6 +76,8 @@ pub struct ParamMetadata {
     pub rust_type: RustType,
     /// Basic type(s) expected by the param deserializer.
     pub expecting: BasicTypes,
+    /// Tag variant in the enclosing [`ConfigMetadata`] that enables this parameter. `None` means that the parameter is unconditionally enabled.
+    pub tag_variant: Option<&'static ConfigVariant>,
     #[doc(hidden)] // implementation detail
     pub deserializer: &'static dyn ErasedDeserializer,
     #[doc(hidden)] // implementation detail
@@ -341,6 +367,8 @@ pub struct NestedConfigMetadata {
     pub aliases: &'static [&'static str],
     /// Name of the config field in Rust code.
     pub rust_field_name: &'static str,
+    /// Tag variant in the enclosing [`ConfigMetadata`] that enables this parameter. `None` means that the parameter is unconditionally enabled.
+    pub tag_variant: Option<&'static ConfigVariant>,
     /// Config metadata.
     pub meta: &'static ConfigMetadata,
 }

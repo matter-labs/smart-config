@@ -21,6 +21,10 @@ fn describing_enum_config() {
         nested_param_names,
         HashSet::from(["renamed", "other_int", "map"])
     );
+    assert_eq!(
+        metadata.nested_configs[0].tag_variant.unwrap().name,
+        "Nested"
+    );
 
     let param_names: HashSet<_> = metadata.params.iter().map(|param| param.name).collect();
     assert_eq!(
@@ -35,13 +39,16 @@ fn describing_enum_config() {
         .unwrap();
     let set_param_default = format!("{:?}", set_param.default_value().unwrap());
     assert!(set_param_default == "{42, 23}" || set_param_default == "{23, 42}");
+    assert_eq!(set_param.tag_variant.unwrap().name, "WithFields");
 
-    let tag_param = metadata
-        .params
-        .iter()
-        .find(|param| param.name == "type")
-        .unwrap();
-    assert_eq!(tag_param.expecting, BasicTypes::STRING);
+    let tag = metadata.tag.unwrap();
+    assert_eq!(tag.param.expecting, BasicTypes::STRING);
+    assert_eq!(tag.variants.len(), 3);
+    assert_eq!(tag.variants[0].name, "first");
+    assert_eq!(tag.variants[0].rust_name, "First");
+    assert_eq!(tag.variants[1].name, "Nested");
+    assert_eq!(tag.variants[2].name, "WithFields");
+    assert_eq!(tag.variants[2].aliases, ["Fields", "With"]);
 }
 
 #[test]

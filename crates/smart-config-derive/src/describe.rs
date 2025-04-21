@@ -5,7 +5,8 @@ use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, LitStr, Type};
 
 use crate::utils::{
-    wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigField, DefaultValue, Validation,
+    wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
+    DefaultValue, RenameRule, Validation,
 };
 
 impl DefaultValue {
@@ -71,7 +72,11 @@ impl ConfigField {
         }
     }
 
-    fn describe_param(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
+    fn describe_param(
+        &self,
+        parent: &ConfigContainer,
+        variant_idx: Option<usize>,
+    ) -> proc_macro2::TokenStream {
         let name = &self.name;
         let name_span = self.name_span();
         let aliases = self.attrs.aliases.iter();
@@ -101,6 +106,8 @@ impl ConfigField {
 
         let cr = parent.cr(name_span);
         let deserializer = self.deserializer(&cr);
+        let tag_variant = wrap_in_option(variant_idx.map(|idx| quote!(&TAG_VARIANTS[#idx])));
+
         quote_spanned! {name_span=> {
             let deserializer = #deserializer;
 
@@ -111,6 +118,7 @@ impl ConfigField {
                 rust_field_name: ::core::stringify!(#name),
                 rust_type: #cr::metadata::RustType::of::<#ty>(#ty_in_code),
                 expecting: #cr::de::_private::extract_expected_types::<#ty, _>(&deserializer),
+                tag_variant: #tag_variant,
                 deserializer: &#cr::de::_private::Erased::<#ty, _>::new(deserializer),
                 default_value: #default_value,
                 fallback: #fallback,
@@ -118,7 +126,11 @@ impl ConfigField {
         }}
     }
 
-    fn describe_nested_config(&self, parent: &ConfigContainer) -> proc_macro2::TokenStream {
+    fn describe_nested_config(
+        &self,
+        parent: &ConfigContainer,
+        variant_idx: Option<usize>,
+    ) -> proc_macro2::TokenStream {
         let cr = parent.cr(self.name_span());
         let name = &self.name;
         let aliases = self.attrs.aliases.iter();
@@ -128,12 +140,14 @@ impl ConfigField {
         } else {
             self.param_name()
         };
+        let tag_variant = wrap_in_option(variant_idx.map(|idx| quote!(&TAG_VARIANTS[#idx])));
 
         quote_spanned! {self.name_span()=>
             #cr::metadata::NestedConfigMetadata {
                 name: #config_name,
                 aliases: &[#(#aliases,)*],
                 rust_field_name: ::core::stringify!(#name),
+                tag_variant: #tag_variant,
                 meta: &<#ty as #cr::DescribeConfig>::DESCRIPTION,
             }
         }
@@ -150,6 +164,27 @@ impl Validation {
     }
 }
 
+impl ConfigEnumVariant {
+    fn describe(
+        &self,
+        cr: &proc_macro2::TokenStream,
+        rename_rule: Option<RenameRule>,
+    ) -> proc_macro2::TokenStream {
+        let name = self.name(rename_rule);
+        let rust_name = &self.name;
+        let aliases = self.attrs.aliases.iter();
+
+        quote_spanned! {self.name.span()=>
+            #cr::metadata::ConfigVariant {
+                name: #name,
+                aliases: &[#(#aliases,)*],
+                rust_name: ::core::stringify!(#rust_name),
+                help: "", // TODO: capture help
+            }
+        }
+    }
+}
+
 impl ConfigContainer {
     fn derive_describe_config(&self) -> proc_macro2::TokenStream {
         let name = &self.name;
@@ -160,15 +195,20 @@ impl ConfigContainer {
         let all_fields = self.fields.all_fields();
         let validations = all_fields
             .iter()
-            .filter(|field| !field.attrs.flatten)
-            .map(|field| field.validate_names(self));
+            .filter(|(_, field)| !field.attrs.flatten)
+            .map(|(_, field)| field.validate_names(self));
 
+        let is_enum = matches!(&self.fields, ConfigContainerFields::Enum { .. });
         let params = all_fields
             .iter()
-            .filter(|field| !field.attrs.nest)
-            .map(|field| field.describe_param(self));
+            .filter(|(_, field)| !field.attrs.nest)
+            .map(|(variant_idx, field)| {
+                field.describe_param(self, is_enum.then_some(*variant_idx))
+            });
         let mut params: Vec<_> = params.collect();
 
+        let mut tag_variants_const = None;
+        let mut tag_description = None;
         if let ConfigContainerFields::Enum { tag, variants } = &self.fields {
             // Add the tag field description
             let default = variants.iter().find_map(|variant| {
@@ -180,13 +220,31 @@ impl ConfigContainer {
             let expected_variants = variants
                 .iter()
                 .flat_map(|variant| variant.expected_variants(self.attrs.rename_all));
-            let tag = ConfigField::from_tag(&cr, tag, expected_variants, default.as_deref());
-            params.push(tag.describe_param(self));
-        }
 
-        let nested_configs = all_fields.iter().filter_map(|field| {
+            let tag_span = tag.span();
+            let tag = ConfigField::from_tag(&cr, tag, expected_variants, default.as_deref());
+            let tag_index = params.len();
+            params.push(tag.describe_param(self, None));
+
+            let tag_variants = variants
+                .iter()
+                .map(|variant| variant.describe(&cr, self.attrs.rename_all));
+
+            tag_variants_const = Some(quote_spanned! {tag_span=>
+                const TAG_VARIANTS: &[#cr::metadata::ConfigVariant] = &[#(#tag_variants,)*];
+            });
+            tag_description = Some(quote_spanned! {tag_span=>
+                #cr::metadata::ConfigTag {
+                    param: &PARAMS[#tag_index],
+                    variants: TAG_VARIANTS,
+                }
+            });
+        }
+        let tag_description = wrap_in_option(tag_description);
+
+        let nested_configs = all_fields.iter().filter_map(|(variant_idx, field)| {
             if field.attrs.nest {
-                return Some(field.describe_nested_config(self));
+                return Some(field.describe_nested_config(self, is_enum.then_some(*variant_idx)));
             }
             None
         });
@@ -199,17 +257,23 @@ impl ConfigContainer {
 
         quote! {
             impl #cr::DescribeConfig for #name {
-                const DESCRIPTION: #cr::metadata::ConfigMetadata = #cr::metadata::ConfigMetadata {
-                    ty: #cr::metadata::RustType::of::<#name>(#name_str),
-                    help: #help,
-                    params: &[#(#params,)*],
-                    nested_configs: &[#(#nested_configs,)*],
-                    deserializer: |ctx| {
-                        use #cr::metadata::_private::DeserializeBoxedConfig as _;
-                        let receiver = &::core::marker::PhantomData::<#name>;
-                        receiver.deserialize_boxed_config(ctx)
-                    },
-                    validations: &[#(#config_validations,)*],
+                const DESCRIPTION: #cr::metadata::ConfigMetadata = {
+                    const PARAMS: &[#cr::metadata::ParamMetadata] = &[#(#params,)*];
+                    #tag_variants_const
+
+                    #cr::metadata::ConfigMetadata {
+                        ty: #cr::metadata::RustType::of::<#name>(#name_str),
+                        help: #help,
+                        params: PARAMS,
+                        tag: #tag_description,
+                        nested_configs: &[#(#nested_configs,)*],
+                        deserializer: |ctx| {
+                            use #cr::metadata::_private::DeserializeBoxedConfig as _;
+                            let receiver = &::core::marker::PhantomData::<#name>;
+                            receiver.deserialize_boxed_config(ctx)
+                        },
+                        validations: &[#(#config_validations,)*],
+                    }
                 };
             }
 
