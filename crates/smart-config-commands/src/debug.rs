@@ -10,7 +10,7 @@ use smart_config::{
     ConfigRepository, ParseError,
 };
 
-use crate::{ParamRef, Printer, CONFIG_PATH};
+use crate::{ParamRef, Printer, CONFIG_PATH, STRING};
 
 const SECTION: Style = Style::new().bold();
 const ARROW: Style = Style::new().bold();
@@ -190,7 +190,6 @@ fn write_value(writer: &mut impl io::Write, value: &WithOrigin, ident: usize) ->
     const NULL: Style = Style::new().bold();
     const BOOL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
     const NUMBER: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
-    const STRING: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
     const SECRET: Style = Style::new()
         .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
         .fg_color(None);
