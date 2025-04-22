@@ -100,8 +100,10 @@ pub(crate) struct ConfigWithNesting {
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate, tag = "type")]
 pub(crate) enum EnumConfig {
+    /// Empty variant.
     #[config(rename = "first")]
     First,
+    /// Variant wrapping a flattened config.
     Nested(NestedConfig),
     #[config(alias = "Fields", alias = "With")]
     WithFields {

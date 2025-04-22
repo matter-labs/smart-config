@@ -173,13 +173,14 @@ impl ConfigEnumVariant {
         let name = self.name(rename_rule);
         let rust_name = &self.name;
         let aliases = self.attrs.aliases.iter();
+        let help = &self.attrs.help;
 
         quote_spanned! {self.name.span()=>
             #cr::metadata::ConfigVariant {
                 name: #name,
                 aliases: &[#(#aliases,)*],
                 rust_name: ::core::stringify!(#rust_name),
-                help: "", // TODO: capture help
+                help: #help,
             }
         }
     }

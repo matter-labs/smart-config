@@ -46,7 +46,9 @@ fn describing_enum_config() {
     assert_eq!(tag.variants.len(), 3);
     assert_eq!(tag.variants[0].name, "first");
     assert_eq!(tag.variants[0].rust_name, "First");
+    assert_eq!(tag.variants[0].help, "Empty variant.");
     assert_eq!(tag.variants[1].name, "Nested");
+    assert_eq!(tag.variants[1].help, "Variant wrapping a flattened config.");
     assert_eq!(tag.variants[2].name, "WithFields");
     assert_eq!(tag.variants[2].aliases, ["Fields", "With"]);
 }

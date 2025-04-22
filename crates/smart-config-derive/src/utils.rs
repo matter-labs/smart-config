@@ -60,6 +60,7 @@ pub(crate) struct ConfigVariantAttrs {
     pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
     pub(crate) default: bool,
+    pub(crate) help: String,
 }
 
 impl ConfigVariantAttrs {
@@ -89,6 +90,7 @@ impl ConfigVariantAttrs {
             rename,
             aliases,
             default,
+            help: parse_docs(attrs),
         })
     }
 }

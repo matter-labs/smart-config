@@ -119,7 +119,12 @@ fn write_tag_help(
             }
             writeln!(writer)?;
         }
-        // TODO: write help
+
+        if !variant.help.is_empty() {
+            for line in variant.help.lines() {
+                writeln!(writer, "{INDENT}  {line}")?;
+            }
+        }
     }
     Ok(())
 }
