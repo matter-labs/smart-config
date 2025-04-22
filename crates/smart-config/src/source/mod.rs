@@ -316,7 +316,8 @@ pub struct ConfigParser<'a, C> {
 }
 
 impl ConfigParser<'_, ()> {
-    #[doc(hidden)]
+    /// Attempts to parse the related config from the repository input. Returns parsing errors if any.
+    #[doc(hidden)] // not stable yet
     pub fn parse(&self) -> Result<(), ParseErrors> {
         self.with_context(|ctx| ctx.deserialize_any_config().map(drop))
     }

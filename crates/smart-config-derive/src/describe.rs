@@ -183,9 +183,73 @@ impl ConfigEnumVariant {
             }
         }
     }
+
+    fn visit_match_arm(
+        &self,
+        variant_idx: usize,
+        start_field_offset: &mut usize,
+    ) -> proc_macro2::TokenStream {
+        let name = &self.name;
+        let params = self.fields.iter().filter(|field| !field.attrs.nest);
+        let (bindings, params): (Vec<_>, Vec<_>) = (*start_field_offset..)
+            .zip(params)
+            .map(|(field_idx, field)| {
+                let field = &field.name;
+                let field_binding = quote::format_ident!("__{field_idx}");
+
+                let binding = quote_spanned!(field.span()=> #field: #field_binding);
+                let visit =
+                    quote_spanned!(field.span()=> visitor.visit_param(#field_idx, #field_binding));
+                (binding, visit)
+            })
+            .unzip();
+        *start_field_offset += params.len();
+
+        quote_spanned! {name.span()=>
+            Self::#name { #(#bindings,)* .. } => {
+                visitor.visit_tag(#variant_idx);
+                #(#params;)*
+            }
+        }
+    }
 }
 
 impl ConfigContainer {
+    fn derive_visit_config(&self) -> proc_macro2::TokenStream {
+        let name = &self.name;
+        let cr = self.cr(name.span());
+
+        let visit_impl = match &self.fields {
+            ConfigContainerFields::Struct(fields) => {
+                let params = fields.iter().filter(|field| !field.attrs.nest);
+                let params = params.enumerate().map(|(i, field)| {
+                    let field = &field.name;
+                    quote_spanned!(field.span()=> visitor.visit_param(#i, &self.#field))
+                });
+                quote!(#(#params;)*)
+            }
+            ConfigContainerFields::Enum { variants, .. } => {
+                let mut start_param_offset = 0;
+                let match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
+                    variant.visit_match_arm(variant_idx, &mut start_param_offset)
+                });
+                quote! {
+                    match self {
+                        #(#match_arms)*
+                    }
+                }
+            }
+        };
+
+        quote! {
+            impl #cr::visit::VisitConfig for #name {
+                fn visit_config(&self, visitor: &mut dyn #cr::visit::ConfigVisitor) {
+                    #visit_impl
+                }
+            }
+        }
+    }
+
     fn derive_describe_config(&self) -> proc_macro2::TokenStream {
         let name = &self.name;
         let cr = self.cr(name.span());
@@ -333,13 +397,14 @@ impl ConfigContainer {
     }
 
     fn derive_all(&self) -> syn::Result<proc_macro2::TokenStream> {
+        let visit_impl = self.derive_visit_config();
         let describe_impl = self.derive_describe_config();
         let default_impl = if self.attrs.derive_default {
             Some(self.derive_default()?)
         } else {
             None
         };
-        Ok(quote!(#describe_impl #default_impl))
+        Ok(quote!(#visit_impl #describe_impl #default_impl))
     }
 }
 
