@@ -395,7 +395,7 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
 /// # use serde::Deserialize;
 /// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
 ///
-/// #[derive(Deserialize)]
+/// #[derive(Debug, Deserialize)]
 /// #[serde(transparent)]
 /// struct MySet(HashSet<u64>);
 ///

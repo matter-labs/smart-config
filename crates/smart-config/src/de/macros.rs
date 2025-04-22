@@ -54,6 +54,7 @@ macro_rules! _basic_types {
 /// ```
 /// # use serde::{Deserialize, Deserializer};
 /// # use smart_config::{de::Serde, DescribeConfig, DeserializeConfig};
+/// #[derive(Debug)]
 /// struct ComplexType {
 ///     // ...
 /// }
