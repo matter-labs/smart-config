@@ -2,7 +2,7 @@
 
 use std::{any, borrow::Cow, fmt};
 
-use self::_private::BoxedDeserializer;
+use self::_private::{BoxedDeserializer, BoxedVisitor};
 use crate::{
     de::{DeserializeParam, _private::ErasedDeserializer},
     fallback::FallbackSource,
@@ -35,6 +35,8 @@ pub struct ConfigMetadata {
     pub nested_configs: &'static [NestedConfigMetadata],
     #[doc(hidden)] // implementation detail
     pub deserializer: BoxedDeserializer,
+    #[doc(hidden)] // implementation detail
+    pub visitor: BoxedVisitor,
     #[doc(hidden)] // implementation detail
     pub validations: &'static [&'static dyn Validate<dyn any::Any>],
 }

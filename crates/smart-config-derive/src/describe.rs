@@ -336,6 +336,7 @@ impl ConfigContainer {
                             let receiver = &::core::marker::PhantomData::<#name>;
                             receiver.deserialize_boxed_config(ctx)
                         },
+                        visitor: #cr::metadata::_private::box_config_visitor::<Self>(),
                         validations: &[#(#config_validations,)*],
                     }
                 };

@@ -1,4 +1,5 @@
 use std::{
+    any,
     collections::{BTreeMap, HashSet},
     iter,
     marker::PhantomData,
@@ -316,10 +317,15 @@ pub struct ConfigParser<'a, C> {
 }
 
 impl ConfigParser<'_, ()> {
-    /// Attempts to parse the related config from the repository input. Returns parsing errors if any.
+    /// Attempts to parse the related config from the repository input. Returns the boxed parsed config.
+    ///
+    /// # Errors
+    ///
+    /// Returns parsing errors if any.
     #[doc(hidden)] // not stable yet
-    pub fn parse(&self) -> Result<(), ParseErrors> {
-        self.with_context(|ctx| ctx.deserialize_any_config().map(drop))
+    #[allow(clippy::redundant_closure_for_method_calls)] // false positive because of lifetimes
+    pub fn parse(&self) -> Result<Box<dyn any::Any>, ParseErrors> {
+        self.with_context(|ctx| ctx.deserialize_any_config())
     }
 }
 
