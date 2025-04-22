@@ -1,20 +1,29 @@
 //! Visitor pattern for configs.
 
-#![allow(missing_docs)] // FIXME
-
 use std::{any, fmt};
 
+/// Types that can be used as configuration parameters. Automatically implemented.
 pub trait ParamValue: any::Any + fmt::Debug {}
 
 impl<T: any::Any + fmt::Debug> ParamValue for T {}
 
+/// Visitor of configuration parameters in a particular configuration.
+#[doc(hidden)] // API is not stable yet
 pub trait ConfigVisitor {
+    /// Visits an enumeration tag in the configuration, if the config is an enumeration.
+    /// Called once per configuration before any other calls.
     fn visit_tag(&mut self, variant_index: usize);
 
+    /// Visits a parameter providing its value for inspection. This will be called for all params in a struct config,
+    /// and for params associated with the active tag variant in an enum config.
     fn visit_param(&mut self, param_index: usize, value: &dyn ParamValue);
 }
 
+/// Configuration that can be visited (e.g., to inspect its parameters in a generic way).
+///
+/// This is a supertrait for [`DescribeConfig`](crate::DescribeConfig) that should be automatically derived.
 pub trait VisitConfig {
+    /// Performs the visit.
     fn visit_config(&self, visitor: &mut dyn ConfigVisitor);
 }
 
