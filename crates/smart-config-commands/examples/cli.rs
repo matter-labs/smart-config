@@ -181,6 +181,10 @@ test:
   funding:
     address: "0x0000000000000000000000000000000000001234"
     balance: "0x123456"
+  object_store:
+    type: google
+    bucket_name: test-bucket
+    region: euw1
 "#;
 
 fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> {
@@ -223,6 +227,7 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
                     "BOGUS_TEST_FUNDS_ADDRESS",
                     "0x0000000000000000000000000000000000000000",
                 ),
+                ("BOGUS_TEST_OBJECT_STORE_TYPE", "file"),
             ],
         );
         repo = repo.with(bogus_vars);
