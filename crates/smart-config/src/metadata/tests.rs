@@ -75,13 +75,10 @@ fn deserializing_config_using_deserializer() {
 #[test]
 fn describing_defaulting_enum_config() {
     let metadata = &DefaultingEnumConfig::DESCRIPTION;
-    let tag_param = metadata
-        .params
-        .iter()
-        .find(|param| param.name == "kind")
-        .unwrap();
-    let default = format!("{:?}", tag_param.default_value().unwrap());
+    let tag = metadata.tag.unwrap();
+    let default = format!("{:?}", tag.param.default_value().unwrap());
     assert_eq!(default, "\"Second\"");
+    assert_eq!(tag.default_variant.unwrap().name, "Second");
 }
 
 #[test]

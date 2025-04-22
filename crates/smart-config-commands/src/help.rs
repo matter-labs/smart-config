@@ -12,6 +12,7 @@ use crate::{ParamRef, Printer, CONFIG_PATH, STRING};
 const INDENT: &str = "  ";
 const DIMMED: Style = Style::new().dimmed();
 const MAIN_NAME: Style = Style::new().bold();
+const DEFAULT_VARIANT: Style = Style::new().bold();
 const FIELD: Style = Style::new().underline();
 const DEFAULT_VAL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
 const UNIT: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
@@ -102,9 +103,18 @@ fn write_tag_help(
         writer,
         "{INDENT}{FIELD}Type{FIELD:#}: string tag with variants:"
     )?;
+
+    let default_variant_name = tag.default_variant.map(|variant| variant.rust_name);
+
     for variant in tag.variants {
+        let default_marker = if default_variant_name == Some(variant.rust_name) {
+            format!(" {DEFAULT_VARIANT}(default){DEFAULT_VARIANT:#}")
+        } else {
+            String::new()
+        };
+
         writeln!(
-            writer, "{INDENT}- {STRING}'{name}'{STRING:#} {DIMMED}[Rust: {config_name}::{rust_name}]{DIMMED:#}",
+            writer, "{INDENT}- {STRING}'{name}'{STRING:#} {DIMMED}[Rust: {config_name}::{rust_name}]{DIMMED:#}{default_marker}",
             name = variant.name,
             config_name = config.metadata().ty.name_in_code(),
             rust_name = variant.rust_name

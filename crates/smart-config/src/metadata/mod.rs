@@ -48,6 +48,8 @@ pub struct ConfigTag {
     pub param: &'static ParamMetadata,
     /// Variants for the tag.
     pub variants: &'static [ConfigVariant],
+    /// Default variant, if any.
+    pub default_variant: Option<&'static ConfigVariant>,
 }
 
 /// Variant of a [`ConfigTag`].

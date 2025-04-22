@@ -276,12 +276,17 @@ impl ConfigContainer {
         let mut tag_description = None;
         if let ConfigContainerFields::Enum { tag, variants } = &self.fields {
             // Add the tag field description
-            let default = variants.iter().find_map(|variant| {
-                variant
-                    .attrs
-                    .default
-                    .then(|| variant.name(self.attrs.rename_all))
-            });
+            let (default_variant_idx, default) = variants
+                .iter()
+                .enumerate()
+                .find_map(|(i, variant)| {
+                    variant
+                        .attrs
+                        .default
+                        .then(|| (i, variant.name(self.attrs.rename_all)))
+                })
+                .unzip();
+
             let expected_variants = variants
                 .iter()
                 .flat_map(|variant| variant.expected_variants(self.attrs.rename_all));
@@ -298,10 +303,13 @@ impl ConfigContainer {
             tag_variants_const = Some(quote_spanned! {tag_span=>
                 const TAG_VARIANTS: &[#cr::metadata::ConfigVariant] = &[#(#tag_variants,)*];
             });
+            let default_variant =
+                wrap_in_option(default_variant_idx.map(|i| quote!(&TAG_VARIANTS[#i])));
             tag_description = Some(quote_spanned! {tag_span=>
                 #cr::metadata::ConfigTag {
                     param: &PARAMS[#tag_index],
                     variants: TAG_VARIANTS,
+                    default_variant: #default_variant,
                 }
             });
         }
