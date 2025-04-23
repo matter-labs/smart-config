@@ -132,6 +132,8 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
     pub(crate) with: Option<Expr>,
+    #[allow(dead_code)] // FIXME
+    pub(crate) validations: Vec<Validation>,
 }
 
 impl ConfigFieldAttrs {
@@ -146,6 +148,7 @@ impl ConfigFieldAttrs {
         let mut flatten_span = None;
         let mut with = None;
         let mut secret_span = None;
+        let mut validations = vec![];
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("rename") {
@@ -178,6 +181,9 @@ impl ConfigFieldAttrs {
                     Ok(())
                 } else if meta.path.is_ident("with") {
                     with = Some(meta.value()?.parse::<Expr>()?);
+                    Ok(())
+                } else if meta.path.is_ident("validate") {
+                    validations.push(Validation::new(meta.input)?);
                     Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))
@@ -227,6 +233,7 @@ impl ConfigFieldAttrs {
             flatten,
             nest,
             with,
+            validations,
             is_secret: secret_span.is_some(),
         })
     }
