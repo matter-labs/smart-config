@@ -6,19 +6,13 @@ use self::_private::{BoxedDeserializer, BoxedVisitor};
 use crate::{
     de::{DeserializeParam, _private::ErasedDeserializer},
     fallback::FallbackSource,
-    ErrorWithOrigin,
+    validation::Validate,
 };
 
 #[doc(hidden)] // used in the derive macros
 pub mod _private;
 #[cfg(test)]
 mod tests;
-
-/// Generic post-validation for a configuration parameter.
-#[doc(hidden)]
-pub trait Validate<T: ?Sized>: 'static + Send + Sync + fmt::Debug + fmt::Display {
-    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin>;
-}
 
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]

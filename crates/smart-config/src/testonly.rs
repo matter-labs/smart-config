@@ -20,6 +20,7 @@ use crate::{
     fallback,
     fallback::FallbackSource,
     metadata::{SizeUnit, TimeUnit},
+    validation,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
     ParseErrors,
@@ -304,7 +305,7 @@ pub(crate) struct ConfigWithFallbacks {
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
-#[config(validate("`len` must match `secret` length", Self::validate_len))]
+#[config(validate = validation::Custom("`len` must match `secret` length", Self::validate_len))]
 pub(crate) struct ConfigWithValidations {
     pub len: usize,
     pub secret: SecretString,

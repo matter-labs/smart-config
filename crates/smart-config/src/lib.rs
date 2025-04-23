@@ -128,6 +128,8 @@
 // Linter settings
 #![warn(missing_docs)]
 
+extern crate core;
+
 /// Derives the [`DescribeConfig`](trait@DescribeConfig) trait for a type.
 ///
 /// This macro supports both structs and enums. It is conceptually similar to `Deserialize` macro from `serde`.
@@ -303,10 +305,11 @@
 ///
 /// ```
 /// use secrecy::{ExposeSecret, SecretString};
+/// use smart_config::validation;
 /// # use smart_config::{testing, DescribeConfig, DeserializeConfig, ErrorWithOrigin};
 ///
 /// #[derive(DescribeConfig, DeserializeConfig)]
-/// #[config(validate(
+/// #[config(validate = validation::Custom(
 ///     "secret key must have expected length",
 ///     Self::validate_secret_key
 /// ))]
@@ -362,6 +365,7 @@ pub mod testing;
 mod testonly;
 mod types;
 mod utils;
+pub mod validation;
 pub mod value;
 pub mod visit;
 

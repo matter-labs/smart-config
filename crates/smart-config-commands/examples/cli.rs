@@ -12,9 +12,10 @@ use serde::{Deserialize, Deserializer};
 use smart_config::{
     de, fallback,
     metadata::{SizeUnit, TimeUnit},
+    validation,
     value::SecretString,
-    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
-    ErrorWithOrigin, Json, Prefixed, Yaml,
+    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
+    Prefixed, Yaml,
 };
 use smart_config_commands::{ParamRef, Printer};
 
@@ -98,10 +99,7 @@ impl<'de> Deserialize<'de> for SecretKey {
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
-#[config(validate(
-    "`address` should be non-zero for non-zero `balance`",
-    Self::validate_address
-))]
+#[config(validate = Self::NON_ZERO_ADDRESS)]
 pub struct FundingConfig {
     /// Ethereum-like address to fund.
     #[config(default)]
@@ -117,12 +115,10 @@ pub struct FundingConfig {
 }
 
 impl FundingConfig {
-    fn validate_address(&self) -> Result<(), ErrorWithOrigin> {
-        if self.balance > 0.into() && self.address.is_zero() {
-            return Err(ErrorWithOrigin::custom("address shouldn't be zero"));
-        }
-        Ok(())
-    }
+    const NON_ZERO_ADDRESS: validation::Basic<Self> = validation::Basic(
+        "`address` should be non-zero for non-zero `balance`",
+        |config| config.balance.is_zero() || !config.address.is_zero(),
+    );
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]

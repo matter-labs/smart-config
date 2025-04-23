@@ -2,11 +2,11 @@
 
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::{spanned::Spanned, DeriveInput, LitStr, Type};
+use syn::{spanned::Spanned, DeriveInput, Expr, LitStr, Type};
 
 use crate::utils::{
     wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
-    DefaultValue, RenameRule, Validation,
+    DefaultValue, RenameRule,
 };
 
 impl DefaultValue {
@@ -154,16 +154,6 @@ impl ConfigField {
     }
 }
 
-impl Validation {
-    fn to_validation(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-        let description = &self.description;
-        let path = &self.path;
-        quote_spanned! {description.span()=>
-            &#cr::metadata::_private::Validation(#description, #path)
-        }
-    }
-}
-
 impl ConfigEnumVariant {
     fn describe(
         &self,
@@ -251,6 +241,16 @@ impl ConfigContainer {
         }
     }
 
+    fn erase_validation(
+        validation: &Expr,
+        cr: &proc_macro2::TokenStream,
+        ty: &impl quote::ToTokens,
+    ) -> proc_macro2::TokenStream {
+        quote_spanned! {validation.span()=>
+            &#cr::validation::ErasedValidation::<#ty, _>::new(#validation)
+        }
+    }
+
     fn derive_describe_config(&self) -> proc_macro2::TokenStream {
         let name = &self.name;
         let cr = self.cr(name.span());
@@ -326,7 +326,7 @@ impl ConfigContainer {
             .attrs
             .validations
             .iter()
-            .map(|val| val.to_validation(&cr));
+            .map(|val| Self::erase_validation(val, &cr, &name));
 
         quote! {
             impl #cr::DescribeConfig for #name {
