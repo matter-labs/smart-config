@@ -133,7 +133,7 @@ impl<T: 'static, De: fmt::Debug> fmt::Debug for Validated<T, De> {
     }
 }
 
-impl<T, De: DeserializeParam<T>> Validated<T, De> {
+impl<T, De> Validated<T, De> {
     pub const fn new(inner: De, validations: &'static [&'static dyn Validate<T>]) -> Self {
         Self { inner, validations }
     }
@@ -161,5 +161,22 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Validated<T, De> {
             }
         }
         Ok(value)
+    }
+}
+
+impl<T, De: DeserializeParam<Option<T>>> DeserializeParam<Option<T>> for Validated<T, De> {
+    const EXPECTING: BasicTypes = De::EXPECTING;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.inner.describe(description);
+        description.set_validations(self.validations);
+    }
+
+    fn deserialize_param(
+        &self,
+        _ctx: DeserializeContext<'_>,
+        _param: &'static ParamMetadata,
+    ) -> Result<Option<T>, ErrorWithOrigin> {
+        todo!()
     }
 }

@@ -303,14 +303,11 @@ pub(crate) struct ConfigWithFallbacks {
     pub str: Option<SecretString>,
 }
 
-const NOT_TOO_LARGE: validation::Basic<usize> =
-    validation::Basic("less than 1000", |&val| val < 1_000);
-
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 #[config(validate = validation::Custom("`len` must match `secret` length", Self::validate_len))]
 pub(crate) struct ConfigWithValidations {
-    #[config(validate = NOT_TOO_LARGE)]
+    #[config(validate = (..1_000))]
     pub len: usize,
     pub secret: SecretString,
 }

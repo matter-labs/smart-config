@@ -2,12 +2,19 @@
 
 #![allow(missing_docs)] // FIXME
 
-use std::{any, fmt, marker::PhantomData};
+use std::{any, fmt, marker::PhantomData, ops, sync::Arc};
+
+use serde::de;
 
 use crate::ErrorWithOrigin;
 
 /// Generic post-validation for a configuration parameter.
-pub trait Validate<T: ?Sized>: 'static + Send + Sync + fmt::Display {
+pub trait Validate<T: ?Sized>: 'static + Send + Sync {
+    /// # Errors
+    ///
+    /// Should propagate formatting errors.
+    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result;
+
     /// # Errors
     ///
     /// Should return an error if validation fails.
@@ -17,22 +24,26 @@ pub trait Validate<T: ?Sized>: 'static + Send + Sync + fmt::Display {
 impl<T: 'static + ?Sized> fmt::Debug for dyn Validate<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("Validate")
-            .field("description", &self.to_string())
+            .debug_tuple("Validate")
+            .field(&self.to_string())
             .finish_non_exhaustive()
+    }
+}
+
+impl<T: 'static + ?Sized> fmt::Display for dyn Validate<T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(formatter)
     }
 }
 
 #[derive(Debug)]
 pub struct Custom<T>(pub &'static str, pub fn(&T) -> Result<(), ErrorWithOrigin>);
 
-impl<T> fmt::Display for Custom<T> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl<T: 'static> Validate<T> for Custom<T> {
+    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.0)
     }
-}
 
-impl<T: 'static> Validate<T> for Custom<T> {
     fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
         (self.1)(target)
     }
@@ -41,13 +52,11 @@ impl<T: 'static> Validate<T> for Custom<T> {
 #[derive(Debug)]
 pub struct Basic<T>(pub &'static str, pub fn(&T) -> bool);
 
-impl<T> fmt::Display for Basic<T> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl<T: 'static> Validate<T> for Basic<T> {
+    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.0)
     }
-}
 
-impl<T: 'static> Validate<T> for Basic<T> {
     fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
         if !(self.1)(target) {
             return Err(ErrorWithOrigin::custom(self.0));
@@ -55,6 +64,36 @@ impl<T: 'static> Validate<T> for Basic<T> {
         Ok(())
     }
 }
+
+macro_rules! impl_validate_for_range {
+    ($range:path) => {
+        impl<T> Validate<T> for $range
+        where
+            T: 'static + Send + Sync + PartialOrd + fmt::Debug,
+        {
+            fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(formatter, "must be in range {self:?}")
+            }
+
+            fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
+                if !self.contains(target) {
+                    let err = de::Error::invalid_value(
+                        de::Unexpected::Other(&format!("{target:?}")),
+                        &format!("value in range {self:?}").as_str(),
+                    );
+                    return Err(ErrorWithOrigin::json(err, Arc::default()));
+                }
+                Ok(())
+            }
+        }
+    };
+}
+
+impl_validate_for_range!(ops::Range<T>);
+impl_validate_for_range!(ops::RangeInclusive<T>);
+impl_validate_for_range!(ops::RangeTo<T>);
+impl_validate_for_range!(ops::RangeToInclusive<T>);
+impl_validate_for_range!(ops::RangeFrom<T>);
 
 #[doc(hidden)] // used in proc macros
 #[derive(Debug)]
@@ -72,13 +111,11 @@ impl<T: 'static, V: Validate<T>> ErasedValidation<T, V> {
     }
 }
 
-impl<T: 'static, V: Validate<T>> fmt::Display for ErasedValidation<T, V> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.validation, formatter)
-    }
-}
-
 impl<T: 'static, V: Validate<T>> Validate<dyn any::Any> for ErasedValidation<T, V> {
+    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.validation.describe(formatter)
+    }
+
     fn validate(&self, target: &dyn any::Any) -> Result<(), ErrorWithOrigin> {
         let target: &T = target
             .downcast_ref()

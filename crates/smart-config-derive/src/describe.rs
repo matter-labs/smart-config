@@ -51,7 +51,7 @@ impl ConfigField {
         if !self.attrs.validations.is_empty() {
             let validations = self.attrs.validations.iter().map(|val| {
                 // A reference is required to convert to `&dyn Validate<_>`
-                quote!(&#val)
+                quote_spanned!(val.span()=> &#val)
             });
             deserializer =
                 quote!(#cr::de::_private::Validated::new(#deserializer, &[#(#validations,)*]));

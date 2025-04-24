@@ -30,8 +30,7 @@ pub struct TestConfig {
     pub app_name: String,
     #[config(default_t = Duration::from_millis(500))]
     pub poll_latency: Duration,
-    /// Should be greater than 0.
-    #[config(default)]
+    #[config(default, validate = (0.0..=10.0))]
     pub scaling_factor: Option<f32>,
     /// Directory for temporary stuff.
     #[config(default_t = "/tmp".into(), fallback = &fallback::Env("TMPDIR"))]
