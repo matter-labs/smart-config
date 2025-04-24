@@ -128,8 +128,6 @@
 // Linter settings
 #![warn(missing_docs)]
 
-extern crate core;
-
 /// Derives the [`DescribeConfig`](trait@DescribeConfig) trait for a type.
 ///
 /// This macro supports both structs and enums. It is conceptually similar to `Deserialize` macro from `serde`.
@@ -341,7 +339,6 @@ pub use smart_config_derive::DescribeConfig;
 /// the same attributes, so see `DescribeConfig` docs for details and examples of usage.
 pub use smart_config_derive::DeserializeConfig;
 
-use self::metadata::ConfigMetadata;
 pub use self::{
     de::DeserializeConfig,
     error::{DeserializeConfigError, ErrorWithOrigin, ParseError, ParseErrors},
@@ -352,6 +349,7 @@ pub use self::{
     },
     types::ByteSize,
 };
+use self::{metadata::ConfigMetadata, visit::VisitConfig};
 
 pub mod de;
 mod error;
@@ -365,9 +363,10 @@ mod testonly;
 mod types;
 mod utils;
 pub mod value;
+pub mod visit;
 
 /// Describes a configuration (i.e., a group of related parameters).
-pub trait DescribeConfig: 'static {
+pub trait DescribeConfig: 'static + VisitConfig {
     /// Provides the config description.
     const DESCRIPTION: ConfigMetadata;
 }

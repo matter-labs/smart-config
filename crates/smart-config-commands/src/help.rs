@@ -3,15 +3,16 @@ use std::{io, io::Write as _};
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
-    metadata::{BasicTypes, TypeDescription},
+    metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeDescription},
     ConfigRef, ConfigSchema,
 };
 
-use crate::{ParamRef, Printer, CONFIG_PATH};
+use crate::{ParamRef, Printer, CONFIG_PATH, STRING};
 
 const INDENT: &str = "  ";
 const DIMMED: Style = Style::new().dimmed();
 const MAIN_NAME: Style = Style::new().bold();
+const DEFAULT_VARIANT: Style = Style::new().bold();
 const FIELD: Style = Style::new().underline();
 const DEFAULT_VAL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
 const UNIT: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
@@ -32,7 +33,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
     ) -> io::Result<()> {
         let mut writer = self.writer;
         for config in schema.iter() {
-            let filtered_params: Vec<_> = config
+            let mut filtered_params: Vec<_> = config
                 .metadata()
                 .params
                 .iter()
@@ -47,6 +48,13 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
             if !validations.is_empty() {
                 write_config_help(&mut writer, config)?;
                 writeln!(&mut writer)?;
+            }
+
+            if let Some(tag) = &config.metadata().tag {
+                write_tag_help(&mut writer, config, tag)?;
+                // Do not output the tag param twice.
+                filtered_params
+                    .retain(|param| param.param.rust_field_name != tag.param.rust_field_name);
             }
 
             for param_ref in filtered_params {
@@ -81,8 +89,58 @@ fn write_config_help(writer: &mut impl io::Write, config: ConfigRef<'_>) -> io::
     Ok(())
 }
 
+fn write_tag_help(
+    writer: &mut impl io::Write,
+    config: ConfigRef<'_>,
+    tag: &ConfigTag,
+) -> io::Result<()> {
+    ParamRef {
+        config,
+        param: tag.param,
+    }
+    .write_locations(writer)?;
+    writeln!(
+        writer,
+        "{INDENT}{FIELD}Type{FIELD:#}: string tag with variants:"
+    )?;
+
+    let default_variant_name = tag.default_variant.map(|variant| variant.rust_name);
+
+    for variant in tag.variants {
+        let default_marker = if default_variant_name == Some(variant.rust_name) {
+            format!(" {DEFAULT_VARIANT}(default){DEFAULT_VARIANT:#}")
+        } else {
+            String::new()
+        };
+
+        writeln!(
+            writer, "{INDENT}- {STRING}'{name}'{STRING:#} {DIMMED}[Rust: {config_name}::{rust_name}]{DIMMED:#}{default_marker}",
+            name = variant.name,
+            config_name = config.metadata().ty.name_in_code(),
+            rust_name = variant.rust_name
+        )?;
+        if !variant.aliases.is_empty() {
+            write!(writer, "{INDENT}  {FIELD}Aliases{FIELD:#}: ")?;
+            for (i, &alias) in variant.aliases.iter().enumerate() {
+                write!(writer, "{STRING}'{alias}'{STRING:#}")?;
+                if i + 1 < variant.aliases.len() {
+                    write!(writer, ", ")?;
+                }
+            }
+            writeln!(writer)?;
+        }
+
+        if !variant.help.is_empty() {
+            for line in variant.help.lines() {
+                writeln!(writer, "{INDENT}  {line}")?;
+            }
+        }
+    }
+    Ok(())
+}
+
 impl ParamRef<'_> {
-    fn write_help(&self, writer: &mut impl io::Write) -> io::Result<()> {
+    fn write_locations(&self, writer: &mut impl io::Write) -> io::Result<()> {
         let all_paths = self.all_paths_inner();
         let mut main_name = true;
         for (prefix, name) in all_paths {
@@ -98,9 +156,17 @@ impl ParamRef<'_> {
                 "{DIMMED}{prefix}{prefix_sep}{DIMMED:#}{name_style}{name}{name_style:#}"
             )?;
         }
+        Ok(())
+    }
 
+    fn write_help(&self, writer: &mut impl io::Write) -> io::Result<()> {
+        self.write_locations(writer)?;
         let description = self.param.type_description();
         write_type_description(writer, "Type", 2, self.param.expecting, &description)?;
+
+        if let Some(tag_variant) = self.param.tag_variant {
+            self.write_tag_variant(tag_variant, writer)?;
+        }
 
         if let Some(default) = self.param.default_value() {
             writeln!(
@@ -126,6 +192,23 @@ impl ParamRef<'_> {
             }
         }
         Ok(())
+    }
+
+    fn write_tag_variant(
+        &self,
+        variant: &ConfigVariant,
+        writer: &mut impl io::Write,
+    ) -> io::Result<()> {
+        let tag_ref = ParamRef {
+            config: self.config,
+            param: self.config.metadata().tag.unwrap().param,
+        };
+        let tag_name = tag_ref.canonical_path();
+        let variant = variant.name;
+        writeln!(
+            writer,
+            "{INDENT}{FIELD}Tag{FIELD:#}: {tag_name} == {STRING}'{variant}'{STRING:#}"
+        )
     }
 }
 

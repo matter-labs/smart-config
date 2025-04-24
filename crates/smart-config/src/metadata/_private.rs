@@ -6,12 +6,25 @@ use compile_fmt::{clip, clip_ascii, compile_args, compile_panic, Ascii, CompileA
 
 use super::{ConfigMetadata, NestedConfigMetadata, ParamMetadata, Validate};
 use crate::{
-    de::DeserializeContext, utils::const_eq, DeserializeConfig, DeserializeConfigError,
-    ErrorWithOrigin,
+    de::DeserializeContext,
+    utils::const_eq,
+    visit::{ConfigVisitor, VisitConfig},
+    DeserializeConfig, DeserializeConfigError, ErrorWithOrigin,
 };
 
 pub type BoxedDeserializer =
     fn(DeserializeContext<'_>) -> Result<Box<dyn any::Any>, DeserializeConfigError>;
+
+pub type BoxedVisitor = fn(&dyn any::Any, &mut dyn ConfigVisitor);
+
+pub const fn box_config_visitor<T: VisitConfig + 'static>() -> BoxedVisitor {
+    |boxed_config, visitor| {
+        let config = boxed_config
+            .downcast_ref::<T>()
+            .expect("Internal error: visit target has incorrect type");
+        config.visit_config(visitor);
+    }
+}
 
 pub trait DeserializeBoxedConfig {
     fn deserialize_boxed_config(

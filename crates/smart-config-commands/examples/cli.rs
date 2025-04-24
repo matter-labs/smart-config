@@ -50,6 +50,8 @@ pub struct TestConfig {
     pub funding: Option<FundingConfig>,
     /// Required param.
     pub required: u64,
+    #[config(nest)]
+    pub object_store: ObjectStoreConfig,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -123,6 +125,29 @@ impl FundingConfig {
     }
 }
 
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(tag = "type", rename_all = "snake_case")]
+pub enum ObjectStoreConfig {
+    /// Stores object locally as files.
+    #[config(default)]
+    Local {
+        /// Path to the root directory.
+        #[config(default_t = ".".into())]
+        path: PathBuf,
+    },
+    /// Stores objects in AWS S3.
+    S3 {
+        bucket_name: String,
+        region: Option<String>,
+    },
+    /// Stores objects in Google Cloud Storage.
+    #[config(alias = "google", alias = "google_cloud")]
+    Gcs {
+        /// Bucket to put objects into.
+        bucket_name: String,
+    },
+}
+
 const JSON: &str = r#"
 {
   "scaling_factor": 4.2,
@@ -156,6 +181,10 @@ test:
   funding:
     address: "0x0000000000000000000000000000000000001234"
     balance: "0x123456"
+  object_store:
+    type: google
+    bucket_name: test-bucket
+    region: euw1
 "#;
 
 fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> {
@@ -198,6 +227,7 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
                     "BOGUS_TEST_FUNDS_ADDRESS",
                     "0x0000000000000000000000000000000000000000",
                 ),
+                ("BOGUS_TEST_OBJECT_STORE_TYPE", "file"),
             ],
         );
         repo = repo.with(bogus_vars);

@@ -60,6 +60,7 @@ pub(crate) struct ConfigVariantAttrs {
     pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
     pub(crate) default: bool,
+    pub(crate) help: String,
 }
 
 impl ConfigVariantAttrs {
@@ -89,6 +90,7 @@ impl ConfigVariantAttrs {
             rename,
             aliases,
             default,
+            help: parse_docs(attrs),
         })
     }
 }
@@ -542,12 +544,16 @@ pub(crate) enum ConfigContainerFields {
 }
 
 impl ConfigContainerFields {
-    pub(crate) fn all_fields(&self) -> Vec<&ConfigField> {
+    /// Returns the variant index together with each field. For struct configs, all indices are 0.
+    pub(crate) fn all_fields(&self) -> Vec<(usize, &ConfigField)> {
         match self {
-            Self::Struct(fields) => fields.iter().collect(),
+            Self::Struct(fields) => fields.iter().map(|field| (0, field)).collect(),
             Self::Enum { variants, .. } => variants
                 .iter()
-                .flat_map(|variant| &variant.fields)
+                .enumerate()
+                .flat_map(|(variant_idx, variant)| {
+                    variant.fields.iter().map(move |field| (variant_idx, field))
+                })
                 .collect(),
         }
     }

@@ -61,6 +61,7 @@ mod debug;
 mod help;
 
 const CONFIG_PATH: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
+const STRING: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
 
 /// Wrapper around an I/O writer. Will style the output with ANSI sequences if appropriate.
 ///

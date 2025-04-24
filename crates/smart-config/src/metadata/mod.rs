@@ -2,7 +2,7 @@
 
 use std::{any, borrow::Cow, fmt};
 
-use self::_private::BoxedDeserializer;
+use self::_private::{BoxedDeserializer, BoxedVisitor};
 use crate::{
     de::{DeserializeParam, _private::ErasedDeserializer},
     fallback::FallbackSource,
@@ -29,12 +29,40 @@ pub struct ConfigMetadata {
     pub help: &'static str,
     /// Parameters included in the config.
     pub params: &'static [ParamMetadata],
+    /// Tag for enumeration configs.
+    pub tag: Option<ConfigTag>,
     /// Nested configs included in the config.
     pub nested_configs: &'static [NestedConfigMetadata],
     #[doc(hidden)] // implementation detail
     pub deserializer: BoxedDeserializer,
     #[doc(hidden)] // implementation detail
+    pub visitor: BoxedVisitor,
+    #[doc(hidden)] // implementation detail
     pub validations: &'static [&'static dyn Validate<dyn any::Any>],
+}
+
+/// Information about a config tag.
+#[derive(Debug, Clone, Copy)]
+pub struct ConfigTag {
+    /// Parameter of the enclosing config corresponding to the tag.
+    pub param: &'static ParamMetadata,
+    /// Variants for the tag.
+    pub variants: &'static [ConfigVariant],
+    /// Default variant, if any.
+    pub default_variant: Option<&'static ConfigVariant>,
+}
+
+/// Variant of a [`ConfigTag`].
+#[derive(Debug, Clone, Copy)]
+pub struct ConfigVariant {
+    /// Canonical param name in the config sources. Not necessarily the Rust name!
+    pub name: &'static str,
+    /// Param aliases.
+    pub aliases: &'static [&'static str],
+    /// Name of the corresponding enum variant in Rust code.
+    pub rust_name: &'static str,
+    /// Human-readable param help parsed from the doc comment.
+    pub help: &'static str,
 }
 
 /// Metadata for a specific configuration parameter.
@@ -52,6 +80,8 @@ pub struct ParamMetadata {
     pub rust_type: RustType,
     /// Basic type(s) expected by the param deserializer.
     pub expecting: BasicTypes,
+    /// Tag variant in the enclosing [`ConfigMetadata`] that enables this parameter. `None` means that the parameter is unconditionally enabled.
+    pub tag_variant: Option<&'static ConfigVariant>,
     #[doc(hidden)] // implementation detail
     pub deserializer: &'static dyn ErasedDeserializer,
     #[doc(hidden)] // implementation detail
@@ -91,7 +121,7 @@ impl fmt::Debug for RustType {
 
 impl PartialEq for RustType {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        (self.id)() == (other.id)()
     }
 }
 
@@ -341,6 +371,8 @@ pub struct NestedConfigMetadata {
     pub aliases: &'static [&'static str],
     /// Name of the config field in Rust code.
     pub rust_field_name: &'static str,
+    /// Tag variant in the enclosing [`ConfigMetadata`] that enables this parameter. `None` means that the parameter is unconditionally enabled.
+    pub tag_variant: Option<&'static ConfigVariant>,
     /// Config metadata.
     pub meta: &'static ConfigMetadata,
 }
@@ -359,6 +391,8 @@ pub enum TimeUnit {
     Hours,
     /// Day (86,400 seconds).
     Days,
+    /// Week (7 days).
+    Weeks,
     // No larger units since they are less useful and may be ambiguous (e.g., is a month 30 days? is a year 365 days or 365.25...)
 }
 
@@ -370,6 +404,7 @@ impl TimeUnit {
             TimeUnit::Minutes => "minutes",
             TimeUnit::Hours => "hours",
             TimeUnit::Days => "days",
+            TimeUnit::Weeks => "weeks",
         }
     }
 }

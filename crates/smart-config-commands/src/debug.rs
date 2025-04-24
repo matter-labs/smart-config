@@ -1,4 +1,5 @@
 use std::{
+    any,
     collections::{HashMap, HashSet},
     io::{self, Write as _},
 };
@@ -7,13 +8,15 @@ use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
     value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
+    visit::{ConfigVisitor, ParamValue},
     ConfigRepository, ParseError,
 };
 
-use crate::{ParamRef, Printer, CONFIG_PATH};
+use crate::{ParamRef, Printer, CONFIG_PATH, STRING};
 
 const SECTION: Style = Style::new().bold();
 const ARROW: Style = Style::new().bold();
+const INACTIVE: Style = Style::new().italic();
 const RUST: Style = Style::new().dimmed();
 const JSON_FILE: Style = Style::new()
     .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
@@ -29,33 +32,32 @@ const ERROR_LABEL: Style = Style::new()
     .bg_color(Some(Color::Ansi(AnsiColor::Red)))
     .fg_color(None);
 
-impl<W: RawStream + AsLockedWrite> Printer<W> {
-    /// Prints debug info for all param values in the provided `repo`. If params fail to deserialize,
-    /// corresponding error(s) are output as well.
-    ///
-    /// # Errors
-    ///
-    /// Propagates I/O errors.
-    pub fn print_debug(
-        self,
-        repo: &ConfigRepository,
-        mut filter: impl FnMut(ParamRef<'_>) -> bool,
-    ) -> io::Result<()> {
-        let mut writer = self.writer;
-        if repo.sources().is_empty() {
-            writeln!(&mut writer, "configuration is empty")?;
-            return Ok(());
-        }
+#[derive(Debug, Default)]
+struct ParamValuesVisitor {
+    variant: Option<usize>,
+    param_values: HashMap<usize, String>,
+}
 
-        writeln!(&mut writer, "{SECTION}Configuration sources:{SECTION:#}")?;
-        for source in repo.sources() {
-            write!(&mut writer, "- ")?;
-            write_origin(&mut writer, &source.origin)?;
-            writeln!(&mut writer, ", {} param(s)", source.param_count)?;
-        }
+impl ConfigVisitor for ParamValuesVisitor {
+    fn visit_tag(&mut self, variant_index: usize) {
+        self.variant = Some(variant_index);
+    }
 
-        let mut errors_by_param = HashMap::<_, Vec<_>>::new();
-        let mut errors_by_config = HashMap::<_, Vec<_>>::new();
+    fn visit_param(&mut self, param_index: usize, value: &dyn ParamValue) {
+        self.param_values.insert(param_index, format!("{value:?}"));
+    }
+}
+
+#[derive(Debug)]
+struct ConfigErrors {
+    by_param: HashMap<(any::TypeId, &'static str), Vec<ParseError>>,
+    by_config: HashMap<any::TypeId, Vec<ParseError>>,
+}
+
+impl ConfigErrors {
+    fn new(repo: &ConfigRepository<'_>) -> Self {
+        let mut by_param = HashMap::<_, Vec<_>>::new();
+        let mut by_config = HashMap::<_, Vec<_>>::new();
         for config_parser in repo.iter() {
             if !config_parser.config().is_top_level() {
                 // The config should be parsed as a part of the parent config. Filtering out these configs
@@ -73,30 +75,63 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
                     let config_id = err.config().ty.id();
                     if let Some(param) = err.param() {
                         let key = (config_id, param.rust_field_name);
-                        if !errors_by_param.contains_key(&key) || new_params.contains(&key) {
-                            errors_by_param.entry(key).or_default().push(err);
+                        if !by_param.contains_key(&key) || new_params.contains(&key) {
+                            by_param.entry(key).or_default().push(err);
                             new_params.insert(key);
                         }
-                    } else if !errors_by_config.contains_key(&config_id)
+                    } else if !by_config.contains_key(&config_id)
                         || new_configs.contains(&config_id)
                     {
-                        errors_by_config.entry(config_id).or_default().push(err);
+                        by_config.entry(config_id).or_default().push(err);
                         new_configs.insert(config_id);
                     }
                 }
             }
         }
+        Self {
+            by_param,
+            by_config,
+        }
+    }
+}
+
+impl<W: RawStream + AsLockedWrite> Printer<W> {
+    /// Prints debug info for all param values in the provided `repo`. If params fail to deserialize,
+    /// corresponding error(s) are output as well.
+    ///
+    /// # Errors
+    ///
+    /// Propagates I/O errors.
+    #[allow(clippy::missing_panics_doc)] // false positive
+    pub fn print_debug(
+        self,
+        repo: &ConfigRepository<'_>,
+        mut filter: impl FnMut(ParamRef<'_>) -> bool,
+    ) -> io::Result<()> {
+        let mut writer = self.writer;
+        if repo.sources().is_empty() {
+            writeln!(&mut writer, "configuration is empty")?;
+            return Ok(());
+        }
+
+        writeln!(&mut writer, "{SECTION}Configuration sources:{SECTION:#}")?;
+        for source in repo.sources() {
+            write!(&mut writer, "- ")?;
+            write_origin(&mut writer, &source.origin)?;
+            writeln!(&mut writer, ", {} param(s)", source.param_count)?;
+        }
 
         writeln!(&mut writer)?;
         writeln!(&mut writer, "{SECTION}Values:{SECTION:#}")?;
 
+        let errors = ConfigErrors::new(repo);
         let merged = repo.merged();
         for config_parser in repo.iter() {
             let config = config_parser.config();
             let config_name = config.metadata().ty.name_in_code();
             let config_id = config.metadata().ty.id();
 
-            if let Some(errors) = errors_by_config.get(&config_id) {
+            if let Some(errors) = errors.by_config.get(&config_id) {
                 writeln!(
                     writer,
                     "{CONFIG_PATH}{}{CONFIG_PATH:#} {RUST}[Rust: {config_name}]{RUST:#}, config",
@@ -105,20 +140,57 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
                 write_de_errors(&mut writer, errors)?;
             }
 
-            for param in config.metadata().params {
+            let (variant, mut param_values) = if let Ok(boxed_config) = config_parser.parse() {
+                let visitor_fn = config.metadata().visitor;
+                let mut visitor = ParamValuesVisitor::default();
+                visitor_fn(boxed_config.as_ref(), &mut visitor);
+                (visitor.variant, visitor.param_values)
+            } else {
+                (None, HashMap::new())
+            };
+
+            let variant = variant.map(|idx| {
+                // `unwrap()` is safe by construction: if there's an active variant, the config must have a tag
+                let tag = config.metadata().tag.unwrap();
+                let name = tag.variants[idx].name;
+                // Add the tag value, using the fact that the tag is always the last param in the config.
+                let tag_param_idx = config.metadata().params.len() - 1;
+                param_values.insert(tag_param_idx, format!("{name:?}"));
+
+                ActiveTagVariant {
+                    canonical_path: ParamRef {
+                        config,
+                        param: tag.param,
+                    }
+                    .canonical_path(),
+                    name,
+                }
+            });
+
+            for (param_idx, param) in config.metadata().params.iter().enumerate() {
                 let param_ref = ParamRef { config, param };
                 if !filter(param_ref) {
                     continue;
                 }
                 let canonical_path = param_ref.canonical_path();
 
+                let raw_value = merged.pointer(&canonical_path);
+                let param_value = param_values.get(&param_idx);
                 let mut param_written = false;
-                if let Some(value) = merged.pointer(&canonical_path) {
-                    write_param(&mut writer, param_ref, &canonical_path, value)?;
+                if param_value.is_some() || raw_value.is_some() {
+                    write_param(
+                        &mut writer,
+                        param_ref,
+                        &canonical_path,
+                        param_value,
+                        raw_value,
+                        variant.as_ref(),
+                    )?;
                     param_written = true;
                 }
+
                 let field_name = param.rust_field_name;
-                if let Some(errors) = errors_by_param.get(&(config_id, field_name)) {
+                if let Some(errors) = errors.by_param.get(&(config_id, field_name)) {
                     if !param_written {
                         writeln!(
                             writer,
@@ -166,31 +238,69 @@ fn write_origin(writer: &mut impl io::Write, origin: &ValueOrigin) -> io::Result
     }
 }
 
+#[derive(Debug)]
+struct ActiveTagVariant {
+    canonical_path: String,
+    name: &'static str,
+}
+
 fn write_param(
     writer: &mut impl io::Write,
     param_ref: ParamRef<'_>,
     path: &str,
-    value: &WithOrigin,
+    visited_value: Option<&String>,
+    raw_value: Option<&WithOrigin>,
+    active_variant: Option<&ActiveTagVariant>,
 ) -> io::Result<()> {
+    let activity_style = if visited_value.is_some() {
+        Style::new()
+    } else {
+        INACTIVE
+    };
     write!(
         writer,
-        "{path} {RUST}[Rust: {}.{}]{RUST:#} = ",
+        "{activity_style}{path}{activity_style:#} {RUST}[Rust: {}.{}]{RUST:#}",
         param_ref.config.metadata().ty.name_in_code(),
         param_ref.param.rust_field_name
     )?;
-    write_value(writer, value, 0)?;
 
-    writeln!(writer)?;
-    write!(writer, "  Origin: ")?;
-    write_origin(writer, &value.origin)?;
-    writeln!(writer)
+    if let Some(value) = visited_value {
+        writeln!(writer, " = {value}")?;
+    } else {
+        writeln!(writer)?;
+    }
+
+    if let (Some(param_variant), Some(active_variant)) =
+        (param_ref.param.tag_variant, active_variant)
+    {
+        let tag_path = &active_variant.canonical_path;
+        let param_variant_name = param_variant.name;
+        let (label, eq) = if param_variant_name == active_variant.name {
+            ("Active", "==")
+        } else {
+            ("Inactive", "!=")
+        };
+        writeln!(
+            writer,
+            "  {label}: {tag_path} {eq} {STRING}'{param_variant_name}'{STRING:#}"
+        )?;
+    }
+
+    if let Some(value) = raw_value {
+        write!(writer, "  Raw: ")?;
+        write_value(writer, value, 2)?;
+        writeln!(writer)?;
+        write!(writer, "  Origin: ")?;
+        write_origin(writer, &value.origin)?;
+        writeln!(writer)?;
+    }
+    Ok(())
 }
 
 fn write_value(writer: &mut impl io::Write, value: &WithOrigin, ident: usize) -> io::Result<()> {
     const NULL: Style = Style::new().bold();
     const BOOL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
     const NUMBER: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
-    const STRING: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
     const SECRET: Style = Style::new()
         .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
         .fg_color(None);

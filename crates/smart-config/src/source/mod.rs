@@ -1,4 +1,5 @@
 use std::{
+    any,
     collections::{BTreeMap, HashSet},
     iter,
     marker::PhantomData,
@@ -316,9 +317,15 @@ pub struct ConfigParser<'a, C> {
 }
 
 impl ConfigParser<'_, ()> {
-    #[doc(hidden)]
-    pub fn parse(&self) -> Result<(), ParseErrors> {
-        self.with_context(|ctx| ctx.deserialize_any_config().map(drop))
+    /// Attempts to parse the related config from the repository input. Returns the boxed parsed config.
+    ///
+    /// # Errors
+    ///
+    /// Returns parsing errors if any.
+    #[doc(hidden)] // not stable yet
+    #[allow(clippy::redundant_closure_for_method_calls)] // false positive because of lifetimes
+    pub fn parse(&self) -> Result<Box<dyn any::Any>, ParseErrors> {
+        self.with_context(|ctx| ctx.deserialize_any_config())
     }
 }
 
@@ -444,7 +451,7 @@ impl WithOrigin {
                             continue;
                         };
 
-                        if canonical_map.map_or(false, |map| map.contains_key(canonical_key)) {
+                        if canonical_map.is_some_and(|map| map.contains_key(canonical_key)) {
                             // Key is already present in the original map
                             continue;
                         }

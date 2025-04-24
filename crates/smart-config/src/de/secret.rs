@@ -73,6 +73,7 @@ impl WellKnown for SecretString {
 ///
 /// // It is generally a good idea to wrap a secret into a `SecretBox`
 /// // so that it is zeroized on drop and has an opaque `Debug` representation.
+/// #[derive(Debug)]
 /// struct NumSecret(SecretBox<u64>);
 ///
 /// impl<'de> serde::Deserialize<'de> for NumSecret {
