@@ -215,6 +215,7 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
             "BOGUS_",
             [
                 ("BOGUS_TEST_TIMEOUT_SEC", "what?"),
+                ("BOGUS_TEST_SCALING_FACTOR", "-1"),
                 ("BOGUS_TEST_NESTED_TIMEOUTS", "nope,124us"),
                 ("BOGUS_TEST_NESTED_COMPLEX", r#"{ "array": [1, true] }"#),
                 ("BOGUS_TEST_NESTED_METHOD_LIMITS", r#"{ "eth_getLogs": 0 }"#),

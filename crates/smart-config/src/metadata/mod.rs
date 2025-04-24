@@ -269,6 +269,11 @@ impl TypeDescription {
         self.unit
     }
 
+    #[doc(hidden)] // exposes implementation details
+    pub fn validations(&self) -> &[String] {
+        &self.validations
+    }
+
     /// Returns the description of array items, if one was provided.
     pub fn items(&self) -> Option<(BasicTypes, &Self)> {
         self.items
