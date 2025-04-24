@@ -143,8 +143,16 @@ extern crate core;
 ///
 /// ## `validate`
 ///
-/// **Type:** human-readable description + path to a function / method with the `fn(&Self) -> Result<(), ErrorWithOrigin>` signature
-/// (see [the example below](#defining-validations)).
+/// **Type:** One of the following:
+///
+/// - Expression evaluating to a [`Validate`](validation::Validate) implementation (e.g., a [`Range`](std::ops::Range); see the `Validate` docs
+///   for implementations). An optional human-readable string validation description may be provided delimited by the comma (e.g., to make the description
+///   more domain-specific).
+/// - Pointer to a function with the `fn(&_) -> Result<(), ErrorWithOrigin>` signature and the validation description separated by a comma.
+/// - Pointer to a function with the `fn(&_) -> bool` signature and the validation description separated by a comma. Validation fails
+///   if the function returns `false`.
+///
+/// See the examples in the [`validation`] module.
 ///
 /// Specifies a post-deserialization validation for the config. This is useful to check invariants involving multiple params.
 /// Multiple validations are supported by specifying the attribute multiple times.
@@ -241,6 +249,10 @@ extern crate core;
 /// If specified, the field is treated as a *flattened* sub-config rather than a param. Unlike `nest`, its params
 /// will be added to the containing config instead of a separate object. The sub-config type must implement `DescribeConfig`.
 ///
+/// ## `validate`
+///
+/// Has same semantics as [config validations](#validate), but applies to a specific config parameter.
+///
 /// # Validations
 ///
 /// The following validations are performed by the macro in compile time:
@@ -298,41 +310,6 @@ extern crate core;
 ///
 /// impl FlattenedConfig {
 ///     const fn default_array() -> [f32; 2] { [1.0, 2.0] }
-/// }
-/// ```
-///
-/// ## Defining validations
-///
-/// ```
-/// use secrecy::{ExposeSecret, SecretString};
-/// use smart_config::validation;
-/// # use smart_config::{testing, DescribeConfig, DeserializeConfig, ErrorWithOrigin};
-///
-/// #[derive(DescribeConfig, DeserializeConfig)]
-/// #[config(validate = validation::Custom(
-///     "secret key must have expected length",
-///     Self::validate_secret_key
-/// ))]
-/// struct ValidatedConfig {
-///     secret_key: SecretString,
-///     /// Reference key length. If specified, the secret key length
-///     /// will be checked against it.
-///     secret_key_len: Option<usize>,
-/// }
-///
-/// impl ValidatedConfig {
-///     fn validate_secret_key(&self) -> Result<(), ErrorWithOrigin> {
-///         if let Some(expected_len) = self.secret_key_len {
-///             let actual_len = self.secret_key.expose_secret().len();
-///             if expected_len != actual_len {
-///                 return Err(ErrorWithOrigin::custom(format!(
-///                     "unexpected `secret_key` length ({actual_len}); \
-///                      expected {expected_len}"
-///                 )));
-///             }
-///         }
-///         Ok(())
-///     }
 /// }
 /// ```
 pub use smart_config_derive::DescribeConfig;
