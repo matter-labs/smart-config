@@ -6,7 +6,7 @@ use crate::metadata::SizeUnit;
 
 /// A wrapper providing a clear reminder that the wrapped value represents the number of bytes.
 // TODO: make generic?
-#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ByteSize(pub u64);
 
 impl fmt::Debug for ByteSize {
