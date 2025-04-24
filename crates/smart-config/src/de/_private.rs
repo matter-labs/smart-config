@@ -139,6 +139,17 @@ impl<T, De> Validated<T, De> {
     }
 }
 
+fn validate<T>(value: &T, validations: &[&'static dyn Validate<T>]) -> Result<(), ErrorWithOrigin> {
+    for &validation in validations {
+        let _span = tracing::trace_span!("validation", %validation).entered();
+        if let Err(err) = validation.validate(value) {
+            tracing::warn!(%validation, %err, "validation failed");
+            return Err(err);
+        }
+    }
+    Ok(())
+}
+
 impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Validated<T, De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
 
@@ -153,13 +164,7 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Validated<T, De> {
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
         let value = self.inner.deserialize_param(ctx, param)?;
-        for &validation in self.validations {
-            let _span = tracing::trace_span!("validation", %validation).entered();
-            if let Err(err) = validation.validate(&value) {
-                tracing::warn!(%validation, %err, "validation failed");
-                return Err(err);
-            }
-        }
+        validate(&value, self.validations)?;
         Ok(value)
     }
 }
@@ -174,9 +179,13 @@ impl<T, De: DeserializeParam<Option<T>>> DeserializeParam<Option<T>> for Validat
 
     fn deserialize_param(
         &self,
-        _ctx: DeserializeContext<'_>,
-        _param: &'static ParamMetadata,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
     ) -> Result<Option<T>, ErrorWithOrigin> {
-        todo!()
+        let value = self.inner.deserialize_param(ctx, param)?;
+        if let Some(value) = &value {
+            validate(value, self.validations)?;
+        }
+        Ok(value)
     }
 }
