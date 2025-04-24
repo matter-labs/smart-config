@@ -20,6 +20,7 @@ use crate::{
     fallback,
     fallback::FallbackSource,
     metadata::{SizeUnit, TimeUnit},
+    validation::NotEmpty,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
     ParseErrors,
@@ -309,6 +310,8 @@ pub(crate) struct ConfigWithValidations {
     #[config(validate(..1_000))]
     pub len: usize,
     pub secret: SecretString,
+    #[config(default_t = vec![1, 2, 3], validate(NotEmpty))]
+    pub numbers: Vec<u32>,
 }
 
 impl ConfigWithValidations {

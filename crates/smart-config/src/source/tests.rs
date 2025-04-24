@@ -1316,6 +1316,15 @@ fn config_validations() {
     assert_eq!(err.param().unwrap().name, "len");
     let inner = err.inner().to_string();
     assert!(inner.contains("expected value in range ..1000"), "{inner}");
+
+    let json = config!("len": 4, "secret": "test", "numbers": [] as [u32; 0]);
+    let err = testing::test::<ConfigWithValidations>(json).unwrap_err();
+    assert_eq!(err.len(), 1, "{err:?}");
+    let err = err.first();
+    assert_eq!(err.path(), "numbers");
+    assert_eq!(err.param().unwrap().name, "numbers");
+    let inner = err.inner().to_string();
+    assert!(inner.contains("value is empty"), "{inner}");
 }
 
 #[test]

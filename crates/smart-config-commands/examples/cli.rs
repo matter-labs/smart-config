@@ -12,6 +12,7 @@ use serde::{Deserialize, Deserializer};
 use smart_config::{
     de, fallback,
     metadata::{SizeUnit, TimeUnit},
+    validation::NotEmpty,
     value::SecretString,
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
     Prefixed, Yaml,
@@ -25,7 +26,7 @@ pub struct TestConfig {
     #[config(default_t = 8080, alias = "bind_to")]
     pub port: u16,
     /// Application name.
-    #[config(default_t = "app".into())]
+    #[config(default_t = "app".into(), validate(NotEmpty))]
     pub app_name: String,
     #[config(default_t = Duration::from_millis(500))]
     pub poll_latency: Duration,
@@ -214,6 +215,7 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
         let bogus_vars = Environment::from_iter(
             "BOGUS_",
             [
+                ("BOGUS_TEST_APP_NAME", ""),
                 ("BOGUS_TEST_TIMEOUT_SEC", "what?"),
                 ("BOGUS_TEST_SCALING_FACTOR", "-1"),
                 ("BOGUS_TEST_NESTED_TIMEOUTS", "nope,124us"),

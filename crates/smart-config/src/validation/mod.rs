@@ -51,7 +51,11 @@
 //! }
 //! ```
 
-use std::{fmt, ops, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fmt, ops,
+    sync::Arc,
+};
 
 use serde::de;
 
@@ -66,7 +70,8 @@ pub mod _private;
 ///
 /// Validations are implemented for the following types:
 ///
-/// - [`Range`](ops::Range), [`RangeInclusive`](ops::RangeInclusive) etc. Validate whether the type is within the provided bounds.
+/// - [`NotEmpty`]. Validates that a string or a collection, such as `Vec`, is not empty.
+/// - [`Range`](ops::Range), [`RangeInclusive`](ops::RangeInclusive) etc. Validates whether the type is within the provided bounds.
 pub trait Validate<T: ?Sized>: 'static + Send + Sync {
     /// Describes this validation.
     ///
@@ -127,3 +132,31 @@ impl_validate_for_range!(ops::RangeInclusive<T>);
 impl_validate_for_range!(ops::RangeTo<T>);
 impl_validate_for_range!(ops::RangeToInclusive<T>);
 impl_validate_for_range!(ops::RangeFrom<T>);
+
+/// Validates that a string or a data collection (e.g., [`Vec`]) is not empty.
+#[derive(Debug)]
+pub struct NotEmpty;
+
+macro_rules! impl_not_empty_validation {
+    ($ty:ident$(<$($arg:ident),+>)?) => {
+        impl$(<$($arg,)+>)? Validate<$ty$(<$($arg,)+>)?> for NotEmpty {
+            fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("must not be empty")
+            }
+
+            fn validate(&self, target: &$ty$(<$($arg,)+>)?) -> Result<(), ErrorWithOrigin> {
+                if target.is_empty() {
+                    return Err(de::Error::custom("value is empty"));
+                }
+                Ok(())
+            }
+        }
+    };
+}
+
+impl_not_empty_validation!(String);
+impl_not_empty_validation!(Vec<T>);
+impl_not_empty_validation!(HashMap<K, V, S>);
+impl_not_empty_validation!(BTreeMap<K, V>);
+impl_not_empty_validation!(HashSet<K, S>);
+impl_not_empty_validation!(BTreeSet<K>);
