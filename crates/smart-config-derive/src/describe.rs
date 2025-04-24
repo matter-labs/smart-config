@@ -34,7 +34,9 @@ impl Validation {
     fn wrap(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         let expr = &self.expr;
         if let Some(description) = &self.description {
-            quote_spanned!(expr.span()=> #cr::validation::WithDescription::new(#expr, #description))
+            quote_spanned! {expr.span()=>
+                #cr::validation::_private::WithDescription::new(#expr, #description)
+            }
         } else {
             quote!(#expr)
         }
@@ -272,7 +274,7 @@ impl ConfigContainer {
     ) -> proc_macro2::TokenStream {
         let validation = validation.wrap(cr);
         quote! {
-            &#cr::validation::ErasedValidation::<#ty, _>::new(#validation)
+            &#cr::validation::_private::ErasedValidation::<#ty, _>::new(#validation)
         }
     }
 

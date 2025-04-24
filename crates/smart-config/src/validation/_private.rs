@@ -1,84 +1,23 @@
-//! Parameter and config validation.
+use std::{any, fmt, marker::PhantomData};
 
-#![allow(missing_docs)] // FIXME
+use crate::{validation::Validate, ErrorWithOrigin};
 
-use std::{any, fmt, marker::PhantomData, ops, sync::Arc};
-
-use serde::de;
-
-use crate::ErrorWithOrigin;
-
-/// Generic post-validation for a configuration parameter.
-pub trait Validate<T: ?Sized>: 'static + Send + Sync {
-    /// # Errors
-    ///
-    /// Should propagate formatting errors.
-    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result;
-
-    /// # Errors
-    ///
-    /// Should return an error if validation fails.
-    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin>;
-}
-
-impl<T: 'static + ?Sized> fmt::Debug for dyn Validate<T> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_tuple("Validate")
-            .field(&self.to_string())
-            .finish()
-    }
-}
-
-impl<T: 'static + ?Sized> fmt::Display for dyn Validate<T> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.describe(formatter)
-    }
-}
-
-macro_rules! impl_validate_for_range {
-    ($range:path) => {
-        impl<T> Validate<T> for $range
-        where
-            T: 'static + Send + Sync + PartialOrd + fmt::Debug,
-        {
-            fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(formatter, "must be in range {self:?}")
-            }
-
-            fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
-                if !self.contains(target) {
-                    let err = de::Error::invalid_value(
-                        de::Unexpected::Other(&format!("{target:?}")),
-                        &format!("value in range {self:?}").as_str(),
-                    );
-                    return Err(ErrorWithOrigin::json(err, Arc::default()));
-                }
-                Ok(())
-            }
-        }
-    };
-}
-
-impl_validate_for_range!(ops::Range<T>);
-impl_validate_for_range!(ops::RangeInclusive<T>);
-impl_validate_for_range!(ops::RangeTo<T>);
-impl_validate_for_range!(ops::RangeToInclusive<T>);
-impl_validate_for_range!(ops::RangeFrom<T>);
-
-#[doc(hidden)]
+/// Tag for `WithDescription` wrapping a type that already implements a validation.
 #[derive(Debug)]
 pub struct Delegated(());
 
-#[doc(hidden)]
+/// Tag for `WithDescription` wrapping a Boolean predicate.
 #[derive(Debug)]
 pub struct BoolPredicate(());
 
-#[doc(hidden)]
+/// Tag for `WithDescription` wrapping a predicate of form `fn(&T) -> Result<(), ErrorWithOrigin>`.
 #[derive(Debug)]
 pub struct ResultPredicate(());
 
-#[doc(hidden)]
+/// Wrapper for validation allowing to (re)define its description.
+///
+/// The `Kind` type param is inferred automatically by the compiler and allows to distinguish between
+/// 3 types of wrappers currently supported.
 #[derive(Debug)]
 pub struct WithDescription<V, Kind> {
     inner: V,
@@ -135,7 +74,7 @@ where
     }
 }
 
-#[doc(hidden)] // used in proc macros
+/// Erases the validated type (`T`) from `Validate`.
 #[derive(Debug)]
 pub struct ErasedValidation<T, V> {
     validation: V,
