@@ -8,6 +8,7 @@ use super::{deserializer::ValueDeserializer, DeserializeContext, DeserializePara
 use crate::{
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
+    validation::Validate,
 };
 
 pub const fn extract_expected_types<T, De: DeserializeParam<T>>(_: &De) -> BasicTypes {
@@ -113,5 +114,52 @@ impl DeserializeParam<&'static str> for TagDeserializer {
                     .unwrap_or_default();
                 ErrorWithOrigin::json(err, origin)
             })
+    }
+}
+
+/// Wrapper for params with post-validations.
+pub struct Validated<T: 'static, De> {
+    inner: De,
+    validations: &'static [&'static dyn Validate<T>],
+}
+
+impl<T: 'static, De: fmt::Debug> fmt::Debug for Validated<T, De> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Validated")
+            .field("inner", &self.inner)
+            .field("validations", &self.validations)
+            .finish()
+    }
+}
+
+impl<T, De: DeserializeParam<T>> Validated<T, De> {
+    pub const fn new(inner: De, validations: &'static [&'static dyn Validate<T>]) -> Self {
+        Self { inner, validations }
+    }
+}
+
+impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Validated<T, De> {
+    const EXPECTING: BasicTypes = De::EXPECTING;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.inner.describe(description);
+        description.set_validations(self.validations);
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        let value = self.inner.deserialize_param(ctx, param)?;
+        for &validation in self.validations {
+            let _span = tracing::trace_span!("validation", %validation).entered();
+            if let Err(err) = validation.validate(&value) {
+                tracing::warn!(%validation, %err, "validation failed");
+                return Err(err);
+            }
+        }
+        Ok(value)
     }
 }

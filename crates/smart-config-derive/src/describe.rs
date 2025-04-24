@@ -31,6 +31,8 @@ impl DefaultValue {
 }
 
 impl ConfigField {
+    /// **Important.** The ordering of deserializer wrappers is important! E.g., the post-validation wrapper
+    /// must come last.
     fn deserializer(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         let mut deserializer = if let Some(with) = &self.attrs.with {
             quote!(#with)
@@ -46,6 +48,15 @@ impl ConfigField {
         if let Some(default_fn) = &default_fn {
             deserializer = quote!(#cr::de::WithDefault::new(#deserializer, #default_fn));
         }
+        if !self.attrs.validations.is_empty() {
+            let validations = self.attrs.validations.iter().map(|val| {
+                // A reference is required to convert to `&dyn Validate<_>`
+                quote!(&#val)
+            });
+            deserializer =
+                quote!(#cr::de::_private::Validated::new(#deserializer, &[#(#validations,)*]));
+        }
+
         deserializer
     }
 

@@ -248,6 +248,7 @@ pub struct TypeDescription {
     details: Option<Cow<'static, str>>,
     unit: Option<UnitOfMeasurement>,
     pub(crate) is_secret: bool,
+    validations: Vec<String>,
     items: Option<ChildDescription>,
     entries: Option<(ChildDescription, ChildDescription)>,
 }
@@ -318,6 +319,12 @@ impl TypeDescription {
     /// Adds a unit of measurement.
     pub fn set_unit(&mut self, unit: UnitOfMeasurement) -> &mut Self {
         self.unit = Some(unit);
+        self
+    }
+
+    /// Sets validation for the type.
+    pub fn set_validations<T>(&mut self, validations: &[&'static dyn Validate<T>]) -> &mut Self {
+        self.validations = validations.iter().map(ToString::to_string).collect();
         self
     }
 
