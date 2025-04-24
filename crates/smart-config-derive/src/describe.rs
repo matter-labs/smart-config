@@ -2,11 +2,11 @@
 
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::{spanned::Spanned, DeriveInput, Expr, LitStr, Type};
+use syn::{spanned::Spanned, DeriveInput, LitStr, Type};
 
 use crate::utils::{
     wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
-    DefaultValue, RenameRule,
+    DefaultValue, RenameRule, Validation,
 };
 
 impl DefaultValue {
@@ -26,6 +26,17 @@ impl DefaultValue {
             Some(Self::Expr(expr)) => {
                 Some(quote_spanned!(span=> ::std::boxed::Box::<#ty>::new(#expr)))
             }
+        }
+    }
+}
+
+impl Validation {
+    fn wrap(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let expr = &self.expr;
+        if let Some(description) = &self.description {
+            quote_spanned!(expr.span()=> #cr::validation::WithDescription::new(#expr, #description))
+        } else {
+            quote!(#expr)
         }
     }
 }
@@ -50,8 +61,10 @@ impl ConfigField {
         }
         if !self.attrs.validations.is_empty() {
             let validations = self.attrs.validations.iter().map(|val| {
-                // A reference is required to convert to `&dyn Validate<_>`
-                quote_spanned!(val.span()=> &#val)
+                let wrapped = val.wrap(cr);
+                // A reference is required to convert to `&dyn Validate<_>`. `()`s are here to correctly handle some validation expressions
+                // (e.g., `a..b` ranges; unless a range is parenthesized, `&` will be interpreted as a part of the range start).
+                quote_spanned!(val.expr.span()=> &(#wrapped))
             });
             deserializer =
                 quote!(#cr::de::_private::Validated::new(#deserializer, &[#(#validations,)*]));
@@ -253,11 +266,12 @@ impl ConfigContainer {
     }
 
     fn erase_validation(
-        validation: &Expr,
+        validation: &Validation,
         cr: &proc_macro2::TokenStream,
         ty: &impl quote::ToTokens,
     ) -> proc_macro2::TokenStream {
-        quote_spanned! {validation.span()=>
+        let validation = validation.wrap(cr);
+        quote! {
             &#cr::validation::ErasedValidation::<#ty, _>::new(#validation)
         }
     }

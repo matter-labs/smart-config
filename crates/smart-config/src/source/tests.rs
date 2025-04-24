@@ -1308,14 +1308,14 @@ fn config_validations() {
         "{inner}"
     );
 
-    let json = config!("len": 1_000, "secret": "!".repeat(1_000));
+    let json = config!("len": 2_000, "secret": "!".repeat(2_000));
     let err = testing::test::<ConfigWithValidations>(json).unwrap_err();
     assert_eq!(err.len(), 1, "{err:?}");
     let err = err.first();
     assert_eq!(err.path(), "len");
     assert_eq!(err.param().unwrap().name, "len");
     let inner = err.inner().to_string();
-    assert!(inner.contains("less than 1000"), "{inner}");
+    assert!(inner.contains("expected value in range ..1000"), "{inner}");
 }
 
 #[test]

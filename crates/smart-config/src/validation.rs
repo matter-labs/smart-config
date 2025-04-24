@@ -26,42 +26,13 @@ impl<T: 'static + ?Sized> fmt::Debug for dyn Validate<T> {
         formatter
             .debug_tuple("Validate")
             .field(&self.to_string())
-            .finish_non_exhaustive()
+            .finish()
     }
 }
 
 impl<T: 'static + ?Sized> fmt::Display for dyn Validate<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.describe(formatter)
-    }
-}
-
-#[derive(Debug)]
-pub struct Custom<T>(pub &'static str, pub fn(&T) -> Result<(), ErrorWithOrigin>);
-
-impl<T: 'static> Validate<T> for Custom<T> {
-    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.0)
-    }
-
-    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
-        (self.1)(target)
-    }
-}
-
-#[derive(Debug)]
-pub struct Basic<T>(pub &'static str, pub fn(&T) -> bool);
-
-impl<T: 'static> Validate<T> for Basic<T> {
-    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.0)
-    }
-
-    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
-        if !(self.1)(target) {
-            return Err(ErrorWithOrigin::custom(self.0));
-        }
-        Ok(())
     }
 }
 
@@ -94,6 +65,75 @@ impl_validate_for_range!(ops::RangeInclusive<T>);
 impl_validate_for_range!(ops::RangeTo<T>);
 impl_validate_for_range!(ops::RangeToInclusive<T>);
 impl_validate_for_range!(ops::RangeFrom<T>);
+
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct Delegated(());
+
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct BoolPredicate(());
+
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ResultPredicate(());
+
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct WithDescription<V, Kind> {
+    inner: V,
+    description: &'static str,
+    _kind: PhantomData<Kind>,
+}
+
+impl<V, Kind> WithDescription<V, Kind> {
+    pub const fn new(inner: V, description: &'static str) -> Self {
+        Self {
+            inner,
+            description,
+            _kind: PhantomData,
+        }
+    }
+}
+
+impl<T, V: Validate<T>> Validate<T> for WithDescription<V, Delegated> {
+    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.description)
+    }
+
+    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
+        self.inner.validate(target)
+    }
+}
+
+impl<T, F> Validate<T> for WithDescription<F, BoolPredicate>
+where
+    F: Fn(&T) -> bool + Send + Sync + 'static,
+{
+    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.description)
+    }
+
+    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
+        if !(self.inner)(target) {
+            return Err(ErrorWithOrigin::custom(self.description));
+        }
+        Ok(())
+    }
+}
+
+impl<T, F> Validate<T> for WithDescription<F, ResultPredicate>
+where
+    F: Fn(&T) -> Result<(), ErrorWithOrigin> + Send + Sync + 'static,
+{
+    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.description)
+    }
+
+    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
+        (self.inner)(target)
+    }
+}
 
 #[doc(hidden)] // used in proc macros
 #[derive(Debug)]

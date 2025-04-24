@@ -8,9 +8,9 @@ use std::{
 use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{
-    ext::IdentExt, spanned::Spanned, Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr,
-    Field, Fields, GenericArgument, Index, Lit, LitStr, Member, Path, PathArguments, Type,
-    TypePath,
+    ext::IdentExt, parse::ParseStream, spanned::Spanned, Attribute, Data, DataEnum, DataStruct,
+    DeriveInput, Expr, Field, Fields, GenericArgument, Index, Lit, LitStr, Member, Path,
+    PathArguments, Token, Type, TypePath,
 };
 
 pub(crate) fn wrap_in_option(val: Option<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
@@ -53,6 +53,28 @@ fn parse_docs(attrs: &[Attribute]) -> String {
         }
     }
     docs
+}
+
+#[derive(Debug)]
+pub(crate) struct Validation {
+    pub(crate) expr: Expr,
+    pub(crate) description: Option<Expr>,
+}
+
+impl Validation {
+    fn new(input: ParseStream<'_>) -> syn::Result<Self> {
+        let content;
+        syn::parenthesized!(content in input);
+        let expr = content.parse()?;
+
+        let description = if content.is_empty() {
+            None
+        } else {
+            content.parse::<Token![,]>()?;
+            Some(content.parse()?)
+        };
+        Ok(Self { expr, description })
+    }
 }
 
 #[derive(Debug)]
@@ -132,8 +154,7 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
     pub(crate) with: Option<Expr>,
-    #[allow(dead_code)] // FIXME
-    pub(crate) validations: Vec<Expr>,
+    pub(crate) validations: Vec<Validation>,
 }
 
 impl ConfigFieldAttrs {
@@ -183,7 +204,7 @@ impl ConfigFieldAttrs {
                     with = Some(meta.value()?.parse::<Expr>()?);
                     Ok(())
                 } else if meta.path.is_ident("validate") {
-                    validations.push(meta.value()?.parse()?);
+                    validations.push(Validation::new(meta.input)?);
                     Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))
@@ -426,7 +447,7 @@ pub(crate) struct ConfigContainerAttrs {
     pub(crate) cr: Option<Path>,
     pub(crate) rename_all: Option<RenameRule>,
     pub(crate) tag: Option<LitStr>,
-    pub(crate) validations: Vec<Expr>,
+    pub(crate) validations: Vec<Validation>,
     pub(crate) derive_default: bool,
 }
 
@@ -454,7 +475,7 @@ impl ConfigContainerAttrs {
                     tag = Some(meta.value()?.parse::<LitStr>()?);
                     Ok(())
                 } else if meta.path.is_ident("validate") {
-                    validations.push(meta.value()?.parse()?);
+                    validations.push(Validation::new(meta.input)?);
                     Ok(())
                 } else if meta.path.is_ident("derive") {
                     let content;
