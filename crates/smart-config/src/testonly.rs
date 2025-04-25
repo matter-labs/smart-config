@@ -1,7 +1,9 @@
 //! Test-only functionality shared among multiple test modules.
 
 use std::{
+    any::Any,
     collections::{HashMap, HashSet},
+    fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     num::NonZeroUsize,
     path::PathBuf,
@@ -16,12 +18,14 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::{de::Error as DeError, Deserialize, Serialize};
 
 use crate::{
-    de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
+    de::{self, DeserializeContext, DeserializeParam, DeserializerOptions, Serde, WellKnown},
     fallback,
     fallback::FallbackSource,
-    metadata::{SizeUnit, TimeUnit},
+    metadata::{BasicTypes, ConfigMetadata, ParamMetadata, SizeUnit, TimeUnit},
+    testing,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
+    visit::ConfigVisitor,
+    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin, Json,
     ParseErrors,
 };
 
@@ -38,7 +42,7 @@ impl WellKnown for SimpleEnum {
     const DE: Self::Deserializer = Serde![str];
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub(crate) struct TestParam {
     pub int: u64,
     #[serde(default)]
@@ -56,7 +60,7 @@ impl WellKnown for TestParam {
     const DE: Self::Deserializer = Serde![object];
 }
 
-#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ValueCoercingConfig {
     pub param: TestParam,
@@ -197,14 +201,29 @@ impl FromStr for MapOrString {
     }
 }
 
-const CUSTOM_DE: de::Custom![usize; str] = de::Custom![_; str](|ctx, param| {
-    let de = ctx.current_value_deserializer(param.name)?;
-    let len = String::deserialize(de)?.len();
-    if len > 5 {
-        return Err(DeError::custom("string is too long"));
+#[derive(Debug)]
+struct StringLen;
+
+impl DeserializeParam<usize> for StringLen {
+    const EXPECTING: BasicTypes = BasicTypes::STRING;
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<usize, ErrorWithOrigin> {
+        let de = ctx.current_value_deserializer(param.name)?;
+        let len = String::deserialize(de)?.len();
+        if len > 5 {
+            return Err(DeError::custom("string is too long"));
+        }
+        Ok(len)
     }
-    Ok(len)
-});
+
+    fn serialize_param(&self, &param: &usize) -> serde_json::Value {
+        "_".repeat(param).into()
+    }
+}
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
@@ -234,11 +253,11 @@ pub(crate) struct ConfigWithComplexTypes {
     pub ip_addr: IpAddr,
     #[config(default_t = ([192, 168, 0, 1], 3000).into())]
     pub socket_addr: SocketAddr,
-    #[config(default, with = CUSTOM_DE)]
+    #[config(default, with = StringLen)]
     pub with_custom_deserializer: usize,
 }
 
-#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ComposedConfig {
     #[config(default)]
@@ -389,6 +408,47 @@ pub(crate) fn extract_env_var_name(source: &ValueOrigin) -> &str {
     };
     assert_matches!(source.as_ref(), ValueOrigin::EnvVars);
     path
+}
+
+// FIXME: Doesn't work for nested / flattened configs!
+pub(crate) fn serialize_to_json<C: DeserializeConfig>(
+    config: &C,
+) -> serde_json::Map<String, serde_json::Value> {
+    struct SerializingVisitor {
+        metadata: &'static ConfigMetadata,
+        json: serde_json::Map<String, serde_json::Value>,
+    }
+
+    impl ConfigVisitor for SerializingVisitor {
+        fn visit_tag(&mut self, variant_index: usize) {
+            let tag = self.metadata.tag.unwrap();
+            let tag_name = tag.param.name;
+            let tag_value = tag.variants[variant_index].name;
+            self.json.insert(tag_name.to_owned(), tag_value.into());
+        }
+
+        fn visit_param(&mut self, param_index: usize, value: &dyn Any) {
+            let param = &self.metadata.params[param_index];
+            let value = param.deserializer.serialize_param(value);
+            self.json.insert(param.name.to_owned(), value);
+        }
+    }
+
+    let mut visitor = SerializingVisitor {
+        metadata: &C::DESCRIPTION,
+        json: serde_json::Map::default(),
+    };
+    config.visit_config(&mut visitor);
+    visitor.json
+}
+
+pub(crate) fn test_config_roundtrip<C>(config: &C)
+where
+    C: DeserializeConfig + PartialEq + fmt::Debug,
+{
+    let json = serialize_to_json(config);
+    let config_copy: C = testing::test(Json::new("test.json", json)).unwrap();
+    assert_eq!(config_copy, *config);
 }
 
 #[cfg(test)]

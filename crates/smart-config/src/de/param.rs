@@ -47,7 +47,10 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     const EXPECTING: BasicTypes;
 
     /// Additional info about the deserialized type, e.g., extended description.
-    fn describe(&self, description: &mut TypeDescription);
+    #[allow(unused)]
+    fn describe(&self, description: &mut TypeDescription) {
+        // Do nothing
+    }
 
     /// Performs deserialization given the context and param metadata.
     ///

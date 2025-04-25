@@ -308,6 +308,11 @@ impl DeserializeParam<Duration> for WithUnit {
     }
 
     fn serialize_param(&self, param: &Duration) -> serde_json::Value {
+        if param.is_zero() {
+            // Special case to produce more "expected" string.
+            return "0s".into();
+        }
+
         let duration_string = if param.subsec_millis() != 0 {
             format!("{}ms", param.as_millis())
         } else {
@@ -494,5 +499,63 @@ mod tests {
         assert_eq!(size, RawByteSize::Megabytes(4));
         let size: RawByteSize = "1 GB".parse().unwrap();
         assert_eq!(size, RawByteSize::Gigabytes(1));
+    }
+
+    #[test]
+    fn serializing_with_time_unit() {
+        let val = TimeUnit::Millis.serialize_param(&Duration::from_millis(10));
+        assert_eq!(val, 10_u32);
+        let val = TimeUnit::Millis.serialize_param(&Duration::from_secs(10));
+        assert_eq!(val, 10_000_u32);
+        let val = TimeUnit::Seconds.serialize_param(&Duration::from_secs(10));
+        assert_eq!(val, 10_u32);
+        let val = TimeUnit::Minutes.serialize_param(&Duration::from_secs(10));
+        assert_eq!(val, 0_u32);
+        let val = TimeUnit::Minutes.serialize_param(&Duration::from_secs(120));
+        assert_eq!(val, 2_u32);
+    }
+
+    #[test]
+    fn serializing_with_size_unit() {
+        let val = SizeUnit::Bytes.serialize_param(&ByteSize(128));
+        assert_eq!(val, 128_u32);
+        let val = SizeUnit::Bytes.serialize_param(&ByteSize(1 << 16));
+        assert_eq!(val, 1_u32 << 16);
+        let val = SizeUnit::KiB.serialize_param(&ByteSize(1 << 16));
+        assert_eq!(val, 1_u32 << 6);
+        let val = SizeUnit::MiB.serialize_param(&ByteSize(1 << 16));
+        assert_eq!(val, 0_u32);
+        let val = SizeUnit::MiB.serialize_param(&ByteSize::new(3, SizeUnit::MiB));
+        assert_eq!(val, 3_u32);
+    }
+
+    #[test]
+    fn serializing_with_duration() {
+        let val = WithUnit.serialize_param(&Duration::ZERO);
+        assert_eq!(val, "0s");
+        let val = WithUnit.serialize_param(&Duration::from_millis(10));
+        assert_eq!(val, "10ms");
+        let val = WithUnit.serialize_param(&Duration::from_secs(5));
+        assert_eq!(val, "5s");
+        let val = WithUnit.serialize_param(&Duration::from_millis(5_050));
+        assert_eq!(val, "5050ms");
+        let val = WithUnit.serialize_param(&Duration::from_secs(300));
+        assert_eq!(val, "5min");
+        let val = WithUnit.serialize_param(&Duration::from_secs(7_200));
+        assert_eq!(val, "2h");
+        let val = WithUnit.serialize_param(&Duration::from_secs(86_400));
+        assert_eq!(val, "1d");
+    }
+
+    #[test]
+    fn serializing_with_byte_size() {
+        let val = WithUnit.serialize_param(&ByteSize(0));
+        assert_eq!(val, "0 B");
+        let val = WithUnit.serialize_param(&ByteSize(128));
+        assert_eq!(val, "128 B");
+        let val = WithUnit.serialize_param(&ByteSize(32 << 10));
+        assert_eq!(val, "32 KiB");
+        let val = WithUnit.serialize_param(&ByteSize(3 << 20));
+        assert_eq!(val, "3 MiB");
     }
 }
