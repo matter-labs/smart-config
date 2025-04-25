@@ -308,14 +308,52 @@ fn parse_key_or_value<T, De: DeserializeParam<T>>(
     }
 }
 
+/// Converts a key–value entry into the common format (pair of references to the key and value).
+pub trait ToEntry<'a, K, V>: Copy {
+    /// Performs the conversion.
+    fn to_entry(self) -> (&'a K, &'a V);
+}
+
+impl<'a, K, V> ToEntry<'a, K, V> for &'a (K, V) {
+    fn to_entry(self) -> (&'a K, &'a V) {
+        (&self.0, &self.1)
+    }
+}
+
+impl<'a, K, V> ToEntry<'a, K, V> for (&'a K, &'a V) {
+    fn to_entry(self) -> (&'a K, &'a V) {
+        self
+    }
+}
+
+/// Collection that can iterate over its entries.
+///
+/// Implemented for maps in the standard library, `Vec<(K, V)>`, `Box<[(K, V)]>` etc.
+// Needed as a separate trait with a blank impl since otherwise (if the `&C: IntoIterator<..>` requirement
+// is specified directly on the `DeserializeParam` impls) the compiler explodes, suggesting to specify type params
+// in the proc-macro code.
+pub trait ToEntries<K: 'static, V: 'static> {
+    /// Iterates over entries in the collection.
+    fn to_entries(&self) -> impl Iterator<Item = (&K, &V)>;
+}
+
+// Covers maps
+impl<K: 'static, V: 'static, C> ToEntries<K, V> for C
+where
+    for<'a> &'a C: IntoIterator<Item: ToEntry<'a, K, V>>,
+{
+    fn to_entries(&self) -> impl Iterator<Item = (&K, &V)> {
+        self.into_iter().map(ToEntry::to_entry)
+    }
+}
+
 impl<K, V, C, DeK, DeV> DeserializeParam<C> for Entries<K, V, DeK, DeV>
 where
     K: 'static,
     V: 'static,
     DeK: DeserializeParam<K>,
     DeV: DeserializeParam<V>,
-    C: FromIterator<(K, V)>,
-    for<'a> &'a C: IntoIterator<Item = (&'a K, &'a V)>, // FIXME: not necessarily true (e.g., for Vec)
+    C: FromIterator<(K, V)> + ToEntries<K, V>,
 {
     const EXPECTING: BasicTypes = {
         assert!(
@@ -346,7 +384,7 @@ where
 
     fn serialize_param(&self, param: &C) -> serde_json::Value {
         let object = param
-            .into_iter()
+            .to_entries()
             .map(|(key, value)| {
                 let key = match self.keys.serialize_param(key) {
                     serde_json::Value::String(s) => s,
@@ -642,8 +680,7 @@ where
     V: 'static,
     DeK: DeserializeParam<K>,
     DeV: DeserializeParam<V>,
-    C: FromIterator<(K, V)>,
-    for<'a> &'a C: IntoIterator<Item = (&'a K, &'a V)>, // FIXME: not necessarily true (e.g., for Vec)
+    C: FromIterator<(K, V)> + ToEntries<K, V>,
 {
     const EXPECTING: BasicTypes = BasicTypes::OBJECT.or(BasicTypes::ARRAY);
 
@@ -676,6 +713,14 @@ where
     }
 
     fn serialize_param(&self, param: &C) -> serde_json::Value {
-        self.inner.serialize_param(param)
+        let entries = param.to_entries().map(|(key, value)| {
+            let key = self.inner.keys.serialize_param(key);
+            let value = self.inner.values.serialize_param(value);
+            serde_json::json!({
+                self.keys_name: key,
+                self.values_name: value,
+            })
+        });
+        serde_json::Value::Array(entries.collect())
     }
 }

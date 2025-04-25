@@ -272,6 +272,8 @@ pub(crate) struct ComposedConfig {
     pub map_of_ints: HashMap<u64, Duration>,
     #[config(default, with = de::Entries::WELL_KNOWN.named("val", "timeout"))]
     pub entry_map: HashMap<u64, Duration>,
+    #[config(default, with = de::Entries::WELL_KNOWN.named("method", "priority"))]
+    pub entry_slice: Box<[(String, i32)]>,
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
@@ -442,13 +444,14 @@ pub(crate) fn serialize_to_json<C: DeserializeConfig>(
     visitor.json
 }
 
-pub(crate) fn test_config_roundtrip<C>(config: &C)
+pub(crate) fn test_config_roundtrip<C>(config: &C) -> serde_json::Map<String, serde_json::Value>
 where
     C: DeserializeConfig + PartialEq + fmt::Debug,
 {
     let json = serialize_to_json(config);
-    let config_copy: C = testing::test(Json::new("test.json", json)).unwrap();
+    let config_copy: C = testing::test(Json::new("test.json", json.clone())).unwrap();
     assert_eq!(config_copy, *config);
+    json
 }
 
 #[cfg(test)]
