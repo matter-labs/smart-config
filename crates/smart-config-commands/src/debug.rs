@@ -9,7 +9,7 @@ use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
     metadata::ConfigMetadata,
     value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
-    visit::ConfigVisitor,
+    visit::{ConfigVisitor, VisitConfig},
     ConfigRepository, ParseError,
 };
 
@@ -71,6 +71,10 @@ impl ConfigVisitor for ParamValuesVisitor {
             param.deserializer.serialize_param(value)
         };
         self.param_values.insert(param_index, json);
+    }
+
+    fn visit_nested_config(&mut self, _config_index: usize, _config: &dyn VisitConfig) {
+        // Don't recurse into nested configs, we debug them separately
     }
 }
 

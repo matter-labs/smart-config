@@ -124,6 +124,48 @@ fn parsing_enum_config_with_schema() {
 }
 
 #[test]
+fn serializing_enum_config() {
+    let config = EnumConfig::First;
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({ "type": "first" })
+    );
+
+    let config = EnumConfig::Nested(NestedConfig {
+        simple_enum: SimpleEnum::First,
+        other_int: 42,
+        map: HashMap::from([("call".to_owned(), 100)]),
+    });
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "type": "Nested",
+            "renamed": "first",
+            "other_int": 42,
+            "map": { "call": 100 },
+        })
+    );
+
+    let config = EnumConfig::WithFields {
+        string: None,
+        flag: true,
+        set: HashSet::from([42]),
+    };
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "type": "WithFields",
+            "string": null,
+            "flag": true,
+            "set": [42],
+        })
+    );
+}
+
+#[test]
 fn parsing_defaulting_config_from_missing_value_with_schema() {
     let schema = ConfigSchema::new(&DefaultingConfig::DESCRIPTION, "test");
     let json = config!("unrelated": 123);
@@ -384,6 +426,19 @@ fn using_nested_config_aliases() {
     let config: ConfigWithNesting = testing::test(json).unwrap();
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 50);
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "merged": "",
+            "value": 10,
+            "nested": {
+                "renamed": "first",
+                "other_int": 50,
+                "map": {},
+            },
+        })
+    );
 
     let json = config!(
         "value": 10,

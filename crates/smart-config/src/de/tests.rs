@@ -244,12 +244,37 @@ fn parsing_compound_config() {
         }
     );
     assert_eq!(
-        config.nested_opt.unwrap(),
+        *config.nested_opt.as_ref().unwrap(),
         NestedConfig {
             simple_enum: SimpleEnum::Second,
             other_int: 42,
             map: HashMap::new(),
         }
+    );
+
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "default": {
+                "map": { "foo": 3 },
+                "other_int": 42,
+                "renamed": "second",
+            },
+            "nested": {
+                "map": {},
+                "other_int": 321,
+                "renamed": "first",
+            },
+            "nested_opt": {
+                "map": {},
+                "other_int": 42,
+                "renamed": "second",
+            },
+            "map": {},
+            "other_int": 42,
+            "renamed": "second",
+        })
     );
 }
 

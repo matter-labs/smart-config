@@ -3,7 +3,7 @@
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
-    fmt,
+    fmt, mem,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     num::NonZeroUsize,
     path::PathBuf,
@@ -24,7 +24,7 @@ use crate::{
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata, SizeUnit, TimeUnit},
     testing,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    visit::ConfigVisitor,
+    visit::{ConfigVisitor, VisitConfig},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin, Json,
     ParseErrors,
 };
@@ -91,7 +91,7 @@ impl NestedConfig {
     }
 }
 
-#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ConfigWithNesting {
     pub value: u32,
@@ -412,7 +412,6 @@ pub(crate) fn extract_env_var_name(source: &ValueOrigin) -> &str {
     path
 }
 
-// FIXME: Doesn't work for nested / flattened configs!
 pub(crate) fn serialize_to_json<C: DeserializeConfig>(
     config: &C,
 ) -> serde_json::Map<String, serde_json::Value> {
@@ -433,6 +432,25 @@ pub(crate) fn serialize_to_json<C: DeserializeConfig>(
             let param = &self.metadata.params[param_index];
             let value = param.deserializer.serialize_param(value);
             self.json.insert(param.name.to_owned(), value);
+        }
+
+        fn visit_nested_config(&mut self, config_index: usize, config: &dyn VisitConfig) {
+            let nested_metadata = &self.metadata.nested_configs[config_index];
+            let prev_metadata = mem::replace(&mut self.metadata, nested_metadata.meta);
+
+            if nested_metadata.name.is_empty() {
+                config.visit_config(self);
+            } else {
+                let mut prev_json = mem::take(&mut self.json);
+                config.visit_config(self);
+                prev_json.insert(
+                    nested_metadata.name.to_owned(),
+                    mem::take(&mut self.json).into(),
+                );
+                self.json = prev_json;
+            }
+
+            self.metadata = prev_metadata;
         }
     }
 

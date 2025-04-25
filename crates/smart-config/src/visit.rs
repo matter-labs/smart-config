@@ -12,6 +12,10 @@ pub trait ConfigVisitor {
     /// Visits a parameter providing its value for inspection. This will be called for all params in a struct config,
     /// and for params associated with the active tag variant in an enum config.
     fn visit_param(&mut self, param_index: usize, value: &dyn any::Any);
+
+    /// Visits a nested configuration. Similarly to params, this will be called for all nested / flattened configs in a struct config,
+    /// and just for ones associated with the active tag variant in an enum config.
+    fn visit_nested_config(&mut self, config_index: usize, config: &dyn VisitConfig);
 }
 
 /// Configuration that can be visited (e.g., to inspect its parameters in a generic way).
@@ -20,6 +24,14 @@ pub trait ConfigVisitor {
 pub trait VisitConfig {
     /// Performs the visit.
     fn visit_config(&self, visitor: &mut dyn ConfigVisitor);
+}
+
+impl<C: VisitConfig> VisitConfig for Option<C> {
+    fn visit_config(&self, visitor: &mut dyn ConfigVisitor) {
+        if let Some(config) = self {
+            config.visit_config(visitor);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -66,6 +78,10 @@ mod tests {
                 "Param value {} is visited twice",
                 param.name
             );
+        }
+
+        fn visit_nested_config(&mut self, _config_index: usize, _config: &dyn VisitConfig) {
+            // Do nothing
         }
     }
 
