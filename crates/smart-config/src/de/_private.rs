@@ -23,6 +23,8 @@ pub trait ErasedDeserializer: fmt::Debug + Send + Sync + 'static {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<Box<dyn any::Any>, ErrorWithOrigin>;
+
+    fn serialize_param(&self, param: &dyn any::Any) -> serde_json::Value;
 }
 
 /// Wrapper transforming [`DeserializeParam`] to [`ErasedDeserializer`].
@@ -59,6 +61,13 @@ impl<T: 'static, De: DeserializeParam<T>> ErasedDeserializer for Erased<T, De> {
         self.inner
             .deserialize_param(ctx, param)
             .map(|val| Box::new(val) as _)
+    }
+
+    fn serialize_param(&self, param: &dyn any::Any) -> serde_json::Value {
+        let param: &T = param
+            .downcast_ref()
+            .expect("Internal error: incorrect param type provided for serialization");
+        self.inner.serialize_param(param)
     }
 }
 

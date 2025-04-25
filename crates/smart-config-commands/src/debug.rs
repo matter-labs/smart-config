@@ -7,8 +7,9 @@ use std::{
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
+    metadata::ConfigMetadata,
     value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
-    visit::{ConfigVisitor, ParamValue},
+    visit::ConfigVisitor,
     ConfigRepository, ParseError,
 };
 
@@ -32,10 +33,29 @@ const ERROR_LABEL: Style = Style::new()
     .bg_color(Some(Color::Ansi(AnsiColor::Red)))
     .fg_color(None);
 
-#[derive(Debug, Default)]
+const NULL: Style = Style::new().bold();
+const BOOL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
+const NUMBER: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
+const SECRET: Style = Style::new()
+    .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
+    .fg_color(None);
+const OBJECT_KEY: Style = Style::new().bold();
+
+#[derive(Debug)]
 struct ParamValuesVisitor {
+    config: &'static ConfigMetadata,
     variant: Option<usize>,
-    param_values: HashMap<usize, String>,
+    param_values: HashMap<usize, serde_json::Value>,
+}
+
+impl ParamValuesVisitor {
+    fn new(config: &'static ConfigMetadata) -> Self {
+        Self {
+            config,
+            variant: None,
+            param_values: HashMap::new(),
+        }
+    }
 }
 
 impl ConfigVisitor for ParamValuesVisitor {
@@ -43,8 +63,14 @@ impl ConfigVisitor for ParamValuesVisitor {
         self.variant = Some(variant_index);
     }
 
-    fn visit_param(&mut self, param_index: usize, value: &dyn ParamValue) {
-        self.param_values.insert(param_index, format!("{value:?}"));
+    fn visit_param(&mut self, param_index: usize, value: &dyn any::Any) {
+        let param = self.config.params[param_index];
+        let json = if param.type_description().contains_secrets() {
+            "[REDACTED]".into()
+        } else {
+            param.deserializer.serialize_param(value)
+        };
+        self.param_values.insert(param_index, json);
     }
 }
 
@@ -142,7 +168,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
 
             let (variant, mut param_values) = if let Ok(boxed_config) = config_parser.parse() {
                 let visitor_fn = config.metadata().visitor;
-                let mut visitor = ParamValuesVisitor::default();
+                let mut visitor = ParamValuesVisitor::new(config.metadata());
                 visitor_fn(boxed_config.as_ref(), &mut visitor);
                 (visitor.variant, visitor.param_values)
             } else {
@@ -155,7 +181,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
                 let name = tag.variants[idx].name;
                 // Add the tag value, using the fact that the tag is always the last param in the config.
                 let tag_param_idx = config.metadata().params.len() - 1;
-                param_values.insert(tag_param_idx, format!("{name:?}"));
+                param_values.insert(tag_param_idx, name.into());
 
                 ActiveTagVariant {
                     canonical_path: ParamRef {
@@ -248,7 +274,7 @@ fn write_param(
     writer: &mut impl io::Write,
     param_ref: ParamRef<'_>,
     path: &str,
-    visited_value: Option<&String>,
+    visited_value: Option<&serde_json::Value>,
     raw_value: Option<&WithOrigin>,
     active_variant: Option<&ActiveTagVariant>,
 ) -> io::Result<()> {
@@ -265,7 +291,9 @@ fn write_param(
     )?;
 
     if let Some(value) = visited_value {
-        writeln!(writer, " = {value}")?;
+        write!(writer, " = ")?;
+        write_json_value(writer, value, 0)?;
+        writeln!(writer)?;
     } else {
         writeln!(writer)?;
     }
@@ -298,14 +326,6 @@ fn write_param(
 }
 
 fn write_value(writer: &mut impl io::Write, value: &WithOrigin, ident: usize) -> io::Result<()> {
-    const NULL: Style = Style::new().bold();
-    const BOOL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
-    const NUMBER: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
-    const SECRET: Style = Style::new()
-        .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
-        .fg_color(None);
-    const OBJECT_KEY: Style = Style::new().bold();
-
     match &value.inner {
         Value::Null => write!(writer, "{NULL}null{NULL:#}"),
         Value::Bool(val) => write!(writer, "{BOOL}{val:?}{BOOL:#}"),
@@ -326,6 +346,37 @@ fn write_value(writer: &mut impl io::Write, value: &WithOrigin, ident: usize) ->
             for (key, value) in val {
                 write!(writer, "{:ident$}  {OBJECT_KEY}{key:?}{OBJECT_KEY:#}: ", "")?;
                 write_value(writer, value, ident + 2)?;
+                writeln!(writer, ",")?;
+            }
+            write!(writer, "{:ident$}}}", "")
+        }
+    }
+}
+
+fn write_json_value(
+    writer: &mut impl io::Write,
+    value: &serde_json::Value,
+    ident: usize,
+) -> io::Result<()> {
+    match value {
+        serde_json::Value::Null => write!(writer, "{NULL}null{NULL:#}"),
+        serde_json::Value::Bool(val) => write!(writer, "{BOOL}{val:?}{BOOL:#}"),
+        serde_json::Value::Number(val) => write!(writer, "{NUMBER}{val}{NUMBER:#}"),
+        serde_json::Value::String(val) => write!(writer, "{STRING}{val:?}{STRING:#}"),
+        serde_json::Value::Array(val) => {
+            writeln!(writer, "[")?;
+            for item in val {
+                write!(writer, "{:ident$}  ", "")?;
+                write_json_value(writer, item, ident + 2)?;
+                writeln!(writer, ",")?;
+            }
+            write!(writer, "{:ident$}]", "")
+        }
+        serde_json::Value::Object(val) => {
+            writeln!(writer, "{{")?;
+            for (key, value) in val {
+                write!(writer, "{:ident$}  {OBJECT_KEY}{key:?}{OBJECT_KEY:#}: ", "")?;
+                write_json_value(writer, value, ident + 2)?;
                 writeln!(writer, ",")?;
             }
             write!(writer, "{:ident$}}}", "")

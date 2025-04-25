@@ -13,6 +13,7 @@ description = "Command-line extensions for `smart-config` library"
 [dependencies]
 anstream.workspace = true
 anstyle.workspace = true
+serde_json.workspace = true
 smart-config.workspace = true
 
 [dev-dependencies]
@@ -22,7 +23,6 @@ clap = { workspace = true, features = ["derive"] }
 doc-comment.workspace = true
 primitive-types.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 serde_yaml.workspace = true
 version-sync.workspace = true
 
