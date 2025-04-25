@@ -13,7 +13,7 @@ use std::{
 use anyhow::Context as _;
 use assert_matches::assert_matches;
 use secrecy::{ExposeSecret, SecretString};
-use serde::{de::Error as DeError, Deserialize};
+use serde::{de::Error as DeError, Deserialize, Serialize};
 
 use crate::{
     de::{self, DeserializeContext, DeserializerOptions, Serde, WellKnown},
@@ -25,7 +25,7 @@ use crate::{
     ParseErrors,
 };
 
-#[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SimpleEnum {
     #[serde(alias = "first_choice")]
@@ -38,7 +38,7 @@ impl WellKnown for SimpleEnum {
     const DE: Self::Deserializer = Serde![str];
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct TestParam {
     pub int: u64,
     #[serde(default)]
@@ -175,7 +175,7 @@ pub(crate) enum DefaultingEnumConfig {
     },
 }
 
-#[derive(Debug, Default, PartialEq, Deserialize)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub(crate) struct MapOrString(pub HashMap<String, u64>);
 

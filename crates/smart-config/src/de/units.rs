@@ -99,6 +99,17 @@ impl DeserializeParam<Duration> for TimeUnit {
         self.into_duration(raw_value)
             .map_err(|err| deserializer.enrich_err(err))
     }
+
+    fn serialize_param(&self, param: &Duration) -> serde_json::Value {
+        match self {
+            Self::Millis => serde_json::to_value(param.as_millis()).unwrap(),
+            Self::Seconds => param.as_secs().into(),
+            Self::Minutes => (param.as_secs() / 60).into(),
+            Self::Hours => (param.as_secs() / 3_600).into(),
+            Self::Days => (param.as_secs() / 86_400).into(),
+            Self::Weeks => (param.as_secs() / 86_400 / 7).into(),
+        }
+    }
 }
 
 /// Supports deserializing a [`ByteSize`] from a number, with `self` being the unit of measurement.
@@ -144,6 +155,15 @@ impl DeserializeParam<ByteSize> for SizeUnit {
             ));
             deserializer.enrich_err(err)
         })
+    }
+
+    fn serialize_param(&self, param: &ByteSize) -> serde_json::Value {
+        match self {
+            Self::Bytes => param.0.into(),
+            Self::KiB => (param.0 >> 10).into(),
+            Self::MiB => (param.0 >> 20).into(),
+            Self::GiB => (param.0 >> 30).into(),
+        }
     }
 }
 
@@ -286,6 +306,26 @@ impl DeserializeParam<Duration> for WithUnit {
         };
         raw.try_into().map_err(|err| deserializer.enrich_err(err))
     }
+
+    fn serialize_param(&self, param: &Duration) -> serde_json::Value {
+        let duration_string = if param.subsec_millis() != 0 {
+            format!("{}ms", param.as_millis())
+        } else {
+            let seconds = param.as_secs();
+            if seconds % 60 != 0 {
+                format!("{seconds}s")
+            } else if seconds % 3_600 != 0 {
+                format!("{}min", seconds / 60)
+            } else if seconds % 86_400 != 0 {
+                format!("{}h", seconds / 3_600)
+            } else if seconds % (86_400 * 7) != 0 {
+                format!("{}d", seconds / 86_400)
+            } else {
+                format!("{}w", seconds / (86_400 * 7))
+            }
+        };
+        duration_string.into()
+    }
 }
 
 impl WellKnown for Duration {
@@ -378,6 +418,10 @@ impl DeserializeParam<ByteSize> for WithUnit {
             RawByteSize::deserialize(deserializer)?
         };
         raw.try_into().map_err(|err| deserializer.enrich_err(err))
+    }
+
+    fn serialize_param(&self, param: &ByteSize) -> serde_json::Value {
+        param.to_string().into()
     }
 }
 

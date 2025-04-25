@@ -1,4 +1,4 @@
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 
 use super::{DeserializeContext, DeserializeParam, WellKnown};
 use crate::{
@@ -29,7 +29,7 @@ use crate::{
 #[derive(Debug)]
 pub struct FromSecretString;
 
-impl<T: From<SecretString>> DeserializeParam<T> for FromSecretString {
+impl<T: From<SecretString> + ExposeSecret<str>> DeserializeParam<T> for FromSecretString {
     const EXPECTING: BasicTypes = BasicTypes::STRING;
 
     fn describe(&self, description: &mut TypeDescription) {
@@ -48,6 +48,10 @@ impl<T: From<SecretString>> DeserializeParam<T> for FromSecretString {
             _ => return Err(de.invalid_type("secret string")),
         };
         Ok(s.into())
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        param.expose_secret().into()
     }
 }
 
@@ -126,5 +130,9 @@ where
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
         self.0.deserialize_param(ctx, param)
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        self.0.serialize_param(param)
     }
 }

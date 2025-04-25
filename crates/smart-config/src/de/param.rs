@@ -11,7 +11,10 @@ use std::{
     str::FromStr,
 };
 
-use serde::de::{DeserializeOwned, Error as DeError};
+use serde::{
+    de::{DeserializeOwned, Error as DeError},
+    Serialize,
+};
 
 use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
@@ -56,6 +59,9 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin>;
+
+    /// FIXME
+    fn serialize_param(&self, param: &T) -> serde_json::Value;
 }
 
 /// Parameter type with well-known [deserializer](DeserializeParam).
@@ -110,6 +116,10 @@ impl<T: WellKnown> DeserializeParam<T> for () {
     ) -> Result<T, ErrorWithOrigin> {
         T::DE.deserialize_param(ctx, param)
     }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        T::DE.serialize_param(param)
+    }
 }
 
 /// Deserializer powered by `serde`. Usually created with the help of [`Serde!`](crate::Serde!) macro;
@@ -125,7 +135,9 @@ impl<const EXPECTING: u8> fmt::Debug for Serde<EXPECTING> {
     }
 }
 
-impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXPECTING> {
+impl<T: Serialize + DeserializeOwned, const EXPECTING: u8> DeserializeParam<T>
+    for Serde<EXPECTING>
+{
     const EXPECTING: BasicTypes = BasicTypes::from_raw(EXPECTING);
 
     fn describe(&self, _description: &mut TypeDescription) {
@@ -148,6 +160,10 @@ impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXP
             return Err(deserializer.invalid_type(&expecting.to_string()));
         }
         T::deserialize(deserializer)
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        serde_json::to_value(param).expect("failed serializing to JSON")
     }
 }
 
@@ -181,6 +197,10 @@ impl<T: 'static, const EXPECTING: u8> DeserializeParam<T> for Custom<T, EXPECTIN
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
         self.0(ctx, param)
+    }
+
+    fn serialize_param(&self, _param: &T) -> serde_json::Value {
+        todo!()
     }
 }
 
@@ -314,6 +334,10 @@ where
     ) -> Result<T, ErrorWithOrigin> {
         self.inner.deserialize_param(ctx, param)
     }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        self.inner.serialize_param(param)
+    }
 }
 
 /// Deserializer decorator that defaults to the provided value if the input for the param is missing.
@@ -357,6 +381,10 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
             Ok((self.default)())
         }
     }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        self.inner.serialize_param(param)
+    }
 }
 
 /// Deserializer decorator that wraps the output of the underlying decorator in `Some` and returns `None`
@@ -381,6 +409,14 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
             return Ok(None);
         }
         self.0.deserialize_param(ctx, param).map(Some)
+    }
+
+    fn serialize_param(&self, param: &Option<T>) -> serde_json::Value {
+        if let Some(param) = param {
+            self.0.serialize_param(param)
+        } else {
+            serde_json::Value::Null
+        }
     }
 }
 
@@ -458,5 +494,9 @@ where
             let err = serde_json::Error::custom(err);
             ErrorWithOrigin::json(err, origin.clone())
         })
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        self.0.serialize_param(param)
     }
 }

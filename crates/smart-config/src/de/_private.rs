@@ -114,4 +114,8 @@ impl DeserializeParam<&'static str> for TagDeserializer {
                 ErrorWithOrigin::json(err, origin)
             })
     }
+
+    fn serialize_param(&self, &param: &&'static str) -> serde_json::Value {
+        param.into()
+    }
 }
