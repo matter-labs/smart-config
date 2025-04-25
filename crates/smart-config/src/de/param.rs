@@ -170,43 +170,6 @@ impl<T: Serialize + DeserializeOwned, const EXPECTING: u8> DeserializeParam<T>
     }
 }
 
-type DeserializeFn<T> =
-    fn(DeserializeContext<'_>, &'static ParamMetadata) -> Result<T, ErrorWithOrigin>;
-
-/// Custom deserializer for a specific type. Usually created with the help of [`Custom!`](crate::Custom!) macro;
-/// see its docs for the examples of usage.
-pub struct Custom<T, const EXPECTING: u8>(pub DeserializeFn<T>);
-
-impl<T: 'static, const EXPECTING: u8> fmt::Debug for Custom<T, EXPECTING> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("Custom")
-            .field("type", &any::type_name::<T>())
-            .field("expecting", &BasicTypes::from_raw(EXPECTING))
-            .finish()
-    }
-}
-
-impl<T: 'static, const EXPECTING: u8> DeserializeParam<T> for Custom<T, EXPECTING> {
-    const EXPECTING: BasicTypes = BasicTypes::from_raw(EXPECTING);
-
-    fn describe(&self, _description: &mut TypeDescription) {
-        // Do nothing
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<T, ErrorWithOrigin> {
-        self.0(ctx, param)
-    }
-
-    fn serialize_param(&self, _param: &T) -> serde_json::Value {
-        todo!()
-    }
-}
-
 impl WellKnown for bool {
     type Deserializer = super::Serde![bool];
     const DE: Self::Deserializer = super::Serde![bool];
