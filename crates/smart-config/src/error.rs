@@ -35,6 +35,8 @@ pub enum LowLevelError {
     InvalidArray,
     #[doc(hidden)] // implementation detail
     InvalidObject,
+    #[doc(hidden)] // implementation detail
+    Validation,
 }
 
 impl From<serde_json::Error> for LowLevelError {
@@ -49,6 +51,7 @@ impl fmt::Display for LowLevelError {
             Self::Json(err) => fmt::Display::fmt(err, formatter),
             Self::InvalidArray => formatter.write_str("error(s) deserializing array items"),
             Self::InvalidObject => formatter.write_str("error(s) deserializing object entries"),
+            Self::Validation => formatter.write_str("validation failed"),
         }
     }
 }
@@ -83,7 +86,9 @@ impl std::error::Error for ErrorWithOrigin {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match &self.inner {
             LowLevelError::Json(err) => Some(err),
-            LowLevelError::InvalidArray | LowLevelError::InvalidObject => None,
+            LowLevelError::InvalidArray
+            | LowLevelError::InvalidObject
+            | LowLevelError::Validation => None,
         }
     }
 }
@@ -95,6 +100,7 @@ pub struct ParseError {
     pub(crate) origin: Arc<ValueOrigin>,
     pub(crate) config: &'static ConfigMetadata,
     pub(crate) location_in_config: Option<LocationInConfig>,
+    pub(crate) validation: Option<String>,
 }
 
 impl fmt::Debug for ParseError {
@@ -106,6 +112,7 @@ impl fmt::Debug for ParseError {
             .field("path", &self.path)
             .field("config.ty", &self.config.ty)
             .field("location_in_config", &self.location_in_config)
+            .field("validation", &self.validation)
             .finish_non_exhaustive()
     }
 }
@@ -128,9 +135,15 @@ impl fmt::Display for ParseError {
             format!(" [origin: {}]", self.origin)
         };
 
+        let validation = if let Some(validation) = &self.validation {
+            format!("validation '{validation}' failed: ")
+        } else {
+            String::new()
+        };
+
         write!(
             formatter,
-            "error parsing {field} in `{config}` at `{path}`{origin}: {err}",
+            "error parsing {field} in `{config}` at `{path}`{origin}: {validation}{err}",
             err = self.inner,
             config = self.config.ty.name_in_code(),
             path = self.path
@@ -152,6 +165,7 @@ impl ParseError {
             origin: Arc::default(),
             config,
             location_in_config: None,
+            validation: None,
         }
     }
 
@@ -168,6 +182,11 @@ impl ParseError {
     /// Returns an origin of the value deserialization of which failed.
     pub fn origin(&self) -> &ValueOrigin {
         &self.origin
+    }
+
+    /// Returns human-readable description of the failed validation, if the error is caused by one.
+    pub fn validation(&self) -> Option<&str> {
+        self.validation.as_deref()
     }
 
     /// Returns metadata for the failing config.

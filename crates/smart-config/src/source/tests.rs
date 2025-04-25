@@ -1307,6 +1307,7 @@ fn config_validations() {
         inner.contains("`len` doesn't correspond to `secret`"),
         "{inner}"
     );
+    assert_eq!(err.validation(), Some("`len` must match `secret` length"));
 
     let json = config!("len": 2_000, "secret": "!".repeat(2_000));
     let err = testing::test::<ConfigWithValidations>(json).unwrap_err();
@@ -1314,6 +1315,7 @@ fn config_validations() {
     let err = err.first();
     assert_eq!(err.path(), "len");
     assert_eq!(err.param().unwrap().name, "len");
+    assert_eq!(err.validation(), Some("must be in range ..1000"));
     let inner = err.inner().to_string();
     assert!(inner.contains("expected value in range ..1000"), "{inner}");
 
@@ -1325,6 +1327,22 @@ fn config_validations() {
     assert_eq!(err.param().unwrap().name, "numbers");
     let inner = err.inner().to_string();
     assert!(inner.contains("value is empty"), "{inner}");
+}
+
+#[test]
+fn multiple_validation_failures() {
+    let json = config!("len": 1_666, "secret": "!");
+    let err = testing::test::<ConfigWithValidations>(json).unwrap_err();
+    assert_eq!(err.len(), 2, "{err:?}");
+
+    let validations: HashSet<_> = err
+        .iter()
+        .map(|err| err.validation.as_deref().unwrap())
+        .collect();
+    assert_eq!(
+        validations,
+        HashSet::from(["must not be cursed", "must be in range ..1000"])
+    );
 }
 
 #[test]

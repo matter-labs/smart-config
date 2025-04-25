@@ -307,7 +307,10 @@ pub(crate) struct ConfigWithFallbacks {
 #[config(crate = crate)]
 #[config(validate(Self::validate_len, "`len` must match `secret` length"))]
 pub(crate) struct ConfigWithValidations {
-    #[config(validate(..1_000))]
+    #[config(
+        validate(..1_000),
+        validate(ConfigWithValidations::is_not_cursed, "must not be cursed")
+    )]
     pub len: usize,
     pub secret: SecretString,
     #[config(default_t = vec![1, 2, 3], validate(NotEmpty))]
@@ -320,6 +323,11 @@ impl ConfigWithValidations {
             return Err(DeError::custom("`len` doesn't correspond to `secret`"));
         }
         Ok(())
+    }
+
+    #[allow(clippy::trivially_copy_pass_by_ref)] // required by the predicate fn signature
+    fn is_not_cursed(&value: &usize) -> bool {
+        value % 1_000 != 666
     }
 }
 

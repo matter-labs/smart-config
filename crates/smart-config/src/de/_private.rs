@@ -1,12 +1,12 @@
 //! Private functionality used by derive macros. Not part of the public API.
 
-use std::{any, fmt, marker::PhantomData};
+use std::{any, fmt, marker::PhantomData, sync::Arc};
 
 use serde::{de::Error as DeError, Deserialize};
 
 use super::{deserializer::ValueDeserializer, DeserializeContext, DeserializeParam};
 use crate::{
-    error::ErrorWithOrigin,
+    error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
     validation::Validate,
 };
@@ -139,15 +139,29 @@ impl<T, De> Validated<T, De> {
     }
 }
 
-fn validate<T>(value: &T, validations: &[&'static dyn Validate<T>]) -> Result<(), ErrorWithOrigin> {
+fn validate<T>(
+    value: &T,
+    ctx: &mut DeserializeContext<'_>,
+    validations: &[&'static dyn Validate<T>],
+) -> Result<(), ErrorWithOrigin> {
+    let mut has_errors = false;
     for &validation in validations {
         let _span = tracing::trace_span!("validation", %validation).entered();
         if let Err(err) = validation.validate(value) {
             tracing::warn!(%validation, %err, "validation failed");
-            return Err(err);
+            ctx.push_generic_error(err, Some(validation.to_string()));
+            has_errors = true;
         }
     }
-    Ok(())
+
+    if has_errors {
+        Err(ErrorWithOrigin::new(
+            LowLevelError::Validation,
+            Arc::default(),
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Validated<T, De> {
@@ -160,11 +174,11 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Validated<T, De> {
 
     fn deserialize_param(
         &self,
-        ctx: DeserializeContext<'_>,
+        mut ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
-        let value = self.inner.deserialize_param(ctx, param)?;
-        validate(&value, self.validations)?;
+        let value = self.inner.deserialize_param(ctx.borrow(), param)?;
+        validate(&value, &mut ctx, self.validations)?;
         Ok(value)
     }
 }
@@ -179,12 +193,12 @@ impl<T, De: DeserializeParam<Option<T>>> DeserializeParam<Option<T>> for Validat
 
     fn deserialize_param(
         &self,
-        ctx: DeserializeContext<'_>,
+        mut ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<Option<T>, ErrorWithOrigin> {
-        let value = self.inner.deserialize_param(ctx, param)?;
+        let value = self.inner.deserialize_param(ctx.borrow(), param)?;
         if let Some(value) = &value {
-            validate(value, self.validations)?;
+            validate(value, &mut ctx, self.validations)?;
         }
         Ok(value)
     }
