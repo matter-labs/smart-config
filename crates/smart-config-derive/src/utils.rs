@@ -252,15 +252,6 @@ impl ConfigFieldAttrs {
             return Err(syn::Error::new(secret_span, msg));
         }
 
-        if let (Some(example), Some(_)) = (&example, &default) {
-            let msg = "Specifying `example` is redundant for params having default values";
-            return Err(syn::Error::new(example.span(), msg));
-        }
-        if let (Some(example), true) = (&example, nest) {
-            let msg = "Specifying `example` only works for params, not nested / flattened configs";
-            return Err(syn::Error::new(example.span(), msg));
-        }
-
         Ok(Self {
             rename,
             aliases,

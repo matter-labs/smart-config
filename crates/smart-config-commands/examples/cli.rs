@@ -33,13 +33,15 @@ pub struct TestConfig {
     pub app_name: String,
     #[config(default_t = Duration::from_millis(500))]
     pub poll_latency: Duration,
-    #[config(default, validate(0.0..=10.0))]
+    /// Should be greater than 0.
+    #[config(default, validate(0.0..=10.0), example = Some(0.5))]
     pub scaling_factor: Option<f32>,
     /// Directory for temporary stuff.
     #[config(default_t = "/tmp".into(), fallback = &fallback::Env("TMPDIR"))]
     pub temp_dir: PathBuf,
     /// Paths to key directories.
     #[config(default, alias = "dirs", with = de::Delimited(":"))]
+    #[config(example = ["./local".into()].into())]
     pub dir_paths: HashSet<PathBuf>,
     /// Timeout for some operation.
     #[config(default_t = 1 * TimeUnit::Minutes, with = TimeUnit::Seconds)]
@@ -58,19 +60,24 @@ pub struct TestConfig {
     pub object_store: ObjectStoreConfig,
 }
 
-#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(derive(Default))]
 pub struct NestedConfig {
     /// Whether to exit the application on error.
     #[config(default_t = true)]
     pub exit_on_error: bool,
     /// Complex parameter deserialized from an object.
-    #[config(default)]
+    #[config(default, example = ComplexParam::example())]
     pub complex: ComplexParam,
     #[config(default, alias = "timeouts", with = de::Delimited(","))]
+    #[config(example = vec![Duration::from_secs(5)])]
     pub more_timeouts: Vec<Duration>,
     /// Can be deserialized either from a map or an array of tuples.
     #[config(default, with = de::Entries::WELL_KNOWN.named("method", "rps"))]
+    #[config(example = HashMap::from([
+        ("eth_call".into(), NonZeroU32::new(100).unwrap()),
+        ("eth_blockNumber".into(), NonZeroU32::new(1).unwrap()),
+    ]))]
     pub method_limits: HashMap<String, NonZeroU32>,
 }
 
@@ -80,6 +87,15 @@ pub struct ComplexParam {
     pub array: Vec<u32>,
     #[serde(default)]
     pub map: HashMap<String, u32>,
+}
+
+impl ComplexParam {
+    fn example() -> Self {
+        Self {
+            array: vec![3, 5],
+            map: HashMap::from([("var".into(), 3)]),
+        }
+    }
 }
 
 impl de::WellKnown for ComplexParam {
@@ -145,6 +161,12 @@ pub enum ObjectStoreConfig {
         /// Bucket to put objects into.
         bucket_name: String,
     },
+}
+
+impl ExampleConfig for ObjectStoreConfig {
+    fn example_config() -> Self {
+        Self::default()
+    }
 }
 
 const JSON: &str = r#"

@@ -77,7 +77,7 @@ pub(crate) struct NestedConfig {
     pub simple_enum: SimpleEnum,
     #[config(default_t = 42)]
     pub other_int: u32,
-    #[config(default)]
+    #[config(default, example = HashMap::from([("var".to_owned(), 42)]))]
     pub map: HashMap<String, u32>,
 }
 
@@ -144,6 +144,10 @@ pub(crate) struct CompoundConfig {
     #[config(rename = "default", nest, default = NestedConfig::default_nested)]
     pub nested_default: NestedConfig,
     #[config(flatten)]
+    #[config(example = NestedConfig {
+        simple_enum: SimpleEnum::Second,
+        ..NestedConfig::example_config()
+    })]
     pub flat: NestedConfig,
 }
 
@@ -454,7 +458,7 @@ mod tests {
         assert_eq!(
             serde_json::Value::from(example_json),
             serde_json::json!({
-                "map": {},
+                "map": { "var": 42 },
                 "other_int": 42,
                 "renamed": "first",
             })
@@ -465,19 +469,23 @@ mod tests {
     fn example_for_compound_config() {
         let example_json = serialize_to_json(&CompoundConfig::example_config());
         let expected_nested_json = serde_json::json!({
-            "map": {},
+            "map": { "var": 42 },
             "other_int": 42,
             "renamed": "first",
         });
         assert_eq!(
             serde_json::Value::from(example_json),
             serde_json::json!({
-                "default": &expected_nested_json,
+                "default": {
+                    "map": {},
+                    "other_int": 23,
+                    "renamed": "first",
+                },
                 "nested": &expected_nested_json,
                 "nested_opt": &expected_nested_json,
-                "map": {},
+                "map": { "var": 42 },
                 "other_int": 42,
-                "renamed": "first",
+                "renamed": "second",
             })
         );
     }

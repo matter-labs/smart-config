@@ -360,12 +360,6 @@ pub trait ExampleConfig {
     fn example_config() -> Self;
 }
 
-impl<T: Default + DescribeConfig> ExampleConfig for T {
-    fn example_config() -> Self {
-        Self::default()
-    }
-}
-
 impl<T: ExampleConfig> ExampleConfig for Option<T> {
     fn example_config() -> Self {
         Some(T::example_config())

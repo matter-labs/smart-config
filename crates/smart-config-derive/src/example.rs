@@ -12,12 +12,13 @@ impl ConfigField {
     ) -> syn::Result<proc_macro2::TokenStream> {
         let name = &self.name;
         let name_span = self.name_span();
-        let val = if self.attrs.nest {
-            quote_spanned!(name_span=> #cr::ExampleConfig::example_config())
+        let val = if let Some(example) = &self.attrs.example {
+            // `example` attribute takes precedence, even if it's specified on a config
+            quote!(#example)
         } else if let Some(default) = &self.attrs.default {
             default.instance(name_span)
-        } else if let Some(example) = &self.attrs.example {
-            quote!(#example)
+        } else if self.attrs.nest {
+            quote_spanned!(name_span=> #cr::ExampleConfig::example_config())
         } else {
             let msg = "example or default value required to derive `ExampleConfig`";
             return Err(syn::Error::new(name_span, msg));
@@ -40,7 +41,13 @@ impl ConfigContainer {
                 let fields = fields?;
                 quote!(Self { #(#fields,)* })
             }
-            ConfigContainerFields::Enum { .. } => todo!(),
+            ConfigContainerFields::Enum { .. } => {
+                let mut msg = "Deriving `ExampleConfig` for enum configs isn't supported yet; implement `ExampleConfig` manually".to_owned();
+                if self.attrs.derive_default {
+                    msg += " (e.g., by delegating to `Default::default()`)";
+                }
+                return Err(syn::Error::new(name.span(), msg));
+            }
         };
 
         Ok(quote! {
