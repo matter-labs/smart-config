@@ -16,16 +16,16 @@ use smart_config::{
     metadata::{SizeUnit, TimeUnit},
     validation::NotEmpty,
     value::SecretString,
-    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
-    Prefixed, Yaml,
+    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
+    ExampleConfig, Json, Prefixed, Yaml,
 };
 use smart_config_commands::{ParamRef, Printer};
 
 /// Configuration with type params of several types.
-#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
 pub struct TestConfig {
     /// Port to bind to.
-    #[config(default_t = 8080, alias = "bind_to")]
+    #[config(example = 8080, alias = "bind_to")]
     pub port: u16,
     /// Application name.
     #[config(default_t = "app".into(), validate(NotEmpty))]
@@ -96,7 +96,7 @@ impl fmt::Debug for SecretKey {
     }
 }
 
-#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(validate(
     Self::validate_address,
     "`address` should be non-zero for non-zero `balance`"
@@ -109,9 +109,11 @@ pub struct FundingConfig {
     #[config(default)]
     pub balance: U256,
     /// Secret string value.
+    #[config(example = Some("correct horse battery staple".into()))]
     pub api_key: Option<SecretString>,
     /// Secret key.
     #[config(secret, with = de::Optional(de::Serde![str]))]
+    #[config(example = Some(SecretKey(H256::zero())))]
     pub secret_key: Option<SecretKey>,
 }
 
@@ -122,7 +124,7 @@ impl FundingConfig {
 }
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
-#[config(tag = "type", rename_all = "snake_case")]
+#[config(derive(Default), tag = "type", rename_all = "snake_case")]
 pub enum ObjectStoreConfig {
     /// Stores object locally as files.
     #[config(default)]

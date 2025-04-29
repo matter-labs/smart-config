@@ -316,6 +316,11 @@ pub use smart_config_derive::DescribeConfig;
 /// This macro is intended to be used together with [`DescribeConfig`](macro@DescribeConfig). It reuses
 /// the same attributes, so see `DescribeConfig` docs for details and examples of usage.
 pub use smart_config_derive::DeserializeConfig;
+/// Derives the [`ExampleConfig`](trait@ExampleConfig) trait for a type.
+///
+/// This macro is intended to be used together with [`DescribeConfig`](macro@DescribeConfig). It reuses
+/// the same attributes, so see `DescribeConfig` docs for details and examples of usage.
+pub use smart_config_derive::ExampleConfig;
 
 pub use self::{
     de::DeserializeConfig,
@@ -348,6 +353,23 @@ pub mod visit;
 pub trait DescribeConfig: 'static + VisitConfig {
     /// Provides the config description.
     const DESCRIPTION: ConfigMetadata;
+}
+
+#[allow(missing_docs)] // FIXME
+pub trait ExampleConfig {
+    fn example_config() -> Self;
+}
+
+impl<T: Default + DescribeConfig> ExampleConfig for T {
+    fn example_config() -> Self {
+        Self::default()
+    }
+}
+
+impl<T: ExampleConfig> ExampleConfig for Option<T> {
+    fn example_config() -> Self {
+        Some(T::example_config())
+    }
 }
 
 #[cfg(doctest)]

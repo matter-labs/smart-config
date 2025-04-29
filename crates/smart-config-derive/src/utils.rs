@@ -159,6 +159,7 @@ pub(crate) struct ConfigFieldAttrs {
 }
 
 impl ConfigFieldAttrs {
+    #[allow(clippy::too_many_lines)]
     fn new(attrs: &[Attribute], is_option: bool) -> syn::Result<Self> {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
