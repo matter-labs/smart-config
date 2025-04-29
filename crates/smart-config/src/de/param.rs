@@ -63,7 +63,10 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin>;
 
-    /// FIXME
+    /// Serializes the provided parameter to the JSON model.
+    ///
+    /// Serialization is considered infallible (`serde_json` serialization may fail on recursive or very deeply nested data types;
+    /// please don't use such data types for config params).
     fn serialize_param(&self, param: &T) -> serde_json::Value;
 }
 
