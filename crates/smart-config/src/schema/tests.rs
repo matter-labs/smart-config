@@ -54,10 +54,7 @@ fn getting_config_metadata() {
     assert_eq!(str_metadata.aliases, ["string"]);
     assert_eq!(str_metadata.help, "String value.");
     assert_eq!(str_metadata.rust_type.name_in_code(), "String");
-    assert_eq!(
-        format!("{:?}", str_metadata.default_value().unwrap()),
-        "\"default\""
-    );
+    assert_eq!(str_metadata.default_value_json().unwrap(), "default");
 
     let optional_metadata = &metadata.params[1];
     assert_eq!(optional_metadata.name, "optional");

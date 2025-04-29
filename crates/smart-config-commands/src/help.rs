@@ -170,10 +170,9 @@ impl ParamRef<'_> {
             self.write_tag_variant(tag_variant, writer)?;
         }
 
-        if let Some(default) = self.param.default_value() {
+        if let Some(default) = self.param.default_value_json() {
             write!(writer, "{INDENT}{FIELD}Default{FIELD:#}: ")?;
-            let default_json = self.param.deserializer.serialize_param(default.as_ref());
-            write_json_value(writer, &default_json, 2)?;
+            write_json_value(writer, &default, 2)?;
             writeln!(writer)?;
         }
         if let Some(fallback) = self.param.fallback {

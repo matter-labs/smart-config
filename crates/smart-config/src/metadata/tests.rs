@@ -37,8 +37,12 @@ fn describing_enum_config() {
         .iter()
         .find(|param| param.name == "set")
         .unwrap();
-    let set_param_default = format!("{:?}", set_param.default_value().unwrap());
-    assert!(set_param_default == "{42, 23}" || set_param_default == "{23, 42}");
+    let set_param_default = set_param.default_value_json().unwrap();
+    assert!(
+        set_param_default == serde_json::json!([42, 23])
+            || set_param_default == serde_json::json!([23, 42]),
+        "{set_param_default:?}"
+    );
     assert_eq!(set_param.tag_variant.unwrap().name, "WithFields");
 
     let tag = metadata.tag.unwrap();
@@ -76,8 +80,7 @@ fn deserializing_config_using_deserializer() {
 fn describing_defaulting_enum_config() {
     let metadata = &DefaultingEnumConfig::DESCRIPTION;
     let tag = metadata.tag.unwrap();
-    let default = format!("{:?}", tag.param.default_value().unwrap());
-    assert_eq!(default, "\"Second\"");
+    assert_eq!(tag.param.default_value_json().unwrap(), "Second");
     assert_eq!(tag.default_variant.unwrap().name, "Second");
 }
 

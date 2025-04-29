@@ -96,6 +96,12 @@ impl ParamMetadata {
         self.default_value.map(|value_fn| value_fn())
     }
 
+    /// Returns the default value for the param serialized into JSON.
+    pub fn default_value_json(&self) -> Option<serde_json::Value> {
+        self.default_value()
+            .map(|val| self.deserializer.serialize_param(val.as_ref()))
+    }
+
     /// Returns the type description for this param as provided by its deserializer.
     // TODO: can be cached if necessary
     pub fn type_description(&self) -> TypeDescription {
