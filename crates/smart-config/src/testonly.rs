@@ -1,9 +1,8 @@
 //! Test-only functionality shared among multiple test modules.
 
 use std::{
-    any::Any,
     collections::{HashMap, HashSet},
-    fmt, mem,
+    fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     num::NonZeroUsize,
     path::PathBuf,
@@ -21,13 +20,13 @@ use crate::{
     de::{self, DeserializeContext, DeserializeParam, DeserializerOptions, Serde, WellKnown},
     fallback,
     fallback::FallbackSource,
-    metadata::{BasicTypes, ConfigMetadata, ParamMetadata, SizeUnit, TimeUnit},
+    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit},
     testing,
     validation::NotEmpty,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    visit::{ConfigVisitor, VisitConfig},
-    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin, Json,
-    ParseErrors,
+    visit::serialize_to_json,
+    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
+    ExampleConfig, Json, ParseErrors,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -71,10 +70,10 @@ pub(crate) struct ValueCoercingConfig {
     pub repeated: Vec<TestParam>,
 }
 
-#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(crate = crate)]
 pub(crate) struct NestedConfig {
-    #[config(rename = "renamed", alias = "enum")]
+    #[config(rename = "renamed", alias = "enum", example = SimpleEnum::First)]
     pub simple_enum: SimpleEnum,
     #[config(default_t = 42)]
     pub other_int: u32,
@@ -135,7 +134,7 @@ pub(crate) enum RenamedEnumConfig {
     },
 }
 
-#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(crate = crate)]
 pub(crate) struct CompoundConfig {
     #[config(nest)]
@@ -424,56 +423,6 @@ pub(crate) fn extract_env_var_name(source: &ValueOrigin) -> &str {
     path
 }
 
-pub(crate) fn serialize_to_json<C: DeserializeConfig>(
-    config: &C,
-) -> serde_json::Map<String, serde_json::Value> {
-    struct SerializingVisitor {
-        metadata: &'static ConfigMetadata,
-        json: serde_json::Map<String, serde_json::Value>,
-    }
-
-    impl ConfigVisitor for SerializingVisitor {
-        fn visit_tag(&mut self, variant_index: usize) {
-            let tag = self.metadata.tag.unwrap();
-            let tag_name = tag.param.name;
-            let tag_value = tag.variants[variant_index].name;
-            self.json.insert(tag_name.to_owned(), tag_value.into());
-        }
-
-        fn visit_param(&mut self, param_index: usize, value: &dyn Any) {
-            let param = &self.metadata.params[param_index];
-            let value = param.deserializer.serialize_param(value);
-            self.json.insert(param.name.to_owned(), value);
-        }
-
-        fn visit_nested_config(&mut self, config_index: usize, config: &dyn VisitConfig) {
-            let nested_metadata = &self.metadata.nested_configs[config_index];
-            let prev_metadata = mem::replace(&mut self.metadata, nested_metadata.meta);
-
-            if nested_metadata.name.is_empty() {
-                config.visit_config(self);
-            } else {
-                let mut prev_json = mem::take(&mut self.json);
-                config.visit_config(self);
-                prev_json.insert(
-                    nested_metadata.name.to_owned(),
-                    mem::take(&mut self.json).into(),
-                );
-                self.json = prev_json;
-            }
-
-            self.metadata = prev_metadata;
-        }
-    }
-
-    let mut visitor = SerializingVisitor {
-        metadata: &C::DESCRIPTION,
-        json: serde_json::Map::default(),
-    };
-    config.visit_config(&mut visitor);
-    visitor.json
-}
-
 pub(crate) fn test_config_roundtrip<C>(config: &C) -> serde_json::Map<String, serde_json::Value>
 where
     C: DeserializeConfig + PartialEq + fmt::Debug,
@@ -497,5 +446,62 @@ mod tests {
 
         let config = DefaultingEnumConfig::default();
         assert_eq!(config, DefaultingEnumConfig::Second { int: 123 });
+    }
+
+    #[test]
+    fn example_for_simple_config() {
+        let example_json = serialize_to_json(&NestedConfig::example_config());
+        assert_eq!(
+            serde_json::Value::from(example_json),
+            serde_json::json!({
+                "map": {},
+                "other_int": 42,
+                "renamed": "first",
+            })
+        );
+    }
+
+    #[test]
+    fn example_for_compound_config() {
+        let example_json = serialize_to_json(&CompoundConfig::example_config());
+        let expected_nested_json = serde_json::json!({
+            "map": {},
+            "other_int": 42,
+            "renamed": "first",
+        });
+        assert_eq!(
+            serde_json::Value::from(example_json),
+            serde_json::json!({
+                "default": &expected_nested_json,
+                "nested": &expected_nested_json,
+                "nested_opt": &expected_nested_json,
+                "map": {},
+                "other_int": 42,
+                "renamed": "first",
+            })
+        );
+    }
+
+    #[test]
+    fn serializing_enum_config() {
+        let config = RenamedEnumConfig::V0;
+        assert_eq!(
+            serde_json::Value::from(serialize_to_json(&config)),
+            serde_json::json!({ "version": "v0" })
+        );
+
+        let config = RenamedEnumConfig::V1 { int: 23 };
+        assert_eq!(
+            serde_json::Value::from(serialize_to_json(&config)),
+            serde_json::json!({ "version": "v1", "int": 23 })
+        );
+
+        let config = RenamedEnumConfig::V2 {
+            str: "??".to_owned(),
+        };
+        assert_eq!(
+            serde_json::Value::from(serialize_to_json(&config)),
+            serde_json::json!({ "version": "v2", "str": "??" })
+        );
     }
 }

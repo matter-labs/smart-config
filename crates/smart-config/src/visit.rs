@@ -1,6 +1,8 @@
 //! Visitor pattern for configs.
 
-use std::any;
+use std::{any, any::Any, mem};
+
+use crate::{metadata::ConfigMetadata, DescribeConfig};
 
 /// Visitor of configuration parameters in a particular configuration.
 #[doc(hidden)] // API is not stable yet
@@ -20,7 +22,7 @@ pub trait ConfigVisitor {
 
 /// Configuration that can be visited (e.g., to inspect its parameters in a generic way).
 ///
-/// This is a supertrait for [`DescribeConfig`](crate::DescribeConfig) that is automatically derived
+/// This is a supertrait for [`DescribeConfig`] that is automatically derived
 /// via [`derive(DescribeConfig)`](macro@crate::DescribeConfig).
 pub trait VisitConfig {
     /// Performs the visit.
@@ -33,6 +35,57 @@ impl<C: VisitConfig> VisitConfig for Option<C> {
             config.visit_config(visitor);
         }
     }
+}
+
+/// Serializes a config to JSON, recursively visiting its nested configs.
+pub fn serialize_to_json<C: DescribeConfig>(
+    config: &C,
+) -> serde_json::Map<String, serde_json::Value> {
+    struct SerializingVisitor {
+        metadata: &'static ConfigMetadata,
+        json: serde_json::Map<String, serde_json::Value>,
+    }
+
+    impl ConfigVisitor for SerializingVisitor {
+        fn visit_tag(&mut self, variant_index: usize) {
+            let tag = self.metadata.tag.unwrap();
+            let tag_name = tag.param.name;
+            let tag_value = tag.variants[variant_index].name;
+            self.json.insert(tag_name.to_owned(), tag_value.into());
+        }
+
+        fn visit_param(&mut self, param_index: usize, value: &dyn Any) {
+            let param = &self.metadata.params[param_index];
+            let value = param.deserializer.serialize_param(value);
+            self.json.insert(param.name.to_owned(), value);
+        }
+
+        fn visit_nested_config(&mut self, config_index: usize, config: &dyn VisitConfig) {
+            let nested_metadata = &self.metadata.nested_configs[config_index];
+            let prev_metadata = mem::replace(&mut self.metadata, nested_metadata.meta);
+
+            if nested_metadata.name.is_empty() {
+                config.visit_config(self);
+            } else {
+                let mut prev_json = mem::take(&mut self.json);
+                config.visit_config(self);
+                prev_json.insert(
+                    nested_metadata.name.to_owned(),
+                    mem::take(&mut self.json).into(),
+                );
+                self.json = prev_json;
+            }
+
+            self.metadata = prev_metadata;
+        }
+    }
+
+    let mut visitor = SerializingVisitor {
+        metadata: &C::DESCRIPTION,
+        json: serde_json::Map::default(),
+    };
+    config.visit_config(&mut visitor);
+    visitor.json
 }
 
 #[cfg(test)]

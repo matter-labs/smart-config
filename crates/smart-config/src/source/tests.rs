@@ -13,13 +13,13 @@ use crate::{
     testing,
     testing::MockEnvGuard,
     testonly::{
-        extract_env_var_name, extract_json_name, serialize_to_json, test_config_roundtrip,
-        test_deserialize, AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes,
-        ConfigWithFallbacks, ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations,
-        DefaultingConfig, EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum,
-        ValueCoercingConfig,
+        extract_env_var_name, extract_json_name, test_config_roundtrip, test_deserialize,
+        AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks,
+        ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations, DefaultingConfig,
+        EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
     },
     value::StrValue,
+    visit::serialize_to_json,
     ByteSize, DescribeConfig,
 };
 

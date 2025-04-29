@@ -16,6 +16,7 @@ use smart_config::{
     metadata::{SizeUnit, TimeUnit},
     validation::NotEmpty,
     value::SecretString,
+    visit::serialize_to_json,
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
     ExampleConfig, Json, Prefixed, Yaml,
 };
@@ -250,6 +251,8 @@ enum Cli {
         /// Filter for param paths.
         filter: Option<String>,
     },
+    /// Serializes example config.
+    Example,
 }
 
 const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
@@ -282,6 +285,20 @@ fn main() {
                 );
                 process::exit(1);
             }
+        }
+        Cli::Example => {
+            let example = TestConfig::example_config();
+            let json = serde_json::Value::from(serialize_to_json(&example));
+            println!("{json:#}");
+
+            // Check that the example config can be deserialized from the produced JSON.
+            let serde_json::Value::Object(json) = json else {
+                unreachable!();
+            };
+            let json = Json::new("test.json", json);
+            let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "");
+            let repo = ConfigRepository::new(&schema).with(json);
+            repo.single::<TestConfig>().unwrap().parse().unwrap();
         }
     }
 }
