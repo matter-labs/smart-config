@@ -72,13 +72,20 @@ impl WellKnown for SecretString {
 ///
 /// ```
 /// use secrecy::{ExposeSecret, ExposeSecretMut, SecretBox};
-/// use serde::{Deserialize, Deserializer};
+/// use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// use smart_config::{de::Serde, testing, DescribeConfig, DeserializeConfig};
 ///
 /// // It is generally a good idea to wrap a secret into a `SecretBox`
 /// // so that it is zeroized on drop and has an opaque `Debug` representation.
 /// #[derive(Debug)]
 /// struct NumSecret(SecretBox<u64>);
+///
+/// impl Serialize for NumSecret {
+///     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+///         // Serialize the underlying secret
+///         self.0.expose_secret().serialize(serializer)
+///     }
+/// }
 ///
 /// impl<'de> serde::Deserialize<'de> for NumSecret {
 ///     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {

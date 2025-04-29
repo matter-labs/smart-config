@@ -57,12 +57,12 @@ smart-config = "0.1.0"
 
 ```rust
 use std::{collections::{HashMap, HashSet}, path::PathBuf, time::Duration};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use smart_config::{
     de::{Optional, Serde}, metadata::*, ByteSize, DescribeConfig, DeserializeConfig,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 enum CustomEnum {
     First,
     Second,

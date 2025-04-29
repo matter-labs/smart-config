@@ -397,10 +397,10 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
 /// ```
 /// # use std::{collections::HashSet, str::FromStr};
 /// use anyhow::Context as _;
-/// # use serde::Deserialize;
+/// # use serde::{Deserialize, Serialize};
 /// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
 ///
-/// #[derive(Debug, Deserialize)]
+/// #[derive(Debug, Serialize, Deserialize)]
 /// #[serde(transparent)]
 /// struct MySet(HashSet<u64>);
 ///

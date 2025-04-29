@@ -52,11 +52,18 @@ macro_rules! _basic_types {
 /// # Examples
 ///
 /// ```
-/// # use serde::{Deserialize, Deserializer};
+/// # use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// # use smart_config::{de::Serde, DescribeConfig, DeserializeConfig};
 /// #[derive(Debug)]
 /// struct ComplexType {
 ///     // ...
+/// }
+///
+/// impl Serialize for ComplexType {
+///     // Complex serialization logic...
+/// # fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+/// #     unreachable!()
+/// # }
 /// }
 ///
 /// impl<'de> Deserialize<'de> for ComplexType {
