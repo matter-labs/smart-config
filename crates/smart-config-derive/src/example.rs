@@ -19,6 +19,8 @@ impl ConfigField {
             default.instance(name_span)
         } else if self.attrs.nest {
             quote_spanned!(name_span=> #cr::ExampleConfig::example_config())
+        } else if Self::is_option(&self.ty) {
+            quote_spanned!(name_span=> ::core::option::Option::None)
         } else {
             let msg = "example or default value required to derive `ExampleConfig`";
             return Err(syn::Error::new(name_span, msg));
