@@ -85,14 +85,14 @@ pub struct ParamMetadata {
     #[doc(hidden)] // implementation detail
     pub deserializer: &'static dyn ErasedDeserializer,
     #[doc(hidden)] // implementation detail
-    pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
+    pub default_value: Option<fn() -> Box<dyn any::Any>>,
     #[doc(hidden)]
     pub fallback: Option<&'static dyn FallbackSource>,
 }
 
 impl ParamMetadata {
     /// Returns the default value for the param.
-    pub fn default_value(&self) -> Option<impl fmt::Debug + '_> {
+    pub fn default_value(&self) -> Option<Box<dyn any::Any>> {
         self.default_value.map(|value_fn| value_fn())
     }
 

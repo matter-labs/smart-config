@@ -8,12 +8,15 @@ use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
     metadata::ConfigMetadata,
-    value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
+    value::{FileFormat, ValueOrigin, WithOrigin},
     visit::{ConfigVisitor, VisitConfig},
     ConfigRepository, ParseError,
 };
 
-use crate::{ParamRef, Printer, CONFIG_PATH, STRING};
+use crate::{
+    utils::{write_json_value, write_value, STRING},
+    ParamRef, Printer, CONFIG_PATH,
+};
 
 const SECTION: Style = Style::new().bold();
 const ARROW: Style = Style::new().bold();
@@ -32,14 +35,6 @@ const ERROR_LABEL: Style = Style::new()
     .bold()
     .bg_color(Some(Color::Ansi(AnsiColor::Red)))
     .fg_color(None);
-
-const NULL: Style = Style::new().bold();
-const BOOL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
-const NUMBER: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
-const SECRET: Style = Style::new()
-    .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
-    .fg_color(None);
-const OBJECT_KEY: Style = Style::new().bold();
 
 #[derive(Debug)]
 struct ParamValuesVisitor {
@@ -327,65 +322,6 @@ fn write_param(
         writeln!(writer)?;
     }
     Ok(())
-}
-
-fn write_value(writer: &mut impl io::Write, value: &WithOrigin, ident: usize) -> io::Result<()> {
-    match &value.inner {
-        Value::Null => write!(writer, "{NULL}null{NULL:#}"),
-        Value::Bool(val) => write!(writer, "{BOOL}{val:?}{BOOL:#}"),
-        Value::Number(val) => write!(writer, "{NUMBER}{val}{NUMBER:#}"),
-        Value::String(StrValue::Plain(val)) => write!(writer, "{STRING}{val:?}{STRING:#}"),
-        Value::String(StrValue::Secret(_)) => write!(writer, "{SECRET}[REDACTED]{SECRET:#}"),
-        Value::Array(val) => {
-            writeln!(writer, "[")?;
-            for item in val {
-                write!(writer, "{:ident$}  ", "")?;
-                write_value(writer, item, ident + 2)?;
-                writeln!(writer, ",")?;
-            }
-            write!(writer, "{:ident$}]", "")
-        }
-        Value::Object(val) => {
-            writeln!(writer, "{{")?;
-            for (key, value) in val {
-                write!(writer, "{:ident$}  {OBJECT_KEY}{key:?}{OBJECT_KEY:#}: ", "")?;
-                write_value(writer, value, ident + 2)?;
-                writeln!(writer, ",")?;
-            }
-            write!(writer, "{:ident$}}}", "")
-        }
-    }
-}
-
-fn write_json_value(
-    writer: &mut impl io::Write,
-    value: &serde_json::Value,
-    ident: usize,
-) -> io::Result<()> {
-    match value {
-        serde_json::Value::Null => write!(writer, "{NULL}null{NULL:#}"),
-        serde_json::Value::Bool(val) => write!(writer, "{BOOL}{val:?}{BOOL:#}"),
-        serde_json::Value::Number(val) => write!(writer, "{NUMBER}{val}{NUMBER:#}"),
-        serde_json::Value::String(val) => write!(writer, "{STRING}{val:?}{STRING:#}"),
-        serde_json::Value::Array(val) => {
-            writeln!(writer, "[")?;
-            for item in val {
-                write!(writer, "{:ident$}  ", "")?;
-                write_json_value(writer, item, ident + 2)?;
-                writeln!(writer, ",")?;
-            }
-            write!(writer, "{:ident$}]", "")
-        }
-        serde_json::Value::Object(val) => {
-            writeln!(writer, "{{")?;
-            for (key, value) in val {
-                write!(writer, "{:ident$}  {OBJECT_KEY}{key:?}{OBJECT_KEY:#}: ", "")?;
-                write_json_value(writer, value, ident + 2)?;
-                writeln!(writer, ",")?;
-            }
-            write!(writer, "{:ident$}}}", "")
-        }
-    }
 }
 
 fn write_de_errors(writer: &mut impl io::Write, errors: &[ParseError]) -> io::Result<()> {
