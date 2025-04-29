@@ -117,15 +117,15 @@ impl ConfigField {
         };
 
         let default_value = DefaultValue::boxed(self.attrs.default.as_ref(), name_span, ty);
-        let default_value = if let Some(value) = default_value {
-            quote_spanned!(name_span=> ::core::option::Option::Some(|| #value))
-        } else {
-            quote_spanned!(name_span=> ::core::option::Option::None)
-        };
+        let default_value = wrap_in_option(default_value.map(|val| quote!(|| #val)));
+        let example_value = self.attrs.example.as_ref().map(
+            |example| quote_spanned!(example.span()=> || ::std::boxed::Box::<#ty>::new(#example)),
+        );
+        let example_value = wrap_in_option(example_value);
 
         let fallback = self
             .attrs
-            .alt
+            .fallback
             .as_ref()
             .map(quote::ToTokens::to_token_stream);
         let fallback = wrap_in_option(fallback);
@@ -147,6 +147,7 @@ impl ConfigField {
                 tag_variant: #tag_variant,
                 deserializer: &#cr::de::_private::Erased::<#ty, _>::new(deserializer),
                 default_value: #default_value,
+                example_value: #example_value,
                 fallback: #fallback,
             }
         }}

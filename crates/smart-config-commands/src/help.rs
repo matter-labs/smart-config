@@ -174,7 +174,12 @@ impl ParamRef<'_> {
             write!(writer, "{INDENT}{FIELD}Default{FIELD:#}: ")?;
             write_json_value(writer, &default, 2)?;
             writeln!(writer)?;
+        } else if let Some(example) = self.param.example_value_json() {
+            write!(writer, "{INDENT}{FIELD}Example{FIELD:#}: ")?;
+            write_json_value(writer, &example, 2)?;
+            writeln!(writer)?;
         }
+
         if let Some(fallback) = self.param.fallback {
             write!(writer, "{INDENT}{FIELD}Fallbacks{FIELD:#}: ")?;
             let fallback = fallback.to_string();

@@ -51,6 +51,7 @@ pub struct TestConfig {
     #[config(nest, alias = "funds")]
     pub funding: Option<FundingConfig>,
     /// Required param.
+    #[config(example = 42)]
     pub required: u64,
     #[config(nest)]
     pub object_store: ObjectStoreConfig,

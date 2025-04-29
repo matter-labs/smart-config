@@ -149,7 +149,8 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
     pub(crate) default: Option<DefaultValue>,
-    pub(crate) alt: Option<Expr>,
+    pub(crate) example: Option<Expr>,
+    pub(crate) fallback: Option<Expr>,
     pub(crate) flatten: bool,
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
@@ -164,6 +165,7 @@ impl ConfigFieldAttrs {
         let mut rename = None;
         let mut aliases = vec![];
         let mut default = None;
+        let mut example = None;
         let mut fallback = None;
         let mut nested_span = None;
         let mut flatten_span = None;
@@ -187,6 +189,9 @@ impl ConfigFieldAttrs {
                     Ok(())
                 } else if meta.path.is_ident("default_t") {
                     default = Some(DefaultValue::Expr(meta.value()?.parse()?));
+                    Ok(())
+                } else if meta.path.is_ident("example") {
+                    example = Some(meta.value()?.parse::<Expr>()?);
                     Ok(())
                 } else if meta.path.is_ident("fallback") {
                     fallback = Some(meta.value()?.parse::<Expr>()?);
@@ -246,11 +251,21 @@ impl ConfigFieldAttrs {
             return Err(syn::Error::new(secret_span, msg));
         }
 
+        if let (Some(example), Some(_)) = (&example, &default) {
+            let msg = "Specifying `example` is redundant for params having default values";
+            return Err(syn::Error::new(example.span(), msg));
+        }
+        if let (Some(example), true) = (&example, nest) {
+            let msg = "Specifying `example` only works for params, not nested / flattened configs";
+            return Err(syn::Error::new(example.span(), msg));
+        }
+
         Ok(Self {
             rename,
             aliases,
             default,
-            alt: fallback,
+            example,
+            fallback,
             flatten,
             nest,
             with,
