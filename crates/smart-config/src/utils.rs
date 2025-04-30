@@ -1,5 +1,7 @@
 #![allow(clippy::enum_variant_names)]
 
+use crate::metadata::ConfigMetadata;
+
 /// Const-compatible array / string comparison.
 pub(crate) const fn const_eq(lhs: &[u8], rhs: &[u8]) -> bool {
     if lhs.len() != rhs.len() {
@@ -181,6 +183,49 @@ impl<'a> EnumVariant<'a> {
             }
         }
         None
+    }
+}
+
+pub(crate) type JsonObject = serde_json::Map<String, serde_json::Value>;
+
+pub(crate) fn merge_json(
+    mut target: &mut JsonObject,
+    metadata: &ConfigMetadata,
+    path: &str,
+    value: JsonObject,
+) {
+    for segment in path.split('.') {
+        if !target.contains_key(segment) {
+            target.insert(segment.to_owned(), serde_json::Map::new().into());
+        }
+
+        // `unwrap()` is safe due to the check above.
+        let child = target.get_mut(segment).unwrap();
+        target = child.as_object_mut().unwrap_or_else(|| {
+            panic!(
+                "Internal error: Attempted to merge {config_name} at '{path}', which is not an object",
+                config_name = metadata.ty.name_in_code()
+            )
+        });
+    }
+    deep_merge(target, value);
+}
+
+fn deep_merge(dest: &mut JsonObject, src: JsonObject) {
+    for (key, value) in src {
+        if let Some(existing) = dest.get_mut(&key) {
+            if let Some(existing_map) = existing.as_object_mut() {
+                if let serde_json::Value::Object(value) = value {
+                    deep_merge(existing_map, value);
+                } else {
+                    *existing = value;
+                }
+            } else {
+                *existing = value;
+            }
+        } else {
+            dest.insert(key, value);
+        }
     }
 }
 

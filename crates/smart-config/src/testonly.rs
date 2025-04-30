@@ -24,7 +24,7 @@ use crate::{
     testing,
     validation::NotEmpty,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    visit::serialize_to_json,
+    visit::Serializer,
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
     ExampleConfig, Json, ParseErrors,
 };
@@ -431,7 +431,7 @@ pub(crate) fn test_config_roundtrip<C>(config: &C) -> serde_json::Map<String, se
 where
     C: DeserializeConfig + PartialEq + fmt::Debug,
 {
-    let json = serialize_to_json(config);
+    let json = Serializer::json(config);
     let config_copy: C = testing::test(Json::new("test.json", json.clone())).unwrap();
     assert_eq!(config_copy, *config);
     json
@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     fn example_for_simple_config() {
-        let example_json = serialize_to_json(&NestedConfig::example_config());
+        let example_json = Serializer::json(&NestedConfig::example_config());
         assert_eq!(
             serde_json::Value::from(example_json),
             serde_json::json!({
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn example_for_compound_config() {
-        let example_json = serialize_to_json(&CompoundConfig::example_config());
+        let example_json = Serializer::json(&CompoundConfig::example_config());
         let expected_nested_json = serde_json::json!({
             "map": { "var": 42 },
             "other_int": 42,
@@ -494,13 +494,13 @@ mod tests {
     fn serializing_enum_config() {
         let config = RenamedEnumConfig::V0;
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config)),
+            serde_json::Value::from(Serializer::json(&config)),
             serde_json::json!({ "version": "v0" })
         );
 
         let config = RenamedEnumConfig::V1 { int: 23 };
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config)),
+            serde_json::Value::from(Serializer::json(&config)),
             serde_json::json!({ "version": "v1", "int": 23 })
         );
 
@@ -508,7 +508,7 @@ mod tests {
             str: "??".to_owned(),
         };
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config)),
+            serde_json::Value::from(Serializer::json(&config)),
             serde_json::json!({ "version": "v2", "str": "??" })
         );
     }

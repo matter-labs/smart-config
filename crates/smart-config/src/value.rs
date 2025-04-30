@@ -2,8 +2,7 @@
 
 use std::{collections::HashMap, fmt, iter, mem, sync::Arc};
 
-use secrecy::ExposeSecret;
-pub use secrecy::SecretString;
+pub use secrecy::{ExposeSecret, SecretString};
 
 use crate::metadata::BasicTypes;
 
