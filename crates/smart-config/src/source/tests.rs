@@ -649,7 +649,8 @@ fn parsing_complex_param() {
     assert_eq!(config.param.repeated, HashSet::from([SimpleEnum::First]));
     assert_eq!(config.set, HashSet::from([1, 2, 3]));
 
-    let json = serialize_to_json(&config);
+    let json = serialize_to_json(&config, false);
+    assert!(json.contains_key("repeated"), "{json:?}");
     assert_eq!(
         json["param"],
         serde_json::json!({
@@ -662,8 +663,13 @@ fn parsing_complex_param() {
         })
     );
 
-    let config_copy: ValueCoercingConfig = testing::test(Json::new("test.json", json)).unwrap();
+    let config_copy: ValueCoercingConfig =
+        testing::test(Json::new("test.json", json.clone())).unwrap();
     assert_eq!(config_copy, config);
+
+    let json_diff = serialize_to_json(&config, true);
+    assert!(!json_diff.contains_key("repeated"), "{json_diff:?}");
+    assert_eq!(json_diff["param"], json["param"]);
 
     let env = Environment::from_iter(
         "",

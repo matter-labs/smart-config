@@ -289,6 +289,9 @@ enum Cli {
         /// Use example config instead of parsing sources.
         #[arg(long)]
         example: bool,
+        /// Do not output default param values.
+        #[arg(long)]
+        diff: bool,
         /// Serialization format.
         #[arg(long, value_enum, default_value_t = SerializationFormat::Yaml)]
         format: SerializationFormat,
@@ -332,16 +335,20 @@ fn main() {
                 process::exit(1);
             }
         }
-        Cli::Serialize { example, format } => {
+        Cli::Serialize {
+            example,
+            diff,
+            format,
+        } => {
             let (json, original_config) = if example {
                 let example_config = TestConfig::example_config();
-                let json = serialize_to_json(&example_config);
+                let json = serialize_to_json(&example_config, diff);
                 // Need to wrap the serialized value with the 'test' prefix so that it corresponds to the schema.
                 (serde_json::json!({ "test": json }), example_config)
             } else {
                 let repo = create_mock_repo(&schema, false);
                 let original_config: TestConfig = repo.single().unwrap().parse().unwrap();
-                (repo.canonicalize().unwrap().into(), original_config)
+                (repo.canonicalize(diff).unwrap().into(), original_config)
             };
 
             let mut buffer = vec![];

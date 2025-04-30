@@ -431,7 +431,13 @@ pub(crate) fn test_config_roundtrip<C>(config: &C) -> serde_json::Map<String, se
 where
     C: DeserializeConfig + PartialEq + fmt::Debug,
 {
-    let json = serialize_to_json(config);
+    println!("diff_with_default = true");
+    let json = serialize_to_json(config, true);
+    let config_copy: C = testing::test(Json::new("test.json", json.clone())).unwrap();
+    assert_eq!(config_copy, *config);
+
+    println!("diff_with_default = false");
+    let json = serialize_to_json(config, false);
     let config_copy: C = testing::test(Json::new("test.json", json.clone())).unwrap();
     assert_eq!(config_copy, *config);
     json
@@ -454,7 +460,7 @@ mod tests {
 
     #[test]
     fn example_for_simple_config() {
-        let example_json = serialize_to_json(&NestedConfig::example_config());
+        let example_json = serialize_to_json(&NestedConfig::example_config(), false);
         assert_eq!(
             serde_json::Value::from(example_json),
             serde_json::json!({
@@ -463,11 +469,20 @@ mod tests {
                 "renamed": "first",
             })
         );
+
+        let example_json = serialize_to_json(&NestedConfig::example_config(), true);
+        assert_eq!(
+            serde_json::Value::from(example_json),
+            serde_json::json!({
+                "map": { "var": 42 },
+                "renamed": "first",
+            })
+        );
     }
 
     #[test]
     fn example_for_compound_config() {
-        let example_json = serialize_to_json(&CompoundConfig::example_config());
+        let example_json = serialize_to_json(&CompoundConfig::example_config(), false);
         let expected_nested_json = serde_json::json!({
             "map": { "var": 42 },
             "other_int": 42,
@@ -488,19 +503,48 @@ mod tests {
                 "renamed": "second",
             })
         );
+
+        let config = CompoundConfig {
+            nested_opt: None,
+            ..CompoundConfig::example_config()
+        };
+        let example_json = serialize_to_json(&config, true);
+        assert_eq!(
+            serde_json::Value::from(example_json),
+            serde_json::json!({
+                "nested": {
+                    "map": { "var": 42 },
+                    "renamed": "first",
+                },
+                "default": {
+                    "other_int": 23,
+                    "renamed": "first",
+                },
+                "map": { "var": 42 },
+                "renamed": "second",
+            })
+        );
     }
 
     #[test]
     fn serializing_enum_config() {
         let config = RenamedEnumConfig::V0;
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config)),
+            serde_json::Value::from(serialize_to_json(&config, false)),
+            serde_json::json!({ "version": "v0" })
+        );
+        assert_eq!(
+            serde_json::Value::from(serialize_to_json(&config, true)),
             serde_json::json!({ "version": "v0" })
         );
 
         let config = RenamedEnumConfig::V1 { int: 23 };
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config)),
+            serde_json::Value::from(serialize_to_json(&config, false)),
+            serde_json::json!({ "version": "v1", "int": 23 })
+        );
+        assert_eq!(
+            serde_json::Value::from(serialize_to_json(&config, true)),
             serde_json::json!({ "version": "v1", "int": 23 })
         );
 
@@ -508,8 +552,12 @@ mod tests {
             str: "??".to_owned(),
         };
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config)),
+            serde_json::Value::from(serialize_to_json(&config, false)),
             serde_json::json!({ "version": "v2", "str": "??" })
+        );
+        assert_eq!(
+            serde_json::Value::from(serialize_to_json(&config, true)),
+            serde_json::json!({ "str": "??" })
         );
     }
 }

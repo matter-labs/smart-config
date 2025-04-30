@@ -283,7 +283,7 @@ impl<'a> ConfigRepository<'a> {
     ///
     /// If parsing any of the config fails, returns parsing errors early (i.e., errors are **not** exhaustive).
     #[doc(hidden)] // not stable yet
-    pub fn canonicalize(&self) -> Result<JsonObject, ParseErrors> {
+    pub fn canonicalize(&self, diff_with_default: bool) -> Result<JsonObject, ParseErrors> {
         let mut json = serde_json::Map::new();
         for config_parser in self.iter() {
             if !config_parser.config().is_top_level() {
@@ -294,7 +294,7 @@ impl<'a> ConfigRepository<'a> {
             let parsed = config_parser.parse()?;
             let metadata = config_parser.config().metadata();
             let visitor_fn = metadata.visitor;
-            let mut visitor = visit::Serializer::new(metadata);
+            let mut visitor = visit::Serializer::new(metadata, diff_with_default);
             visitor_fn(parsed.as_ref(), &mut visitor);
             merge_json(
                 &mut json,
