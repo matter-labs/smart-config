@@ -42,7 +42,7 @@ pub struct TestConfig {
     #[config(default_t = Duration::from_secs(60), with = TimeUnit::Seconds)]
     pub timeout_sec: Duration,
     /// In-memory cache size.
-    #[config(default_t = ByteSize::new(16, SizeUnit::MiB))]
+    #[config(default_t = 16 * SizeUnit::MiB)]
     pub cache_size: ByteSize,
     #[config(nest)]
     pub nested: NestedConfig,
