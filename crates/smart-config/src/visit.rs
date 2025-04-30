@@ -2,7 +2,7 @@
 
 use std::{any, any::Any, mem};
 
-use crate::{metadata::ConfigMetadata, utils::JsonObject};
+use crate::{metadata::ConfigMetadata, utils::JsonObject, DescribeConfig};
 
 /// Visitor of configuration parameters in a particular configuration.
 #[doc(hidden)] // API is not stable yet
@@ -57,14 +57,6 @@ impl Serializer {
     pub(crate) fn into_inner(self) -> JsonObject {
         self.json
     }
-
-    /// Serializes a config to JSON, recursively visiting its nested configs.
-    #[cfg(test)]
-    pub(crate) fn json<C: crate::DescribeConfig>(config: &C) -> JsonObject {
-        let mut visitor = Self::new(&C::DESCRIPTION);
-        config.visit_config(&mut visitor);
-        visitor.json
-    }
 }
 
 impl ConfigVisitor for Serializer {
@@ -99,6 +91,13 @@ impl ConfigVisitor for Serializer {
 
         self.metadata = prev_metadata;
     }
+}
+
+/// Serializes a config to JSON, recursively visiting its nested configs.
+pub fn serialize_to_json<C: DescribeConfig>(config: &C) -> JsonObject {
+    let mut visitor = Serializer::new(&C::DESCRIPTION);
+    config.visit_config(&mut visitor);
+    visitor.json
 }
 
 #[cfg(test)]

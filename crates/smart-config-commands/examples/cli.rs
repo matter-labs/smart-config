@@ -16,7 +16,7 @@ use smart_config::{
     de, fallback,
     metadata::{SizeUnit, TimeUnit},
     validation::NotEmpty,
-    value::SecretString,
+    value::{ExposeSecret, SecretString},
     visit::serialize_to_json,
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
     ExampleConfig, Json, Prefixed, Yaml,
@@ -286,7 +286,9 @@ enum Cli {
     },
     /// Serializes example config.
     Serialize {
-        // FIXME: example config; diff
+        /// Use example config instead of parsing sources.
+        #[arg(long)]
+        example: bool,
         /// Serialization format.
         #[arg(long, value_enum, default_value_t = SerializationFormat::Yaml)]
         format: SerializationFormat,
@@ -330,30 +332,36 @@ fn main() {
                 process::exit(1);
             }
         }
-        Cli::Serialize { format } => {
-            let repo = create_mock_repo(&schema, false);
-            let original_config: TestConfig = repo.single().unwrap().parse().unwrap();
-            let canonical_json = repo.canonicalize().unwrap();
-            let canonical_json = serde_json::Value::from(canonical_json);
+        Cli::Serialize { example, format } => {
+            let (json, original_config) = if example {
+                let example_config = TestConfig::example_config();
+                let json = serialize_to_json(&example_config);
+                // Need to wrap the serialized value with the 'test' prefix so that it corresponds to the schema.
+                (serde_json::json!({ "test": json }), example_config)
+            } else {
+                let repo = create_mock_repo(&schema, false);
+                let original_config: TestConfig = repo.single().unwrap().parse().unwrap();
+                (repo.canonicalize().unwrap().into(), original_config)
+            };
 
             let mut buffer = vec![];
             let restored_repo = match format {
                 SerializationFormat::Json => {
-                    Printer::stderr().print_json(&canonical_json).unwrap();
+                    Printer::stderr().print_json(&json).unwrap();
 
                     // Parse the produced JSON back and check that it describes the same config.
                     Printer::custom(AutoStream::never(&mut buffer))
-                        .print_json(&canonical_json)
+                        .print_json(&json)
                         .unwrap();
                     let deserialized = serde_json::from_slice(&buffer).unwrap();
                     let source = Json::new("deserialized.json", deserialized);
                     ConfigRepository::new(&schema).with(source)
                 }
                 SerializationFormat::Yaml => {
-                    Printer::stderr().print_yaml(&canonical_json).unwrap();
+                    Printer::stderr().print_yaml(&json).unwrap();
 
                     Printer::custom(AutoStream::never(&mut buffer))
-                        .print_yaml(&canonical_json)
+                        .print_yaml(&json)
                         .unwrap();
                     let deserialized = serde_yaml::from_slice(&buffer).unwrap();
                     let source = Yaml::new("deserialized.yaml", deserialized).unwrap();
