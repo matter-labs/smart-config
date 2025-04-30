@@ -231,3 +231,14 @@ impl fmt::Display for ParseErrors {
 }
 
 impl std::error::Error for ParseErrors {}
+
+impl FromIterator<ParseError> for Result<(), ParseErrors> {
+    fn from_iter<I: IntoIterator<Item = ParseError>>(iter: I) -> Self {
+        let errors: Vec<_> = iter.into_iter().collect();
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(ParseErrors { errors })
+        }
+    }
+}

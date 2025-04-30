@@ -3,9 +3,11 @@ use std::{
     fmt,
     num::NonZeroU32,
     path::PathBuf,
+    process,
     time::Duration,
 };
 
+use anstyle::{AnsiColor, Color, Style};
 use clap::Parser;
 use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Deserializer};
@@ -252,6 +254,8 @@ enum Cli {
     },
 }
 
+const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
+
 fn main() {
     let cli = Cli::parse();
     let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
@@ -272,7 +276,14 @@ fn main() {
                     param_ref.all_paths().any(|path| path.contains(needle))
                 })
             };
-            Printer::stderr().print_debug(&repo, filter).unwrap();
+
+            let res = Printer::stderr().print_debug(&repo, filter).unwrap();
+            if let Err(err) = res {
+                anstream::eprintln!(
+                    "\n{ERROR}There were errors parsing configuration params:\n{err}{ERROR:#}"
+                );
+                process::exit(1);
+            }
         }
     }
 }
