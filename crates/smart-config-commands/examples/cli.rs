@@ -7,8 +7,9 @@ use std::{
     time::Duration,
 };
 
+use anstream::AutoStream;
 use anstyle::{AnsiColor, Color, Style};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Serialize};
 use smart_config::{
@@ -23,7 +24,7 @@ use smart_config::{
 use smart_config_commands::{ParamRef, Printer};
 
 /// Configuration with type params of several types.
-#[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 pub struct TestConfig {
     /// Port to bind to.
     #[config(example = 8080, alias = "bind_to")]
@@ -60,7 +61,7 @@ pub struct TestConfig {
     pub object_store: ObjectStoreConfig,
 }
 
-#[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(derive(Default))]
 pub struct NestedConfig {
     /// Whether to exit the application on error.
@@ -81,7 +82,7 @@ pub struct NestedConfig {
     pub method_limits: HashMap<String, NonZeroU32>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ComplexParam {
     #[serde(default)]
     pub array: Vec<u32>,
@@ -103,7 +104,7 @@ impl de::WellKnown for ComplexParam {
     const DE: Self::Deserializer = de::Serde![object];
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SecretKey(pub H256);
 
@@ -134,13 +135,23 @@ pub struct FundingConfig {
     pub secret_key: Option<SecretKey>,
 }
 
+impl PartialEq for FundingConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.address == other.address
+            && self.balance == other.balance
+            && self.api_key.as_ref().map(SecretString::expose_secret)
+                == other.api_key.as_ref().map(SecretString::expose_secret)
+            && self.secret_key == other.secret_key
+    }
+}
+
 impl FundingConfig {
     fn validate_address(&self) -> bool {
         self.balance.is_zero() || !self.address.is_zero()
     }
 }
 
-#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(derive(Default), tag = "type", rename_all = "snake_case")]
 pub enum ObjectStoreConfig {
     /// Stores object locally as files.
@@ -274,7 +285,18 @@ enum Cli {
         filter: Option<String>,
     },
     /// Serializes example config.
-    Example,
+    Serialize {
+        // FIXME: example config; diff
+        /// Serialization format.
+        #[arg(long, value_enum, default_value_t = SerializationFormat::Yaml)]
+        format: SerializationFormat,
+    },
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum SerializationFormat {
+    Json,
+    Yaml,
 }
 
 const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
@@ -308,19 +330,38 @@ fn main() {
                 process::exit(1);
             }
         }
-        Cli::Example => {
-            let example = TestConfig::example_config();
-            let json = serde_json::Value::from(serialize_to_json(&example));
-            println!("{json:#}");
+        Cli::Serialize { format } => {
+            let repo = create_mock_repo(&schema, false);
+            let original_config: TestConfig = repo.single().unwrap().parse().unwrap();
+            let canonical_json = repo.canonicalize().unwrap();
+            let canonical_json = serde_json::Value::from(canonical_json);
 
-            // Check that the example config can be deserialized from the produced JSON.
-            let serde_json::Value::Object(json) = json else {
-                unreachable!();
+            let mut buffer = vec![];
+            let restored_repo = match format {
+                SerializationFormat::Json => {
+                    Printer::stderr().print_json(&canonical_json).unwrap();
+
+                    // Parse the produced JSON back and check that it describes the same config.
+                    Printer::custom(AutoStream::never(&mut buffer))
+                        .print_json(&canonical_json)
+                        .unwrap();
+                    let deserialized = serde_json::from_slice(&buffer).unwrap();
+                    let source = Json::new("deserialized.json", deserialized);
+                    ConfigRepository::new(&schema).with(source)
+                }
+                SerializationFormat::Yaml => {
+                    Printer::stderr().print_yaml(&canonical_json).unwrap();
+
+                    Printer::custom(AutoStream::never(&mut buffer))
+                        .print_yaml(&canonical_json)
+                        .unwrap();
+                    let deserialized = serde_yaml::from_slice(&buffer).unwrap();
+                    let source = Yaml::new("deserialized.yaml", deserialized).unwrap();
+                    ConfigRepository::new(&schema).with(source)
+                }
             };
-            let json = Json::new("test.json", json);
-            let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "");
-            let repo = ConfigRepository::new(&schema).with(json);
-            repo.single::<TestConfig>().unwrap().parse().unwrap();
+            let restored_config: TestConfig = restored_repo.single().unwrap().parse().unwrap();
+            assert_eq!(original_config, restored_config);
         }
     }
 }
