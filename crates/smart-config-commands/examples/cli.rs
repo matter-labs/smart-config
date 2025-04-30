@@ -39,7 +39,7 @@ pub struct TestConfig {
     #[config(default, alias = "dirs", with = de::Delimited(":"))]
     pub dir_paths: HashSet<PathBuf>,
     /// Timeout for some operation.
-    #[config(default_t = Duration::from_secs(60), with = TimeUnit::Seconds)]
+    #[config(default_t = 1 * TimeUnit::Minutes, with = TimeUnit::Seconds)]
     pub timeout_sec: Duration,
     /// In-memory cache size.
     #[config(default_t = 16 * SizeUnit::MiB)]
