@@ -2,7 +2,7 @@
 
 use std::{any, any::Any, mem};
 
-use crate::{metadata::ConfigMetadata, utils::JsonObject, DescribeConfig};
+use crate::{metadata::ConfigMetadata, utils::JsonObject, SerializerOptions};
 
 /// Visitor of configuration parameters in a particular configuration.
 #[doc(hidden)] // API is not stable yet
@@ -42,16 +42,16 @@ impl<C: VisitConfig> VisitConfig for Option<C> {
 pub(crate) struct Serializer {
     metadata: &'static ConfigMetadata,
     json: JsonObject,
-    diff_with_default: bool,
+    options: SerializerOptions,
 }
 
 impl Serializer {
     /// Creates a serializer dynamically.
-    pub(crate) fn new(metadata: &'static ConfigMetadata, diff_with_default: bool) -> Self {
+    pub(crate) fn new(metadata: &'static ConfigMetadata, options: SerializerOptions) -> Self {
         Self {
             metadata,
             json: serde_json::Map::new(),
-            diff_with_default,
+            options,
         }
     }
 
@@ -66,7 +66,7 @@ impl ConfigVisitor for Serializer {
         let tag = self.metadata.tag.unwrap();
         let tag_variant = &tag.variants[variant_index];
 
-        let should_insert = !self.diff_with_default
+        let should_insert = !self.options.diff_with_default
             || !tag
                 .default_variant
                 .is_some_and(|default_variant| default_variant.rust_name == tag_variant.rust_name);
@@ -83,7 +83,7 @@ impl ConfigVisitor for Serializer {
         // If a parameter has a fallback, it should be inserted regardless of whether it has the default value;
         // otherwise, since fallbacks have higher priority than defaults, the parameter value may be unexpected after parsing
         // the produced JSON.
-        let should_insert = !self.diff_with_default
+        let should_insert = !self.options.diff_with_default
             || param.fallback.is_some()
             || param.default_value_json().as_ref() != Some(&value);
         if should_insert {
@@ -102,7 +102,7 @@ impl ConfigVisitor for Serializer {
             config.visit_config(self);
 
             let nested_json = mem::take(&mut self.json);
-            let should_insert = !self.diff_with_default || !nested_json.is_empty();
+            let should_insert = !self.options.diff_with_default || !nested_json.is_empty();
             if should_insert {
                 prev_json.insert(nested_metadata.name.to_owned(), nested_json.into());
             }
@@ -111,13 +111,6 @@ impl ConfigVisitor for Serializer {
 
         self.metadata = prev_metadata;
     }
-}
-
-/// Serializes a config to JSON, recursively visiting its nested configs.
-pub fn serialize_to_json<C: DescribeConfig>(config: &C, diff_with_default: bool) -> JsonObject {
-    let mut visitor = Serializer::new(&C::DESCRIPTION, diff_with_default);
-    config.visit_config(&mut visitor);
-    visitor.json
 }
 
 #[cfg(test)]

@@ -24,9 +24,8 @@ use crate::{
     testing,
     validation::NotEmpty,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    visit::serialize_to_json,
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
-    ExampleConfig, Json, ParseErrors,
+    ExampleConfig, Json, ParseErrors, SerializerOptions,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -432,12 +431,12 @@ where
     C: DeserializeConfig + PartialEq + fmt::Debug,
 {
     println!("diff_with_default = true");
-    let json = serialize_to_json(config, true);
+    let json = SerializerOptions::diff_with_default().serialize(config);
     let config_copy: C = testing::test(Json::new("test.json", json.clone())).unwrap();
     assert_eq!(config_copy, *config);
 
     println!("diff_with_default = false");
-    let json = serialize_to_json(config, false);
+    let json = SerializerOptions::default().serialize(config);
     let config_copy: C = testing::test(Json::new("test.json", json.clone())).unwrap();
     assert_eq!(config_copy, *config);
     json
@@ -460,7 +459,7 @@ mod tests {
 
     #[test]
     fn example_for_simple_config() {
-        let example_json = serialize_to_json(&NestedConfig::example_config(), false);
+        let example_json = SerializerOptions::default().serialize(&NestedConfig::example_config());
         assert_eq!(
             serde_json::Value::from(example_json),
             serde_json::json!({
@@ -470,7 +469,8 @@ mod tests {
             })
         );
 
-        let example_json = serialize_to_json(&NestedConfig::example_config(), true);
+        let example_json =
+            SerializerOptions::diff_with_default().serialize(&NestedConfig::example_config());
         assert_eq!(
             serde_json::Value::from(example_json),
             serde_json::json!({
@@ -482,7 +482,8 @@ mod tests {
 
     #[test]
     fn example_for_compound_config() {
-        let example_json = serialize_to_json(&CompoundConfig::example_config(), false);
+        let example_json =
+            SerializerOptions::default().serialize(&CompoundConfig::example_config());
         let expected_nested_json = serde_json::json!({
             "map": { "var": 42 },
             "other_int": 42,
@@ -508,7 +509,7 @@ mod tests {
             nested_opt: None,
             ..CompoundConfig::example_config()
         };
-        let example_json = serialize_to_json(&config, true);
+        let example_json = SerializerOptions::diff_with_default().serialize(&config);
         assert_eq!(
             serde_json::Value::from(example_json),
             serde_json::json!({
@@ -530,21 +531,21 @@ mod tests {
     fn serializing_enum_config() {
         let config = RenamedEnumConfig::V0;
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config, false)),
+            serde_json::Value::from(SerializerOptions::default().serialize(&config)),
             serde_json::json!({ "version": "v0" })
         );
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config, true)),
+            serde_json::Value::from(SerializerOptions::diff_with_default().serialize(&config)),
             serde_json::json!({ "version": "v0" })
         );
 
         let config = RenamedEnumConfig::V1 { int: 23 };
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config, false)),
+            serde_json::Value::from(SerializerOptions::default().serialize(&config)),
             serde_json::json!({ "version": "v1", "int": 23 })
         );
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config, true)),
+            serde_json::Value::from(SerializerOptions::diff_with_default().serialize(&config)),
             serde_json::json!({ "version": "v1", "int": 23 })
         );
 
@@ -552,11 +553,11 @@ mod tests {
             str: "??".to_owned(),
         };
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config, false)),
+            serde_json::Value::from(SerializerOptions::default().serialize(&config)),
             serde_json::json!({ "version": "v2", "str": "??" })
         );
         assert_eq!(
-            serde_json::Value::from(serialize_to_json(&config, true)),
+            serde_json::Value::from(SerializerOptions::diff_with_default().serialize(&config)),
             serde_json::json!({ "str": "??" })
         );
     }

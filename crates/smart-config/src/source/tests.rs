@@ -19,8 +19,7 @@ use crate::{
         EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
     },
     value::StrValue,
-    visit::serialize_to_json,
-    ByteSize, DescribeConfig,
+    ByteSize, DescribeConfig, SerializerOptions,
 };
 
 #[test]
@@ -649,7 +648,7 @@ fn parsing_complex_param() {
     assert_eq!(config.param.repeated, HashSet::from([SimpleEnum::First]));
     assert_eq!(config.set, HashSet::from([1, 2, 3]));
 
-    let json = serialize_to_json(&config, false);
+    let json = SerializerOptions::default().serialize(&config);
     assert!(json.contains_key("repeated"), "{json:?}");
     assert_eq!(
         json["param"],
@@ -667,7 +666,7 @@ fn parsing_complex_param() {
         testing::test(Json::new("test.json", json.clone())).unwrap();
     assert_eq!(config_copy, config);
 
-    let json_diff = serialize_to_json(&config, true);
+    let json_diff = SerializerOptions::diff_with_default().serialize(&config);
     assert!(!json_diff.contains_key("repeated"), "{json_diff:?}");
     assert_eq!(json_diff["param"], json["param"]);
 

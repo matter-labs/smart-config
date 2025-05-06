@@ -17,9 +17,8 @@ use smart_config::{
     metadata::{SizeUnit, TimeUnit},
     validation::NotEmpty,
     value::{ExposeSecret, SecretString},
-    visit::serialize_to_json,
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
-    ExampleConfig, Json, Prefixed, Yaml,
+    ExampleConfig, Json, Prefixed, SerializerOptions, Yaml,
 };
 use smart_config_commands::{ParamRef, Printer};
 
@@ -340,15 +339,20 @@ fn main() {
             diff,
             format,
         } => {
+            let options = if diff {
+                SerializerOptions::diff_with_default()
+            } else {
+                SerializerOptions::default()
+            };
             let (json, original_config) = if example {
                 let example_config = TestConfig::example_config();
-                let json = serialize_to_json(&example_config, diff);
+                let json = options.serialize(&example_config);
                 // Need to wrap the serialized value with the 'test' prefix so that it corresponds to the schema.
                 (serde_json::json!({ "test": json }), example_config)
             } else {
                 let repo = create_mock_repo(&schema, false);
                 let original_config: TestConfig = repo.single().unwrap().parse().unwrap();
-                (repo.canonicalize(diff).unwrap().into(), original_config)
+                (repo.canonicalize(&options).unwrap().into(), original_config)
             };
 
             let mut buffer = vec![];

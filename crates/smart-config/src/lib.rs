@@ -337,7 +337,7 @@ pub use smart_config_derive::DeserializeConfig;
 ///
 /// ```
 /// # use std::collections::HashSet;
-/// # use smart_config::{DescribeConfig, ExampleConfig, visit::serialize_to_json};
+/// # use smart_config::{DescribeConfig, ExampleConfig, SerializerOptions};
 /// #[derive(DescribeConfig, ExampleConfig)]
 /// struct TestConfig {
 ///     /// Required param that still has an example value.
@@ -359,7 +359,7 @@ pub use smart_config_derive::DeserializeConfig;
 /// }
 ///
 /// let example: TestConfig = TestConfig::example_config();
-/// let json = serialize_to_json(&example);
+/// let json = SerializerOptions::default().serialize(&example);
 /// assert_eq!(
 ///     serde_json::Value::from(json),
 ///     serde_json::json!({
@@ -381,7 +381,7 @@ pub use self::{
     schema::{ConfigMut, ConfigRef, ConfigSchema},
     source::{
         ConfigContents, ConfigParser, ConfigRepository, ConfigSource, ConfigSources, Environment,
-        Json, Prefixed, SourceInfo, Yaml,
+        Json, Prefixed, SerializerOptions, SourceInfo, Yaml,
     },
     types::ByteSize,
 };
