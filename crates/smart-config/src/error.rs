@@ -123,11 +123,11 @@ impl fmt::Display for ParseError {
             Some(match location {
                 LocationInConfig::Param(idx) => {
                     let param = self.config.params.get(idx)?;
-                    format!("param `{}`", param.name)
+                    format!("param `{}` in ", param.name)
                 }
             })
         });
-        let field = field.as_deref().unwrap_or("value");
+        let field = field.as_deref().unwrap_or("");
 
         let origin = if matches!(self.origin(), ValueOrigin::Unknown) {
             String::new()
@@ -135,15 +135,15 @@ impl fmt::Display for ParseError {
             format!(" [origin: {}]", self.origin)
         };
 
-        let validation = if let Some(validation) = &self.validation {
-            format!("validation '{validation}' failed: ")
+        let failed_action = if let Some(validation) = &self.validation {
+            format!("validating '{validation}' for")
         } else {
-            String::new()
+            "parsing".to_owned()
         };
 
         write!(
             formatter,
-            "error parsing {field} in `{config}` at `{path}`{origin}: {validation}{err}",
+            "error {failed_action} {field}`{config}` at `{path}`{origin}: {err}",
             err = self.inner,
             config = self.config.ty.name_in_code(),
             path = self.path
