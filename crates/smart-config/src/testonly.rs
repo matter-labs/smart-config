@@ -223,7 +223,7 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(default_t = "./test".into())]
     pub path: PathBuf,
     #[config(with = de::Optional(SizeUnit::MiB))]
-    #[config(default_t = Some(ByteSize::new(128, SizeUnit::MiB)))]
+    #[config(default_t = Some(128 * SizeUnit::MiB))]
     pub memory_size_mb: Option<ByteSize>,
     pub disk_size: Option<ByteSize>,
     #[config(default, with = de::Delimited(":"))]

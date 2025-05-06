@@ -919,15 +919,15 @@ fn nesting_with_aliased_duration_param() {
 fn nesting_with_byte_size_param() {
     let json = config!("array": [4, 5], "disk_size_mb": 64);
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.disk_size.unwrap(), ByteSize::new(64, SizeUnit::MiB));
+    assert_eq!(config.disk_size.unwrap(), 64 * SizeUnit::MiB);
 
     let json = config!("array": [4, 5], "disk_size": "2 GiB");
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.disk_size.unwrap(), ByteSize::new(2, SizeUnit::GiB));
+    assert_eq!(config.disk_size.unwrap(), 2 * SizeUnit::GiB);
 
     let json = config!("array": [4, 5], "disk_size": HashMap::from([("kib", 512)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.disk_size.unwrap(), ByteSize::new(512, SizeUnit::KiB));
+    assert_eq!(config.disk_size.unwrap(), 512 * SizeUnit::KiB);
 }
 
 #[test]
