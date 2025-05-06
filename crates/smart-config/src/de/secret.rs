@@ -1,4 +1,4 @@
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 
 use super::{DeserializeContext, DeserializeParam, WellKnown};
 use crate::{
@@ -29,7 +29,7 @@ use crate::{
 #[derive(Debug)]
 pub struct FromSecretString;
 
-impl<T: From<SecretString>> DeserializeParam<T> for FromSecretString {
+impl<T: From<SecretString> + ExposeSecret<str>> DeserializeParam<T> for FromSecretString {
     const EXPECTING: BasicTypes = BasicTypes::STRING;
 
     fn describe(&self, description: &mut TypeDescription) {
@@ -48,6 +48,10 @@ impl<T: From<SecretString>> DeserializeParam<T> for FromSecretString {
             _ => return Err(de.invalid_type("secret string")),
         };
         Ok(s.into())
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        param.expose_secret().into()
     }
 }
 
@@ -68,13 +72,20 @@ impl WellKnown for SecretString {
 ///
 /// ```
 /// use secrecy::{ExposeSecret, ExposeSecretMut, SecretBox};
-/// use serde::{Deserialize, Deserializer};
+/// use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// use smart_config::{de::Serde, testing, DescribeConfig, DeserializeConfig};
 ///
 /// // It is generally a good idea to wrap a secret into a `SecretBox`
 /// // so that it is zeroized on drop and has an opaque `Debug` representation.
 /// #[derive(Debug)]
 /// struct NumSecret(SecretBox<u64>);
+///
+/// impl Serialize for NumSecret {
+///     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+///         // Serialize the underlying secret
+///         self.0.expose_secret().serialize(serializer)
+///     }
+/// }
 ///
 /// impl<'de> serde::Deserialize<'de> for NumSecret {
 ///     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -126,5 +137,9 @@ where
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
         self.0.deserialize_param(ctx, param)
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        self.0.serialize_param(param)
     }
 }

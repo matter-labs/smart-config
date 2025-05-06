@@ -1,6 +1,6 @@
 //! Configuration metadata.
 
-use std::{any, borrow::Cow, fmt};
+use std::{any, borrow::Cow, fmt, ops, time::Duration};
 
 use self::_private::{BoxedDeserializer, BoxedVisitor};
 use crate::{
@@ -79,15 +79,21 @@ pub struct ParamMetadata {
     #[doc(hidden)] // implementation detail
     pub deserializer: &'static dyn ErasedDeserializer,
     #[doc(hidden)] // implementation detail
-    pub default_value: Option<fn() -> Box<dyn fmt::Debug>>,
+    pub default_value: Option<fn() -> Box<dyn any::Any>>,
     #[doc(hidden)]
     pub fallback: Option<&'static dyn FallbackSource>,
 }
 
 impl ParamMetadata {
     /// Returns the default value for the param.
-    pub fn default_value(&self) -> Option<impl fmt::Debug + '_> {
+    pub fn default_value(&self) -> Option<Box<dyn any::Any>> {
         self.default_value.map(|value_fn| value_fn())
+    }
+
+    /// Returns the default value for the param serialized into JSON.
+    pub fn default_value_json(&self) -> Option<serde_json::Value> {
+        self.default_value()
+            .map(|val| self.deserializer.serialize_param(val.as_ref()))
     }
 
     /// Returns the type description for this param as provided by its deserializer.
@@ -384,6 +390,17 @@ pub struct NestedConfigMetadata {
 }
 
 /// Unit of time measurement.
+///
+/// # Examples
+///
+/// You can use multiplication to define durations (e.g., for parameter values):
+///
+/// ```
+/// # use std::time::Duration;
+/// # use smart_config::metadata::TimeUnit;
+/// let dur = 5 * TimeUnit::Hours;
+/// assert_eq!(dur, Duration::from_secs(5 * 3_600));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum TimeUnit {
@@ -413,11 +430,68 @@ impl TimeUnit {
             TimeUnit::Weeks => "weeks",
         }
     }
+
+    /// Multiplies this time unit by the specified factor.
+    pub fn checked_mul(self, factor: u64) -> Option<Duration> {
+        Some(match self {
+            Self::Millis => Duration::from_millis(factor),
+            Self::Seconds => Duration::from_secs(factor),
+            Self::Minutes => {
+                let val = factor.checked_mul(60)?;
+                Duration::from_secs(val)
+            }
+            Self::Hours => {
+                let val = factor.checked_mul(3_600)?;
+                Duration::from_secs(val)
+            }
+            Self::Days => {
+                let val = factor.checked_mul(86_400)?;
+                Duration::from_secs(val)
+            }
+            Self::Weeks => {
+                let val = factor.checked_mul(86_400 * 7)?;
+                Duration::from_secs(val)
+            }
+        })
+    }
 }
 
 impl fmt::Display for TimeUnit {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.plural())
+    }
+}
+
+impl From<TimeUnit> for Duration {
+    fn from(unit: TimeUnit) -> Self {
+        match unit {
+            TimeUnit::Millis => Duration::from_millis(1),
+            TimeUnit::Seconds => Duration::from_secs(1),
+            TimeUnit::Minutes => Duration::from_secs(60),
+            TimeUnit::Hours => Duration::from_secs(3_600),
+            TimeUnit::Days => Duration::from_secs(86_400),
+            TimeUnit::Weeks => Duration::from_secs(86_400 * 7),
+        }
+    }
+}
+
+/// Panics on overflow.
+impl ops::Mul<u64> for TimeUnit {
+    type Output = Duration;
+
+    fn mul(self, rhs: u64) -> Self::Output {
+        self.checked_mul(rhs)
+            .unwrap_or_else(|| panic!("Integer overflow getting {rhs} * {self}"))
+    }
+}
+
+/// Panics on overflow.
+impl ops::Mul<TimeUnit> for u64 {
+    type Output = Duration;
+
+    fn mul(self, rhs: TimeUnit) -> Self::Output {
+        rhs.checked_mul(self)
+            .unwrap_or_else(|| panic!("Integer overflow getting {self} * {rhs}"))
     }
 }
 

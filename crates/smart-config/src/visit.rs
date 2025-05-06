@@ -1,11 +1,6 @@
 //! Visitor pattern for configs.
 
-use std::{any, fmt};
-
-/// Types that can be used as configuration parameters. Automatically implemented.
-pub trait ParamValue: any::Any + fmt::Debug {}
-
-impl<T: any::Any + fmt::Debug> ParamValue for T {}
+use std::any;
 
 /// Visitor of configuration parameters in a particular configuration.
 #[doc(hidden)] // API is not stable yet
@@ -16,15 +11,28 @@ pub trait ConfigVisitor {
 
     /// Visits a parameter providing its value for inspection. This will be called for all params in a struct config,
     /// and for params associated with the active tag variant in an enum config.
-    fn visit_param(&mut self, param_index: usize, value: &dyn ParamValue);
+    fn visit_param(&mut self, param_index: usize, value: &dyn any::Any);
+
+    /// Visits a nested configuration. Similarly to params, this will be called for all nested / flattened configs in a struct config,
+    /// and just for ones associated with the active tag variant in an enum config.
+    fn visit_nested_config(&mut self, config_index: usize, config: &dyn VisitConfig);
 }
 
 /// Configuration that can be visited (e.g., to inspect its parameters in a generic way).
 ///
-/// This is a supertrait for [`DescribeConfig`](crate::DescribeConfig) that should be automatically derived.
+/// This is a supertrait for [`DescribeConfig`](crate::DescribeConfig) that is automatically derived
+/// via [`derive(DescribeConfig)`](macro@crate::DescribeConfig).
 pub trait VisitConfig {
     /// Performs the visit.
     fn visit_config(&self, visitor: &mut dyn ConfigVisitor);
+}
+
+impl<C: VisitConfig> VisitConfig for Option<C> {
+    fn visit_config(&self, visitor: &mut dyn ConfigVisitor) {
+        if let Some(config) = self {
+            config.visit_config(visitor);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -42,7 +50,7 @@ mod tests {
     struct PersistingVisitor {
         metadata: &'static ConfigMetadata,
         tag: Option<&'static str>,
-        param_values: HashMap<&'static str, String>,
+        param_values: HashMap<&'static str, serde_json::Value>,
     }
 
     impl PersistingVisitor {
@@ -61,14 +69,20 @@ mod tests {
             self.tag = Some(self.metadata.tag.unwrap().variants[variant_index].rust_name);
         }
 
-        fn visit_param(&mut self, param_index: usize, value: &dyn ParamValue) {
+        fn visit_param(&mut self, param_index: usize, value: &dyn any::Any) {
             let param = &self.metadata.params[param_index];
-            let prev_value = self.param_values.insert(param.name, format!("{value:?}"));
+            let prev_value = self
+                .param_values
+                .insert(param.name, param.deserializer.serialize_param(value));
             assert!(
                 prev_value.is_none(),
                 "Param value {} is visited twice",
                 param.name
             );
+        }
+
+        fn visit_nested_config(&mut self, _config_index: usize, _config: &dyn VisitConfig) {
+            // Do nothing
         }
     }
 
@@ -82,10 +96,10 @@ mod tests {
         assert_eq!(
             visitor.param_values,
             HashMap::from([
-                ("float", "None".to_owned()),
-                ("set", "{}".to_owned()),
-                ("int", "12".to_owned()),
-                ("url", "Some(\"https://example.com/\")".to_owned())
+                ("float", serde_json::Value::Null),
+                ("set", serde_json::json!([])),
+                ("int", 12_u32.into()),
+                ("url", "https://example.com/".into())
             ])
         );
     }
@@ -115,9 +129,9 @@ mod tests {
         assert_eq!(
             visitor.param_values,
             HashMap::from([
-                ("string", "Some(\"test\")".to_owned()),
-                ("flag", "true".to_owned()),
-                ("set", "{1}".to_owned())
+                ("string", "test".into()),
+                ("flag", true.into()),
+                ("set", serde_json::json!([1]))
             ])
         );
     }

@@ -3,6 +3,7 @@
 use std::{any, fmt, marker::PhantomData, sync::Arc};
 
 use serde::{de::Error as DeError, Deserialize};
+use serde_json::Value;
 
 use super::{deserializer::ValueDeserializer, DeserializeContext, DeserializeParam};
 use crate::{
@@ -24,6 +25,8 @@ pub trait ErasedDeserializer: fmt::Debug + Send + Sync + 'static {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<Box<dyn any::Any>, ErrorWithOrigin>;
+
+    fn serialize_param(&self, param: &dyn any::Any) -> serde_json::Value;
 }
 
 /// Wrapper transforming [`DeserializeParam`] to [`ErasedDeserializer`].
@@ -60,6 +63,13 @@ impl<T: 'static, De: DeserializeParam<T>> ErasedDeserializer for Erased<T, De> {
         self.inner
             .deserialize_param(ctx, param)
             .map(|val| Box::new(val) as _)
+    }
+
+    fn serialize_param(&self, param: &dyn any::Any) -> serde_json::Value {
+        let param: &T = param
+            .downcast_ref()
+            .expect("Internal error: incorrect param type provided for serialization");
+        self.inner.serialize_param(param)
     }
 }
 
@@ -114,6 +124,10 @@ impl DeserializeParam<&'static str> for TagDeserializer {
                     .unwrap_or_default();
                 ErrorWithOrigin::json(err, origin)
             })
+    }
+
+    fn serialize_param(&self, &param: &&'static str) -> serde_json::Value {
+        param.into()
     }
 }
 
@@ -181,6 +195,10 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Validated<T, De> {
         validate(&value, &mut ctx, self.validations)?;
         Ok(value)
     }
+
+    fn serialize_param(&self, param: &T) -> Value {
+        self.inner.serialize_param(param)
+    }
 }
 
 impl<T, De: DeserializeParam<Option<T>>> DeserializeParam<Option<T>> for Validated<T, De> {
@@ -201,5 +219,9 @@ impl<T, De: DeserializeParam<Option<T>>> DeserializeParam<Option<T>> for Validat
             validate(value, &mut ctx, self.validations)?;
         }
         Ok(value)
+    }
+
+    fn serialize_param(&self, param: &Option<T>) -> Value {
+        self.inner.serialize_param(param)
     }
 }

@@ -7,12 +7,16 @@ use std::{
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
-    value::{FileFormat, StrValue, Value, ValueOrigin, WithOrigin},
-    visit::{ConfigVisitor, ParamValue},
-    ConfigRepository, ParseError,
+    metadata::ConfigMetadata,
+    value::{FileFormat, ValueOrigin, WithOrigin},
+    visit::{ConfigVisitor, VisitConfig},
+    ConfigRepository, ParseError, ParseErrors,
 };
 
-use crate::{ParamRef, Printer, CONFIG_PATH, STRING};
+use crate::{
+    utils::{write_json_value, write_value, STRING},
+    ParamRef, Printer, CONFIG_PATH,
+};
 
 const SECTION: Style = Style::new().bold();
 const ARROW: Style = Style::new().bold();
@@ -32,10 +36,21 @@ const ERROR_LABEL: Style = Style::new()
     .bg_color(Some(Color::Ansi(AnsiColor::Red)))
     .fg_color(None);
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ParamValuesVisitor {
+    config: &'static ConfigMetadata,
     variant: Option<usize>,
-    param_values: HashMap<usize, String>,
+    param_values: HashMap<usize, serde_json::Value>,
+}
+
+impl ParamValuesVisitor {
+    fn new(config: &'static ConfigMetadata) -> Self {
+        Self {
+            config,
+            variant: None,
+            param_values: HashMap::new(),
+        }
+    }
 }
 
 impl ConfigVisitor for ParamValuesVisitor {
@@ -43,8 +58,18 @@ impl ConfigVisitor for ParamValuesVisitor {
         self.variant = Some(variant_index);
     }
 
-    fn visit_param(&mut self, param_index: usize, value: &dyn ParamValue) {
-        self.param_values.insert(param_index, format!("{value:?}"));
+    fn visit_param(&mut self, param_index: usize, value: &dyn any::Any) {
+        let param = self.config.params[param_index];
+        let json = if param.type_description().contains_secrets() {
+            "[REDACTED]".into()
+        } else {
+            param.deserializer.serialize_param(value)
+        };
+        self.param_values.insert(param_index, json);
+    }
+
+    fn visit_nested_config(&mut self, _config_index: usize, _config: &dyn VisitConfig) {
+        // Don't recurse into nested configs, we debug them separately
     }
 }
 
@@ -95,6 +120,17 @@ impl ConfigErrors {
     }
 }
 
+impl From<ConfigErrors> for Result<(), ParseErrors> {
+    fn from(errors: ConfigErrors) -> Self {
+        let errors = errors
+            .by_config
+            .into_values()
+            .chain(errors.by_param.into_values())
+            .flatten();
+        errors.collect()
+    }
+}
+
 impl<W: RawStream + AsLockedWrite> Printer<W> {
     /// Prints debug info for all param values in the provided `repo`. If params fail to deserialize,
     /// corresponding error(s) are output as well.
@@ -107,11 +143,11 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
         self,
         repo: &ConfigRepository<'_>,
         mut filter: impl FnMut(ParamRef<'_>) -> bool,
-    ) -> io::Result<()> {
+    ) -> io::Result<Result<(), ParseErrors>> {
         let mut writer = self.writer;
         if repo.sources().is_empty() {
             writeln!(&mut writer, "configuration is empty")?;
-            return Ok(());
+            return Ok(Ok(()));
         }
 
         writeln!(&mut writer, "{SECTION}Configuration sources:{SECTION:#}")?;
@@ -142,7 +178,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
 
             let (variant, mut param_values) = if let Ok(boxed_config) = config_parser.parse() {
                 let visitor_fn = config.metadata().visitor;
-                let mut visitor = ParamValuesVisitor::default();
+                let mut visitor = ParamValuesVisitor::new(config.metadata());
                 visitor_fn(boxed_config.as_ref(), &mut visitor);
                 (visitor.variant, visitor.param_values)
             } else {
@@ -155,7 +191,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
                 let name = tag.variants[idx].name;
                 // Add the tag value, using the fact that the tag is always the last param in the config.
                 let tag_param_idx = config.metadata().params.len() - 1;
-                param_values.insert(tag_param_idx, format!("{name:?}"));
+                param_values.insert(tag_param_idx, name.into());
 
                 ActiveTagVariant {
                     canonical_path: ParamRef {
@@ -201,7 +237,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
                 }
             }
         }
-        Ok(())
+        Ok(errors.into())
     }
 }
 
@@ -248,7 +284,7 @@ fn write_param(
     writer: &mut impl io::Write,
     param_ref: ParamRef<'_>,
     path: &str,
-    visited_value: Option<&String>,
+    visited_value: Option<&serde_json::Value>,
     raw_value: Option<&WithOrigin>,
     active_variant: Option<&ActiveTagVariant>,
 ) -> io::Result<()> {
@@ -265,7 +301,9 @@ fn write_param(
     )?;
 
     if let Some(value) = visited_value {
-        writeln!(writer, " = {value}")?;
+        write!(writer, " = ")?;
+        write_json_value(writer, value, 0)?;
+        writeln!(writer)?;
     } else {
         writeln!(writer)?;
     }
@@ -295,42 +333,6 @@ fn write_param(
         writeln!(writer)?;
     }
     Ok(())
-}
-
-fn write_value(writer: &mut impl io::Write, value: &WithOrigin, ident: usize) -> io::Result<()> {
-    const NULL: Style = Style::new().bold();
-    const BOOL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
-    const NUMBER: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
-    const SECRET: Style = Style::new()
-        .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
-        .fg_color(None);
-    const OBJECT_KEY: Style = Style::new().bold();
-
-    match &value.inner {
-        Value::Null => write!(writer, "{NULL}null{NULL:#}"),
-        Value::Bool(val) => write!(writer, "{BOOL}{val:?}{BOOL:#}"),
-        Value::Number(val) => write!(writer, "{NUMBER}{val}{NUMBER:#}"),
-        Value::String(StrValue::Plain(val)) => write!(writer, "{STRING}{val:?}{STRING:#}"),
-        Value::String(StrValue::Secret(_)) => write!(writer, "{SECRET}[REDACTED]{SECRET:#}"),
-        Value::Array(val) => {
-            writeln!(writer, "[")?;
-            for item in val {
-                write!(writer, "{:ident$}  ", "")?;
-                write_value(writer, item, ident + 2)?;
-                writeln!(writer, ",")?;
-            }
-            write!(writer, "{:ident$}]", "")
-        }
-        Value::Object(val) => {
-            writeln!(writer, "{{")?;
-            for (key, value) in val {
-                write!(writer, "{:ident$}  {OBJECT_KEY}{key:?}{OBJECT_KEY:#}: ", "")?;
-                write_value(writer, value, ident + 2)?;
-                writeln!(writer, ",")?;
-            }
-            write!(writer, "{:ident$}}}", "")
-        }
-    }
 }
 
 fn write_de_errors(writer: &mut impl io::Write, errors: &[ParseError]) -> io::Result<()> {

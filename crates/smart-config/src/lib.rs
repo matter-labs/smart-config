@@ -99,7 +99,7 @@
 //!     DescribeConfig, DeserializeConfig,
 //! };
 //!
-//! #[derive(Debug, serde::Deserialize)]
+//! #[derive(Debug, serde::Serialize, serde::Deserialize)]
 //! enum CustomEnum {
 //!     First,
 //!     Second,

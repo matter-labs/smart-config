@@ -73,6 +73,26 @@ impl<De> Repeated<De> {
     }
 }
 
+macro_rules! impl_serialization_for_repeated {
+    ($param:ty) => {
+        fn deserialize_param(
+            &self,
+            ctx: DeserializeContext<'_>,
+            param: &'static ParamMetadata,
+        ) -> Result<$param, ErrorWithOrigin> {
+            self.deserialize_array(ctx, param, None)
+        }
+
+        fn serialize_param(&self, param: &$param) -> serde_json::Value {
+            let array = param
+                .iter()
+                .map(|item| self.0.serialize_param(item))
+                .collect();
+            serde_json::Value::Array(array)
+        }
+    };
+}
+
 impl<T: 'static, De> DeserializeParam<Vec<T>> for Repeated<De>
 where
     De: DeserializeParam<T>,
@@ -83,13 +103,7 @@ where
         description.set_items(&self.0);
     }
 
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<Vec<T>, ErrorWithOrigin> {
-        self.deserialize_array(ctx, param, None)
-    }
+    impl_serialization_for_repeated!(Vec<T>);
 }
 
 impl<T, S, De> DeserializeParam<HashSet<T, S>> for Repeated<De>
@@ -104,13 +118,7 @@ where
         description.set_details("set").set_items(&self.0);
     }
 
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<HashSet<T, S>, ErrorWithOrigin> {
-        self.deserialize_array(ctx, param, None)
-    }
+    impl_serialization_for_repeated!(HashSet<T, S>);
 }
 
 impl<T, De> DeserializeParam<BTreeSet<T>> for Repeated<De>
@@ -124,13 +132,7 @@ where
         description.set_details("set").set_items(&self.0);
     }
 
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<BTreeSet<T>, ErrorWithOrigin> {
-        self.deserialize_array(ctx, param, None)
-    }
+    impl_serialization_for_repeated!(BTreeSet<T>);
 }
 
 impl<T: 'static, De, const N: usize> DeserializeParam<[T; N]> for Repeated<De>
@@ -153,6 +155,14 @@ where
         let items: Vec<_> = self.deserialize_array(ctx, param, Some(N))?;
         // `unwrap()` is safe due to the length check in `deserialize_inner()`
         Ok(items.try_into().ok().unwrap())
+    }
+
+    fn serialize_param(&self, param: &[T; N]) -> serde_json::Value {
+        let array = param
+            .iter()
+            .map(|item| self.0.serialize_param(item))
+            .collect();
+        serde_json::Value::Array(array)
     }
 }
 
@@ -298,13 +308,52 @@ fn parse_key_or_value<T, De: DeserializeParam<T>>(
     }
 }
 
+/// Converts a key–value entry into the common format (pair of references to the key and value).
+pub trait ToEntry<'a, K, V>: Copy {
+    /// Performs the conversion.
+    fn to_entry(self) -> (&'a K, &'a V);
+}
+
+impl<'a, K, V> ToEntry<'a, K, V> for &'a (K, V) {
+    fn to_entry(self) -> (&'a K, &'a V) {
+        (&self.0, &self.1)
+    }
+}
+
+impl<'a, K, V> ToEntry<'a, K, V> for (&'a K, &'a V) {
+    fn to_entry(self) -> (&'a K, &'a V) {
+        self
+    }
+}
+
+/// Collection that can iterate over its entries.
+///
+/// Implemented for maps in the standard library, `Vec<(K, V)>`, `Box<[(K, V)]>` etc.
+// Needed as a separate trait with a blank impl since otherwise (if the `&C: IntoIterator<..>` requirement
+// is specified directly on the `DeserializeParam` impls) the compiler explodes, suggesting to specify type params
+// in the proc-macro code.
+pub trait ToEntries<K: 'static, V: 'static> {
+    /// Iterates over entries in the collection.
+    fn to_entries(&self) -> impl Iterator<Item = (&K, &V)>;
+}
+
+// Covers maps
+impl<K: 'static, V: 'static, C> ToEntries<K, V> for C
+where
+    for<'a> &'a C: IntoIterator<Item: ToEntry<'a, K, V>>,
+{
+    fn to_entries(&self) -> impl Iterator<Item = (&K, &V)> {
+        self.into_iter().map(ToEntry::to_entry)
+    }
+}
+
 impl<K, V, C, DeK, DeV> DeserializeParam<C> for Entries<K, V, DeK, DeV>
 where
     K: 'static,
     V: 'static,
     DeK: DeserializeParam<K>,
     DeV: DeserializeParam<V>,
-    C: FromIterator<(K, V)>,
+    C: FromIterator<(K, V)> + ToEntries<K, V>,
 {
     const EXPECTING: BasicTypes = {
         assert!(
@@ -331,6 +380,22 @@ where
             return Err(deserializer.invalid_type("object"));
         };
         self.deserialize_map(ctx, param, map, deserializer.origin())
+    }
+
+    fn serialize_param(&self, param: &C) -> serde_json::Value {
+        let object = param
+            .to_entries()
+            .map(|(key, value)| {
+                let key = match self.keys.serialize_param(key) {
+                    serde_json::Value::String(s) => s,
+                    serde_json::Value::Number(num) => num.to_string(),
+                    _ => panic!("unsupported key value"),
+                };
+                let value = self.values.serialize_param(value);
+                (key, value)
+            })
+            .collect();
+        serde_json::Value::Object(object)
     }
 }
 
@@ -455,6 +520,10 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
         });
         let array = WithOrigin::new(Value::Array(array_items.collect()), array_origin);
         T::DE.deserialize_param(ctx.patched(&array), param)
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        T::DE.serialize_param(param)
     }
 }
 
@@ -611,7 +680,7 @@ where
     V: 'static,
     DeK: DeserializeParam<K>,
     DeV: DeserializeParam<V>,
-    C: FromIterator<(K, V)>,
+    C: FromIterator<(K, V)> + ToEntries<K, V>,
 {
     const EXPECTING: BasicTypes = BasicTypes::OBJECT.or(BasicTypes::ARRAY);
 
@@ -641,5 +710,17 @@ where
             }
             _ => Err(deserializer.invalid_type("object or array")),
         }
+    }
+
+    fn serialize_param(&self, param: &C) -> serde_json::Value {
+        let entries = param.to_entries().map(|(key, value)| {
+            let key = self.inner.keys.serialize_param(key);
+            let value = self.inner.values.serialize_param(value);
+            serde_json::json!({
+                self.keys_name: key,
+                self.values_name: value,
+            })
+        });
+        serde_json::Value::Array(entries.collect())
     }
 }

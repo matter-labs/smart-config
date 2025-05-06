@@ -1,4 +1,4 @@
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     de::{DeserializeContext, DeserializeParam, Qualified, Serde, WellKnown},
@@ -31,7 +31,7 @@ impl_well_known_hash!(H128, H160, H256, H384, H512, H768);
 pub struct HexUintDeserializer;
 
 // This implementation is overly general, but since the struct is private, it's OK.
-impl<T: DeserializeOwned> DeserializeParam<T> for HexUintDeserializer {
+impl<T: Serialize + DeserializeOwned> DeserializeParam<T> for HexUintDeserializer {
     const EXPECTING: BasicTypes = BasicTypes::STRING;
 
     fn describe(&self, description: &mut TypeDescription) {
@@ -50,6 +50,10 @@ impl<T: DeserializeOwned> DeserializeParam<T> for HexUintDeserializer {
             }
         }
         T::deserialize(deserializer)
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        serde_json::to_value(param).expect("failed serializing value")
     }
 }
 
