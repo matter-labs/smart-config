@@ -97,7 +97,7 @@ pub struct TestConfig {
     // There is dedicated support for durations and byte sizes.
     #[config(default_t = Duration::from_millis(100))]
     pub short_dur: Duration,
-    #[config(default_t = Some(ByteSize::new(128, SizeUnit::MiB)))]
+    #[config(default_t = Some(128 * SizeUnit::MiB))]
     pub memory_size: Option<ByteSize>,
   
     // Configuration nesting and flattening are supported:

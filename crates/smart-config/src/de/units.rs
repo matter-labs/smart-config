@@ -24,39 +24,8 @@ impl TimeUnit {
     }
 
     fn into_duration(self, raw_value: u64) -> Result<Duration, serde_json::Error> {
-        const SECONDS_IN_MINUTE: u64 = 60;
-        const SECONDS_IN_HOUR: u64 = 3_600;
-        const SECONDS_IN_DAY: u64 = 86_400;
-        const SECONDS_IN_WEEK: u64 = SECONDS_IN_DAY * 7;
-
-        Ok(match self {
-            Self::Millis => Duration::from_millis(raw_value),
-            Self::Seconds => Duration::from_secs(raw_value),
-            Self::Minutes => {
-                let val = raw_value
-                    .checked_mul(SECONDS_IN_MINUTE)
-                    .ok_or_else(|| self.overflow_err(raw_value))?;
-                Duration::from_secs(val)
-            }
-            Self::Hours => {
-                let val = raw_value
-                    .checked_mul(SECONDS_IN_HOUR)
-                    .ok_or_else(|| self.overflow_err(raw_value))?;
-                Duration::from_secs(val)
-            }
-            Self::Days => {
-                let val = raw_value
-                    .checked_mul(SECONDS_IN_DAY)
-                    .ok_or_else(|| self.overflow_err(raw_value))?;
-                Duration::from_secs(val)
-            }
-            Self::Weeks => {
-                let val = raw_value
-                    .checked_mul(SECONDS_IN_WEEK)
-                    .ok_or_else(|| self.overflow_err(raw_value))?;
-                Duration::from_secs(val)
-            }
-        })
+        self.checked_mul(raw_value)
+            .ok_or_else(|| self.overflow_err(raw_value))
     }
 }
 

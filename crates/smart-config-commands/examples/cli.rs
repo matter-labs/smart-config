@@ -3,9 +3,11 @@ use std::{
     fmt,
     num::NonZeroU32,
     path::PathBuf,
+    process,
     time::Duration,
 };
 
+use anstyle::{AnsiColor, Color, Style};
 use clap::Parser;
 use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Serialize};
@@ -39,10 +41,10 @@ pub struct TestConfig {
     #[config(default, alias = "dirs", with = de::Delimited(":"))]
     pub dir_paths: HashSet<PathBuf>,
     /// Timeout for some operation.
-    #[config(default_t = Duration::from_secs(60), with = TimeUnit::Seconds)]
+    #[config(default_t = 1 * TimeUnit::Minutes, with = TimeUnit::Seconds)]
     pub timeout_sec: Duration,
     /// In-memory cache size.
-    #[config(default_t = ByteSize::new(16, SizeUnit::MiB))]
+    #[config(default_t = 16 * SizeUnit::MiB)]
     pub cache_size: ByteSize,
     #[config(nest)]
     pub nested: NestedConfig,
@@ -248,6 +250,8 @@ enum Cli {
     },
 }
 
+const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
+
 fn main() {
     let cli = Cli::parse();
     let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
@@ -268,7 +272,14 @@ fn main() {
                     param_ref.all_paths().any(|path| path.contains(needle))
                 })
             };
-            Printer::stderr().print_debug(&repo, filter).unwrap();
+
+            let res = Printer::stderr().print_debug(&repo, filter).unwrap();
+            if let Err(err) = res {
+                anstream::eprintln!(
+                    "\n{ERROR}There were errors parsing configuration params:\n{err}{ERROR:#}"
+                );
+                process::exit(1);
+            }
         }
     }
 }

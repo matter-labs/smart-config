@@ -10,7 +10,7 @@ use smart_config::{
     metadata::ConfigMetadata,
     value::{FileFormat, ValueOrigin, WithOrigin},
     visit::{ConfigVisitor, VisitConfig},
-    ConfigRepository, ParseError,
+    ConfigRepository, ParseError, ParseErrors,
 };
 
 use crate::{
@@ -120,6 +120,17 @@ impl ConfigErrors {
     }
 }
 
+impl From<ConfigErrors> for Result<(), ParseErrors> {
+    fn from(errors: ConfigErrors) -> Self {
+        let errors = errors
+            .by_config
+            .into_values()
+            .chain(errors.by_param.into_values())
+            .flatten();
+        errors.collect()
+    }
+}
+
 impl<W: RawStream + AsLockedWrite> Printer<W> {
     /// Prints debug info for all param values in the provided `repo`. If params fail to deserialize,
     /// corresponding error(s) are output as well.
@@ -132,11 +143,11 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
         self,
         repo: &ConfigRepository<'_>,
         mut filter: impl FnMut(ParamRef<'_>) -> bool,
-    ) -> io::Result<()> {
+    ) -> io::Result<Result<(), ParseErrors>> {
         let mut writer = self.writer;
         if repo.sources().is_empty() {
             writeln!(&mut writer, "configuration is empty")?;
-            return Ok(());
+            return Ok(Ok(()));
         }
 
         writeln!(&mut writer, "{SECTION}Configuration sources:{SECTION:#}")?;
@@ -226,7 +237,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
                 }
             }
         }
-        Ok(())
+        Ok(errors.into())
     }
 }
 
