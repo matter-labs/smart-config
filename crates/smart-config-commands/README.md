@@ -66,6 +66,13 @@ The output will contain deserialization errors for all available params:
 
 ![Example output for print_debug](examples/errors.svg)
 
+### Outputting JSON / YAML
+
+The library can fancy-print JSON and YAML. This be used together with `smart-config` tooling to produce default / example configs,
+diffs with default param values etc. See [the example](examples/cli.rs) for a couple of use cases.
+
+![Example of fancy-printed YAML](examples/ser-yaml.svg)
+
 ## License
 
 Distributed under the terms of either
