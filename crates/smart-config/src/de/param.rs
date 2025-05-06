@@ -11,7 +11,10 @@ use std::{
     str::FromStr,
 };
 
-use serde::de::{DeserializeOwned, Error as DeError};
+use serde::{
+    de::{DeserializeOwned, Error as DeError},
+    Serialize,
+};
 
 use crate::{
     de::{deserializer::ValueDeserializer, DeserializeContext},
@@ -44,7 +47,10 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
     const EXPECTING: BasicTypes;
 
     /// Additional info about the deserialized type, e.g., extended description.
-    fn describe(&self, description: &mut TypeDescription);
+    #[allow(unused)]
+    fn describe(&self, description: &mut TypeDescription) {
+        // Do nothing
+    }
 
     /// Performs deserialization given the context and param metadata.
     ///
@@ -56,6 +62,12 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin>;
+
+    /// Serializes the provided parameter to the JSON model.
+    ///
+    /// Serialization is considered infallible (`serde_json` serialization may fail on recursive or very deeply nested data types;
+    /// please don't use such data types for config params).
+    fn serialize_param(&self, param: &T) -> serde_json::Value;
 }
 
 /// Parameter type with well-known [deserializer](DeserializeParam).
@@ -110,6 +122,10 @@ impl<T: WellKnown> DeserializeParam<T> for () {
     ) -> Result<T, ErrorWithOrigin> {
         T::DE.deserialize_param(ctx, param)
     }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        T::DE.serialize_param(param)
+    }
 }
 
 /// Deserializer powered by `serde`. Usually created with the help of [`Serde!`](crate::Serde!) macro;
@@ -125,7 +141,9 @@ impl<const EXPECTING: u8> fmt::Debug for Serde<EXPECTING> {
     }
 }
 
-impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXPECTING> {
+impl<T: Serialize + DeserializeOwned, const EXPECTING: u8> DeserializeParam<T>
+    for Serde<EXPECTING>
+{
     const EXPECTING: BasicTypes = BasicTypes::from_raw(EXPECTING);
 
     fn describe(&self, _description: &mut TypeDescription) {
@@ -149,38 +167,9 @@ impl<T: DeserializeOwned, const EXPECTING: u8> DeserializeParam<T> for Serde<EXP
         }
         T::deserialize(deserializer)
     }
-}
 
-type DeserializeFn<T> =
-    fn(DeserializeContext<'_>, &'static ParamMetadata) -> Result<T, ErrorWithOrigin>;
-
-/// Custom deserializer for a specific type. Usually created with the help of [`Custom!`](crate::Custom!) macro;
-/// see its docs for the examples of usage.
-pub struct Custom<T, const EXPECTING: u8>(pub DeserializeFn<T>);
-
-impl<T: 'static, const EXPECTING: u8> fmt::Debug for Custom<T, EXPECTING> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("Custom")
-            .field("type", &any::type_name::<T>())
-            .field("expecting", &BasicTypes::from_raw(EXPECTING))
-            .finish()
-    }
-}
-
-impl<T: 'static, const EXPECTING: u8> DeserializeParam<T> for Custom<T, EXPECTING> {
-    const EXPECTING: BasicTypes = BasicTypes::from_raw(EXPECTING);
-
-    fn describe(&self, _description: &mut TypeDescription) {
-        // Do nothing
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<T, ErrorWithOrigin> {
-        self.0(ctx, param)
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        serde_json::to_value(param).expect("failed serializing to JSON")
     }
 }
 
@@ -314,6 +303,10 @@ where
     ) -> Result<T, ErrorWithOrigin> {
         self.inner.deserialize_param(ctx, param)
     }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        self.inner.serialize_param(param)
+    }
 }
 
 /// Deserializer decorator that defaults to the provided value if the input for the param is missing.
@@ -357,6 +350,10 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
             Ok((self.default)())
         }
     }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        self.inner.serialize_param(param)
+    }
 }
 
 /// Deserializer decorator that wraps the output of the underlying decorator in `Some` and returns `None`
@@ -382,6 +379,14 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
         }
         self.0.deserialize_param(ctx, param).map(Some)
     }
+
+    fn serialize_param(&self, param: &Option<T>) -> serde_json::Value {
+        if let Some(param) = param {
+            self.0.serialize_param(param)
+        } else {
+            serde_json::Value::Null
+        }
+    }
 }
 
 /// Deserializer that supports parsing either from a default format (usually an object or array) via [`Deserialize`](serde::Deserialize),
@@ -392,10 +397,10 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
 /// ```
 /// # use std::{collections::HashSet, str::FromStr};
 /// use anyhow::Context as _;
-/// # use serde::Deserialize;
+/// # use serde::{Deserialize, Serialize};
 /// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
 ///
-/// #[derive(Debug, Deserialize)]
+/// #[derive(Debug, Serialize, Deserialize)]
 /// #[serde(transparent)]
 /// struct MySet(HashSet<u64>);
 ///
@@ -458,5 +463,9 @@ where
             let err = serde_json::Error::custom(err);
             ErrorWithOrigin::json(err, origin.clone())
         })
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        self.0.serialize_param(param)
     }
 }

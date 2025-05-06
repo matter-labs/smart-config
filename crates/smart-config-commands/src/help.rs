@@ -7,14 +7,16 @@ use smart_config::{
     ConfigRef, ConfigSchema,
 };
 
-use crate::{ParamRef, Printer, CONFIG_PATH, STRING};
+use crate::{
+    utils::{write_json_value, STRING},
+    ParamRef, Printer, CONFIG_PATH,
+};
 
 const INDENT: &str = "  ";
 const DIMMED: Style = Style::new().dimmed();
 const MAIN_NAME: Style = Style::new().bold();
 const DEFAULT_VARIANT: Style = Style::new().bold();
 const FIELD: Style = Style::new().underline();
-const DEFAULT_VAL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
 const UNIT: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
 const SECRET: Style = Style::new()
     .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
@@ -168,11 +170,10 @@ impl ParamRef<'_> {
             self.write_tag_variant(tag_variant, writer)?;
         }
 
-        if let Some(default) = self.param.default_value() {
-            writeln!(
-                writer,
-                "{INDENT}{FIELD}Default{FIELD:#}: {DEFAULT_VAL}{default:?}{DEFAULT_VAL:#}"
-            )?;
+        if let Some(default) = self.param.default_value_json() {
+            write!(writer, "{INDENT}{FIELD}Default{FIELD:#}: ")?;
+            write_json_value(writer, &default, 2)?;
+            writeln!(writer)?;
         }
         if let Some(fallback) = self.param.fallback {
             write!(writer, "{INDENT}{FIELD}Fallbacks{FIELD:#}: ")?;

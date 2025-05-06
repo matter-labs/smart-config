@@ -56,10 +56,8 @@ use serde::de::Error as DeError;
 use self::deserializer::ValueDeserializer;
 pub use self::{
     deserializer::DeserializerOptions,
-    macros::{Custom, Serde},
-    param::{
-        Custom, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault,
-    },
+    macros::Serde,
+    param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
     repeated::{Delimited, Entries, NamedEntries, Repeated},
     secret::{FromSecretString, Secret},
     units::WithUnit,

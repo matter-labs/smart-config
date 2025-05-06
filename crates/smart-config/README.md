@@ -2,7 +2,7 @@
 
 [![Build status](https://github.com/matter-labs/smart-config/actions/workflows/ci.yml/badge.svg)](https://github.com/matter-labs/smart-config/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue)](https://github.com/matter-labs/smart-config#license)
-![rust 1.78+ required](https://img.shields.io/badge/rust-1.78+-blue.svg?label=Required%20Rust)
+![rust 1.79+ required](https://img.shields.io/badge/rust-1.79+-blue.svg?label=Required%20Rust)
 
 **Docs:**
 [![crate docs (main)](https://img.shields.io/badge/main-yellow.svg?label=docs)](https://matter-labs.github.io/smart-config/smart_config/)
@@ -57,12 +57,12 @@ smart-config = "0.1.0"
 
 ```rust
 use std::{collections::{HashMap, HashSet}, path::PathBuf, time::Duration};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use smart_config::{
     de::{Optional, Serde}, metadata::*, ByteSize, DescribeConfig, DeserializeConfig,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 enum CustomEnum {
     First,
     Second,

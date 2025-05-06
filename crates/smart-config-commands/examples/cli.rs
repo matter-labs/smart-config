@@ -10,7 +10,7 @@ use std::{
 use anstyle::{AnsiColor, Color, Style};
 use clap::Parser;
 use primitive_types::{H160 as Address, H256, U256};
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Serialize};
 use smart_config::{
     de, fallback,
     metadata::{SizeUnit, TimeUnit},
@@ -72,7 +72,7 @@ pub struct NestedConfig {
     pub method_limits: HashMap<String, NonZeroU32>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct ComplexParam {
     #[serde(default)]
     pub array: Vec<u32>,
@@ -85,17 +85,13 @@ impl de::WellKnown for ComplexParam {
     const DE: Self::Deserializer = de::Serde![object];
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct SecretKey(pub H256);
 
 impl fmt::Debug for SecretKey {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.debug_tuple("SecretKey").field(&"_").finish()
-    }
-}
-
-impl<'de> Deserialize<'de> for SecretKey {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        H256::deserialize(deserializer).map(Self)
     }
 }
 

@@ -52,11 +52,18 @@ macro_rules! _basic_types {
 /// # Examples
 ///
 /// ```
-/// # use serde::{Deserialize, Deserializer};
+/// # use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// # use smart_config::{de::Serde, DescribeConfig, DeserializeConfig};
 /// #[derive(Debug)]
 /// struct ComplexType {
 ///     // ...
+/// }
+///
+/// impl Serialize for ComplexType {
+///     // Complex serialization logic...
+/// # fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+/// #     unreachable!()
+/// # }
 /// }
 ///
 /// impl<'de> Deserialize<'de> for ComplexType {
@@ -87,33 +94,4 @@ macro_rules! Serde {
     };
 }
 
-/// Constructor of [`Custom`](struct@crate::de::Custom) types / instances.
-///
-/// The macro accepts a deserialized type followed by a comma-separated list of expected basic types from the following set: `bool`, `int`,
-/// `float`, `str`, `array`, `object`. As a shortcut, `Custom![_; *]` signals to accept any input.
-///
-/// # Examples
-///
-/// ```
-/// use serde::Deserialize;
-/// use smart_config::de::Custom;
-///
-/// /// Deserializer that accepts a string and maps it to its length.
-/// const LEN_DESERIALIZER: Custom![usize; str] = Custom![_; str](|ctx, param| {
-///     let de = ctx.current_value_deserializer(param.name)?;
-///     Ok(String::deserialize(de)?.len())
-/// });
-/// ```
-#[macro_export]
-#[allow(non_snake_case)]
-macro_rules! Custom {
-    ($typ:ty; *) => {
-        $crate::de::Custom::<$typ, { $crate::metadata::BasicTypes::ANY.raw() }>
-    };
-    ($typ:ty; $($expecting:tt),+ $(,)?) => {
-        $crate::de::Custom::<$typ, { $crate::_basic_types!($($expecting)+) }>
-    };
-}
-
-pub use Custom;
 pub use Serde;

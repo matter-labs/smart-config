@@ -188,28 +188,37 @@ impl ConfigEnumVariant {
     fn visit_match_arm(
         &self,
         variant_idx: usize,
-        start_field_offset: &mut usize,
+        start_param_offset: &mut usize,
+        start_config_offset: &mut usize,
     ) -> proc_macro2::TokenStream {
         let name = &self.name;
-        let params = self.fields.iter().filter(|field| !field.attrs.nest);
-        let (bindings, params): (Vec<_>, Vec<_>) = (*start_field_offset..)
-            .zip(params)
-            .map(|(field_idx, field)| {
-                let field = &field.name;
-                let field_binding = quote::format_ident!("__{field_idx}");
+        let mut bindings = vec![];
+        let mut params = vec![];
+        let mut nested_configs = vec![];
+        for (i, field) in self.fields.iter().enumerate() {
+            let is_config = field.attrs.nest;
+            let field = &field.name;
+            let field_binding = quote::format_ident!("__{i}");
 
-                let binding = quote_spanned!(field.span()=> #field: #field_binding);
-                let visit =
-                    quote_spanned!(field.span()=> visitor.visit_param(#field_idx, #field_binding));
-                (binding, visit)
-            })
-            .unzip();
-        *start_field_offset += params.len();
+            bindings.push(quote_spanned!(field.span()=> #field: #field_binding));
+            if is_config {
+                nested_configs.push(quote_spanned! {field.span()=>
+                    visitor.visit_nested_config(#start_config_offset, #field_binding)
+                });
+                *start_config_offset += 1;
+            } else {
+                params.push(quote_spanned! {field.span()=>
+                    visitor.visit_param(#start_param_offset, #field_binding)
+                });
+                *start_param_offset += 1;
+            }
+        }
 
         quote_spanned! {name.span()=>
             Self::#name { #(#bindings,)* .. } => {
                 visitor.visit_tag(#variant_idx);
                 #(#params;)*
+                #(#nested_configs;)*
             }
         }
     }
@@ -227,12 +236,24 @@ impl ConfigContainer {
                     let field = &field.name;
                     quote_spanned!(field.span()=> visitor.visit_param(#i, &self.#field))
                 });
-                quote!(#(#params;)*)
+
+                let nested_configs = fields.iter().filter(|field| field.attrs.nest);
+                let nested_configs = nested_configs.enumerate().map(|(i, field)| {
+                    let field = &field.name;
+                    quote_spanned!(field.span()=> visitor.visit_nested_config(#i, &self.#field))
+                });
+
+                quote!(#(#params;)* #(#nested_configs;)*)
             }
             ConfigContainerFields::Enum { variants, .. } => {
                 let mut start_param_offset = 0;
+                let mut start_nested_config_offset = 0;
                 let match_arms = variants.iter().enumerate().map(|(variant_idx, variant)| {
-                    variant.visit_match_arm(variant_idx, &mut start_param_offset)
+                    variant.visit_match_arm(
+                        variant_idx,
+                        &mut start_param_offset,
+                        &mut start_nested_config_offset,
+                    )
                 });
                 quote! {
                     match self {

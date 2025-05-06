@@ -13,10 +13,11 @@ use crate::{
     testing,
     testing::MockEnvGuard,
     testonly::{
-        extract_env_var_name, extract_json_name, test_deserialize, AliasedConfig, ComposedConfig,
-        CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks, ConfigWithNestedValidations,
-        ConfigWithNesting, ConfigWithValidations, DefaultingConfig, EnumConfig, KvTestConfig,
-        NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
+        extract_env_var_name, extract_json_name, serialize_to_json, test_config_roundtrip,
+        test_deserialize, AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes,
+        ConfigWithFallbacks, ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations,
+        DefaultingConfig, EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum,
+        ValueCoercingConfig,
     },
     value::StrValue,
     ByteSize, DescribeConfig,
@@ -119,6 +120,48 @@ fn parsing_enum_config_with_schema() {
             flag: false,
             set: HashSet::from([23, 42]),
         }
+    );
+}
+
+#[test]
+fn serializing_enum_config() {
+    let config = EnumConfig::First;
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({ "type": "first" })
+    );
+
+    let config = EnumConfig::Nested(NestedConfig {
+        simple_enum: SimpleEnum::First,
+        other_int: 42,
+        map: HashMap::from([("call".to_owned(), 100)]),
+    });
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "type": "Nested",
+            "renamed": "first",
+            "other_int": 42,
+            "map": { "call": 100 },
+        })
+    );
+
+    let config = EnumConfig::WithFields {
+        string: None,
+        flag: true,
+        set: HashSet::from([42]),
+    };
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "type": "WithFields",
+            "string": null,
+            "flag": true,
+            "set": [42],
+        })
     );
 }
 
@@ -383,6 +426,19 @@ fn using_nested_config_aliases() {
     let config: ConfigWithNesting = testing::test(json).unwrap();
     assert_eq!(config.nested.simple_enum, SimpleEnum::First);
     assert_eq!(config.nested.other_int, 50);
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "merged": "",
+            "value": 10,
+            "nested": {
+                "renamed": "first",
+                "other_int": 50,
+                "map": {},
+            },
+        })
+    );
 
     let json = config!(
         "value": 10,
@@ -593,6 +649,22 @@ fn parsing_complex_param() {
     assert_eq!(config.param.repeated, HashSet::from([SimpleEnum::First]));
     assert_eq!(config.set, HashSet::from([1, 2, 3]));
 
+    let json = serialize_to_json(&config);
+    assert_eq!(
+        json["param"],
+        serde_json::json!({
+            "array": [],
+            "bool": false,
+            "int": 4,
+            "optional": null,
+            "repeated": ["first"],
+            "string": "??",
+        })
+    );
+
+    let config_copy: ValueCoercingConfig = testing::test(Json::new("test.json", json)).unwrap();
+    assert_eq!(config_copy, config);
+
     let env = Environment::from_iter(
         "",
         [
@@ -608,6 +680,8 @@ fn parsing_complex_param() {
     assert_eq!(config.param.string, "!!");
     assert_eq!(config.param.repeated, HashSet::from([SimpleEnum::Second]));
     assert_eq!(config.set, HashSet::from([2, 3]));
+
+    test_config_roundtrip(&config);
 }
 
 #[test]
@@ -872,18 +946,22 @@ fn nesting_with_duration_param() {
     let json = config!("array": [4, 5], "long_dur_sec": 30);
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(30));
+    test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur_hours": "4");
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(3_600 * 4));
+    test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur": "3min");
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(60 * 3));
+    test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", 1)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(86_400));
+    test_config_roundtrip(&config);
 }
 
 #[test]
@@ -892,10 +970,12 @@ fn nesting_with_aliased_duration_param() {
     let json = config!("array": [4, 5], "long_timeout": "30s");
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(30));
+    test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_timeout_sec": 30);
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(30));
+    test_config_roundtrip(&config);
 
     // Test global aliases as well.
     let mut schema = ConfigSchema::default();
@@ -920,14 +1000,17 @@ fn nesting_with_byte_size_param() {
     let json = config!("array": [4, 5], "disk_size_mb": 64);
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.disk_size.unwrap(), 64 * SizeUnit::MiB);
+    test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "disk_size": "2 GiB");
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.disk_size.unwrap(), 2 * SizeUnit::GiB);
+    test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "disk_size": HashMap::from([("kib", 512)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.disk_size.unwrap(), 512 * SizeUnit::KiB);
+    test_config_roundtrip(&config);
 }
 
 #[test]
@@ -1063,6 +1146,7 @@ fn nesting_with_composed_deserializers() {
             ("large".to_owned(), ByteSize(5 << 20)),
         ])
     );
+    test_config_roundtrip(&config);
 }
 
 #[test]

@@ -14,10 +14,10 @@ use crate::{
     de::DeserializerOptions,
     metadata::SizeUnit,
     testonly::{
-        extract_env_var_name, extract_json_name, test_deserialize, test_deserialize_missing,
-        wrap_into_value, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting,
-        DefaultingConfig, DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig,
-        RenamedEnumConfig, SimpleEnum, TestParam,
+        extract_env_var_name, extract_json_name, test_config_roundtrip, test_deserialize,
+        test_deserialize_missing, wrap_into_value, ComposedConfig, CompoundConfig,
+        ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, DefaultingEnumConfig,
+        EnumConfig, MapOrString, NestedConfig, RenamedEnumConfig, SimpleEnum, TestParam,
     },
     value::{Pointer, Value, ValueOrigin},
     ByteSize, DescribeConfig, Environment, ParseError,
@@ -244,12 +244,37 @@ fn parsing_compound_config() {
         }
     );
     assert_eq!(
-        config.nested_opt.unwrap(),
+        *config.nested_opt.as_ref().unwrap(),
         NestedConfig {
             simple_enum: SimpleEnum::Second,
             other_int: 42,
             map: HashMap::new(),
         }
+    );
+
+    let json = test_config_roundtrip(&config);
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "default": {
+                "map": { "foo": 3 },
+                "other_int": 42,
+                "renamed": "second",
+            },
+            "nested": {
+                "map": {},
+                "other_int": 321,
+                "renamed": "first",
+            },
+            "nested_opt": {
+                "map": {},
+                "other_int": 42,
+                "renamed": "second",
+            },
+            "map": {},
+            "other_int": 42,
+            "renamed": "second",
+        })
     );
 }
 
@@ -478,20 +503,24 @@ fn parsing_composed_params() {
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     let expected_array = [Duration::from_secs(1), Duration::from_secs(300)];
     assert_eq!(config.durations, expected_array);
+    test_config_roundtrip(&config);
 
     let json = config!(
         "durations": serde_json::json!(["1 sec", { "min": 5 }])
     );
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.durations, expected_array);
+    test_config_roundtrip(&config);
 
     let json = config!("delimited_durations": ["1sec", "5 min"]);
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.delimited_durations, expected_array);
+    test_config_roundtrip(&config);
 
     let json = config!("delimited_durations": "1 sec,5 min");
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.delimited_durations, expected_array);
+    test_config_roundtrip(&config);
 
     let json = config!("map_of_sizes": HashMap::from([("small", "1 MiB"), ("large", "3 MiB")]));
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
@@ -500,14 +529,17 @@ fn parsing_composed_params() {
         ("large".to_owned(), ByteSize(3 << 20)),
     ]);
     assert_eq!(config.map_of_sizes, expected_map);
+    test_config_roundtrip(&config);
 
     let json = config!("map_of_ints": HashMap::from([(5, "30 sec")]));
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.map_of_ints[&5], Duration::from_secs(30));
+    test_config_roundtrip(&config);
 
     let json = config!("entry_map": HashMap::from([(5, "30 sec")]));
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.entry_map[&5], Duration::from_secs(30));
+    test_config_roundtrip(&config);
 
     let json = config!(
         "entry_map": serde_json::json!([
@@ -518,6 +550,20 @@ fn parsing_composed_params() {
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.entry_map[&5], Duration::from_secs(30));
     assert_eq!(config.entry_map[&10], Duration::from_secs(120));
+    test_config_roundtrip(&config);
+
+    let methods = serde_json::json!([
+        { "method": "call", "priority": -100 },
+        { "method": "estimateGas", "priority": 200 },
+    ]);
+    let json = config!("entry_slice": &methods);
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(
+        config.entry_slice[..],
+        [("call".to_owned(), -100), ("estimateGas".to_owned(), 200)]
+    );
+    let json = test_config_roundtrip(&config);
+    assert_eq!(json["entry_slice"], methods);
 }
 
 #[test]
