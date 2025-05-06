@@ -68,8 +68,8 @@
 </tspan><tspan xml:space="preserve" x="42" y="410" class="output">  Raw: <tspan class="fg6">"/var/folders/mw/lhb7m9dj3jbdm3w994t0_c8h0000gn/T/"</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="428" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="428" class="output">  Origin: <tspan class="bg5">env:</tspan>"TMPDIR" <tspan class="bold">-&gt;</tspan> fallback for `TestConfig.temp_dir`
 </tspan><tspan xml:space="preserve" x="42" y="446" class="output">test.dir_paths <tspan class="dimmed">[Rust: TestConfig.dir_paths]</tspan> = [
-</tspan><tspan xml:space="preserve" x="42" y="464" class="output">  <tspan class="fg6">"/usr/local/bin"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="482" class="output">  <tspan class="fg6">"/usr/bin"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="464" class="output">  <tspan class="fg6">"/usr/bin"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="482" class="output">  <tspan class="fg6">"/usr/local/bin"</tspan>,
 </tspan><tspan xml:space="preserve" x="42" y="500" class="output">]
 </tspan><tspan xml:space="preserve" x="42" y="518" class="output">  Raw: <tspan class="fg6">"/usr/bin:/usr/local/bin"</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="536" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="536" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_DIRS"
@@ -117,12 +117,12 @@
 </tspan><tspan xml:space="preserve" x="42" y="1292" class="output">test.nested.more_timeouts <tspan class="dimmed">[Rust: NestedConfig.more_timeouts]</tspan> = []
 </tspan><tspan xml:space="preserve" x="42" y="1310" class="output">test.nested.method_limits <tspan class="dimmed">[Rust: NestedConfig.method_limits]</tspan> = [
 </tspan><tspan xml:space="preserve" x="42" y="1328" class="output">  {
-</tspan><tspan xml:space="preserve" x="42" y="1346" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_getLogs"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1364" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1346" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1364" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>,
 </tspan><tspan xml:space="preserve" x="42" y="1382" class="output">  },
 </tspan><tspan xml:space="preserve" x="42" y="1400" class="output">  {
-</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_getLogs"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>,
 </tspan><tspan xml:space="preserve" x="42" y="1454" class="output">  },
 </tspan><tspan xml:space="preserve" x="42" y="1472" class="output">]
 </tspan><tspan xml:space="preserve" x="42" y="1490" class="output">  Raw: [
@@ -131,8 +131,8 @@
 </tspan><tspan xml:space="preserve" x="42" y="1544" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>,
 </tspan><tspan xml:space="preserve" x="42" y="1562" class="output">    },
 </tspan><tspan xml:space="preserve" x="42" y="1580" class="output">    {
-</tspan><tspan xml:space="preserve" x="42" y="1598" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1616" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1598" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1616" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>,
 </tspan><tspan xml:space="preserve" x="42" y="1634" class="output">    },
 </tspan><tspan xml:space="preserve" x="42" y="1652" class="output">  ]
 </tspan><tspan xml:space="preserve" x="42" y="1670" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1670" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.nested.method_limits

@@ -56,6 +56,28 @@ fn parse_docs(attrs: &[Attribute]) -> String {
 }
 
 #[derive(Debug)]
+pub(crate) struct Validation {
+    pub(crate) expr: Expr,
+    pub(crate) description: Option<Expr>,
+}
+
+impl Validation {
+    fn new(input: ParseStream<'_>) -> syn::Result<Self> {
+        let content;
+        syn::parenthesized!(content in input);
+        let expr = content.parse()?;
+
+        let description = if content.is_empty() {
+            None
+        } else {
+            content.parse::<Token![,]>()?;
+            Some(content.parse()?)
+        };
+        Ok(Self { expr, description })
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct ConfigVariantAttrs {
     pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
@@ -132,6 +154,7 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
     pub(crate) with: Option<Expr>,
+    pub(crate) validations: Vec<Validation>,
 }
 
 impl ConfigFieldAttrs {
@@ -146,6 +169,7 @@ impl ConfigFieldAttrs {
         let mut flatten_span = None;
         let mut with = None;
         let mut secret_span = None;
+        let mut validations = vec![];
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("rename") {
@@ -178,6 +202,9 @@ impl ConfigFieldAttrs {
                     Ok(())
                 } else if meta.path.is_ident("with") {
                     with = Some(meta.value()?.parse::<Expr>()?);
+                    Ok(())
+                } else if meta.path.is_ident("validate") {
+                    validations.push(Validation::new(meta.input)?);
                     Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))
@@ -227,6 +254,7 @@ impl ConfigFieldAttrs {
             flatten,
             nest,
             with,
+            validations,
             is_secret: secret_span.is_some(),
         })
     }
@@ -411,23 +439,6 @@ impl RenameRule {
             });
         }
         output
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct Validation {
-    pub(crate) description: LitStr,
-    pub(crate) path: Path,
-}
-
-impl Validation {
-    fn new(input: ParseStream<'_>) -> syn::Result<Self> {
-        let content;
-        syn::parenthesized!(content in input);
-        let description = content.parse()?;
-        content.parse::<Token![,]>()?;
-        let path = content.parse()?;
-        Ok(Self { description, path })
     }
 }
 

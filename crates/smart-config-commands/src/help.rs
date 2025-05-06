@@ -246,6 +246,13 @@ fn write_type_description(
         ""
     )?;
 
+    if !description.validations().is_empty() {
+        writeln!(writer, "{:>indent$}{FIELD}Validations{FIELD:#}:", "")?;
+        for validation in description.validations() {
+            writeln!(writer, "{:>indent$}- {validation}", "")?;
+        }
+    }
+
     if let Some((expecting, item)) = description.items() {
         write_type_description(writer, "Array items", indent + 2, expecting, item)?;
     }

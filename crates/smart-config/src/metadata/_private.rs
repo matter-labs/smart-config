@@ -1,15 +1,15 @@
 //! Metadata validations performed in compile time.
 
-use std::{any, fmt, marker::PhantomData};
+use std::{any, marker::PhantomData};
 
 use compile_fmt::{clip, clip_ascii, compile_args, compile_panic, Ascii, CompileArgs};
 
-use super::{ConfigMetadata, NestedConfigMetadata, ParamMetadata, Validate};
+use super::{ConfigMetadata, NestedConfigMetadata, ParamMetadata};
 use crate::{
     de::DeserializeContext,
     utils::const_eq,
     visit::{ConfigVisitor, VisitConfig},
-    DeserializeConfig, DeserializeConfigError, ErrorWithOrigin,
+    DeserializeConfig, DeserializeConfigError,
 };
 
 pub type BoxedDeserializer =
@@ -48,31 +48,6 @@ impl<T> DeserializeBoxedConfig for &PhantomData<T> {
         _ctx: DeserializeContext<'_>,
     ) -> Result<Box<dyn any::Any>, DeserializeConfigError> {
         Err(DeserializeConfigError::new())
-    }
-}
-
-/// Typed [`Validate`] implementation.
-#[derive(Clone, Copy)]
-pub struct Validation<T>(pub &'static str, pub fn(&T) -> Result<(), ErrorWithOrigin>);
-
-impl<T: 'static> fmt::Display for Validation<T> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.0)
-    }
-}
-
-impl<T: 'static> fmt::Debug for Validation<T> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_tuple("Validation").field(&self.0).finish()
-    }
-}
-
-impl<T: 'static> Validate<dyn any::Any> for Validation<T> {
-    fn validate(&self, target: &dyn any::Any) -> Result<(), ErrorWithOrigin> {
-        let target = target
-            .downcast_ref()
-            .expect("Internal error: validation target has incorrect type");
-        (self.1)(target)
     }
 }
 

@@ -14,9 +14,10 @@ use serde::{Deserialize, Serialize};
 use smart_config::{
     de, fallback,
     metadata::{SizeUnit, TimeUnit},
+    validation::NotEmpty,
     value::SecretString,
-    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
-    ErrorWithOrigin, Json, Prefixed, Yaml,
+    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment, Json,
+    Prefixed, Yaml,
 };
 use smart_config_commands::{ParamRef, Printer};
 
@@ -27,12 +28,11 @@ pub struct TestConfig {
     #[config(default_t = 8080, alias = "bind_to")]
     pub port: u16,
     /// Application name.
-    #[config(default_t = "app".into())]
+    #[config(default_t = "app".into(), validate(NotEmpty))]
     pub app_name: String,
     #[config(default_t = Duration::from_millis(500))]
     pub poll_latency: Duration,
-    /// Should be greater than 0.
-    #[config(default)]
+    #[config(default, validate(0.0..=10.0))]
     pub scaling_factor: Option<f32>,
     /// Directory for temporary stuff.
     #[config(default_t = "/tmp".into(), fallback = &fallback::Env("TMPDIR"))]
@@ -97,8 +97,8 @@ impl fmt::Debug for SecretKey {
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(validate(
-    "`address` should be non-zero for non-zero `balance`",
-    Self::validate_address
+    Self::validate_address,
+    "`address` should be non-zero for non-zero `balance`"
 ))]
 pub struct FundingConfig {
     /// Ethereum-like address to fund.
@@ -115,11 +115,8 @@ pub struct FundingConfig {
 }
 
 impl FundingConfig {
-    fn validate_address(&self) -> Result<(), ErrorWithOrigin> {
-        if self.balance > 0.into() && self.address.is_zero() {
-            return Err(ErrorWithOrigin::custom("address shouldn't be zero"));
-        }
-        Ok(())
+    fn validate_address(&self) -> bool {
+        self.balance.is_zero() || !self.address.is_zero()
     }
 }
 
@@ -216,7 +213,9 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
         let bogus_vars = Environment::from_iter(
             "BOGUS_",
             [
+                ("BOGUS_TEST_APP_NAME", ""),
                 ("BOGUS_TEST_TIMEOUT_SEC", "what?"),
+                ("BOGUS_TEST_SCALING_FACTOR", "-1"),
                 ("BOGUS_TEST_NESTED_TIMEOUTS", "nope,124us"),
                 ("BOGUS_TEST_NESTED_COMPLEX", r#"{ "array": [1, true] }"#),
                 ("BOGUS_TEST_NESTED_METHOD_LIMITS", r#"{ "eth_getLogs": 0 }"#),

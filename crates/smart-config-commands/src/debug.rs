@@ -351,6 +351,9 @@ fn write_de_errors(writer: &mut impl io::Write, errors: &[ParseError]) -> io::Re
 
 fn write_de_error(writer: &mut impl io::Write, err: &ParseError) -> io::Result<()> {
     writeln!(writer, "{}", err.inner())?;
+    if let Some(validation) = err.validation() {
+        writeln!(writer, "    {SECTION}validation:{SECTION:#} {validation}")?;
+    }
     writeln!(
         writer,
         "    at {SECTION}{path}{SECTION:#}",

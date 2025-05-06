@@ -30,7 +30,22 @@ impl DefaultValue {
     }
 }
 
+impl Validation {
+    fn wrap(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let expr = &self.expr;
+        if let Some(description) = &self.description {
+            quote_spanned! {expr.span()=>
+                #cr::validation::_private::WithDescription::new(#expr, #description)
+            }
+        } else {
+            quote!(#expr)
+        }
+    }
+}
+
 impl ConfigField {
+    /// **Important.** The ordering of deserializer wrappers is important! E.g., the post-validation wrapper
+    /// must come last.
     fn deserializer(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         let mut deserializer = if let Some(with) = &self.attrs.with {
             quote!(#with)
@@ -46,6 +61,17 @@ impl ConfigField {
         if let Some(default_fn) = &default_fn {
             deserializer = quote!(#cr::de::WithDefault::new(#deserializer, #default_fn));
         }
+        if !self.attrs.validations.is_empty() {
+            let validations = self.attrs.validations.iter().map(|val| {
+                let wrapped = val.wrap(cr);
+                // A reference is required to convert to `&dyn Validate<_>`. `()`s are here to correctly handle some validation expressions
+                // (e.g., `a..b` ranges; unless a range is parenthesized, `&` will be interpreted as a part of the range start).
+                quote_spanned!(val.expr.span()=> &(#wrapped))
+            });
+            deserializer =
+                quote!(#cr::de::_private::Validated::new(#deserializer, &[#(#validations,)*]));
+        }
+
         deserializer
     }
 
@@ -150,16 +176,6 @@ impl ConfigField {
                 tag_variant: #tag_variant,
                 meta: &<#ty as #cr::DescribeConfig>::DESCRIPTION,
             }
-        }
-    }
-}
-
-impl Validation {
-    fn to_validation(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-        let description = &self.description;
-        let path = &self.path;
-        quote_spanned! {description.span()=>
-            &#cr::metadata::_private::Validation(#description, #path)
         }
     }
 }
@@ -272,6 +288,17 @@ impl ConfigContainer {
         }
     }
 
+    fn erase_validation(
+        validation: &Validation,
+        cr: &proc_macro2::TokenStream,
+        ty: &impl quote::ToTokens,
+    ) -> proc_macro2::TokenStream {
+        let validation = validation.wrap(cr);
+        quote! {
+            &#cr::validation::_private::ErasedValidation::<#ty, _>::new(#validation)
+        }
+    }
+
     fn derive_describe_config(&self) -> proc_macro2::TokenStream {
         let name = &self.name;
         let cr = self.cr(name.span());
@@ -347,7 +374,7 @@ impl ConfigContainer {
             .attrs
             .validations
             .iter()
-            .map(|val| val.to_validation(&cr));
+            .map(|val| Self::erase_validation(val, &cr, &name));
 
         quote! {
             impl #cr::DescribeConfig for #name {

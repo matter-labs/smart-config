@@ -6,19 +6,13 @@ use self::_private::{BoxedDeserializer, BoxedVisitor};
 use crate::{
     de::{DeserializeParam, _private::ErasedDeserializer},
     fallback::FallbackSource,
-    ErrorWithOrigin,
+    validation::Validate,
 };
 
 #[doc(hidden)] // used in the derive macros
 pub mod _private;
 #[cfg(test)]
 mod tests;
-
-/// Generic post-validation for a configuration parameter.
-#[doc(hidden)]
-pub trait Validate<T: ?Sized>: 'static + Send + Sync + fmt::Debug + fmt::Display {
-    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin>;
-}
 
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]
@@ -260,6 +254,7 @@ pub struct TypeDescription {
     details: Option<Cow<'static, str>>,
     unit: Option<UnitOfMeasurement>,
     pub(crate) is_secret: bool,
+    validations: Vec<String>,
     items: Option<ChildDescription>,
     entries: Option<(ChildDescription, ChildDescription)>,
 }
@@ -278,6 +273,11 @@ impl TypeDescription {
     /// Gets the unit of measurement.
     pub fn unit(&self) -> Option<UnitOfMeasurement> {
         self.unit
+    }
+
+    #[doc(hidden)] // exposes implementation details
+    pub fn validations(&self) -> &[String] {
+        &self.validations
     }
 
     /// Returns the description of array items, if one was provided.
@@ -330,6 +330,12 @@ impl TypeDescription {
     /// Adds a unit of measurement.
     pub fn set_unit(&mut self, unit: UnitOfMeasurement) -> &mut Self {
         self.unit = Some(unit);
+        self
+    }
+
+    /// Sets validation for the type.
+    pub fn set_validations<T>(&mut self, validations: &[&'static dyn Validate<T>]) -> &mut Self {
+        self.validations = validations.iter().map(ToString::to_string).collect();
         self
     }
 

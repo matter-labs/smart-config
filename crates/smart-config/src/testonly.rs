@@ -23,6 +23,7 @@ use crate::{
     fallback::FallbackSource,
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata, SizeUnit, TimeUnit},
     testing,
+    validation::NotEmpty,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
     visit::{ConfigVisitor, VisitConfig},
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin, Json,
@@ -325,10 +326,16 @@ pub(crate) struct ConfigWithFallbacks {
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
-#[config(validate("`len` must match `secret` length", Self::validate_len))]
+#[config(validate(Self::validate_len, "`len` must match `secret` length"))]
 pub(crate) struct ConfigWithValidations {
+    #[config(
+        validate(..1_000),
+        validate(ConfigWithValidations::is_not_cursed, "must not be cursed")
+    )]
     pub len: usize,
     pub secret: SecretString,
+    #[config(default_t = vec![1, 2, 3], validate(NotEmpty))]
+    pub numbers: Vec<u32>,
 }
 
 impl ConfigWithValidations {
@@ -337,6 +344,11 @@ impl ConfigWithValidations {
             return Err(DeError::custom("`len` doesn't correspond to `secret`"));
         }
         Ok(())
+    }
+
+    #[allow(clippy::trivially_copy_pass_by_ref)] // required by the predicate fn signature
+    fn is_not_cursed(&value: &usize) -> bool {
+        value % 1_000 != 666
     }
 }
 

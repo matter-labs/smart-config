@@ -205,11 +205,17 @@ impl<'a> DeserializeContext<'a> {
         )
     }
 
-    #[cold]
     fn push_error(&mut self, err: ErrorWithOrigin) {
+        self.push_generic_error(err, None);
+    }
+
+    #[cold]
+    fn push_generic_error(&mut self, err: ErrorWithOrigin, validation: Option<String>) {
         let inner = match err.inner {
             LowLevelError::Json(err) => err,
-            LowLevelError::InvalidArray | LowLevelError::InvalidObject => return,
+            LowLevelError::InvalidArray
+            | LowLevelError::InvalidObject
+            | LowLevelError::Validation => return,
         };
 
         let mut origin = err.origin;
@@ -225,6 +231,7 @@ impl<'a> DeserializeContext<'a> {
             origin,
             config: self.current_config,
             location_in_config: self.location_in_config,
+            validation,
         });
     }
 
@@ -253,7 +260,7 @@ impl<'a> DeserializeContext<'a> {
             let _span = tracing::trace_span!("validation", %validation).entered();
             if let Err(err) = validation.validate(config.as_ref()) {
                 tracing::info!(%validation, origin = %err.origin, "config validation failed: {}", err.inner);
-                self.push_error(err);
+                self.push_generic_error(err, Some(validation.to_string()));
                 has_errors = true;
             }
         }

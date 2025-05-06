@@ -23,7 +23,7 @@ use crate::metadata::SizeUnit;
 /// const SIZE: ByteSize = ByteSize::new(128, SizeUnit::MiB);
 /// assert_eq!(SIZE, ByteSize(128 << 20));
 /// ```
-#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ByteSize(pub u64);
 
 impl fmt::Debug for ByteSize {
