@@ -12,8 +12,11 @@ use crate::{
     fallback::Fallbacks,
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
+    utils::{merge_json, JsonObject},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
-    DeserializeConfig, DeserializeConfigError, ParseError, ParseErrors,
+    visit,
+    visit::Serializer,
+    DescribeConfig, DeserializeConfig, DeserializeConfigError, ParseError, ParseErrors,
 };
 
 #[macro_use]
@@ -119,6 +122,29 @@ pub struct SourceInfo {
     pub origin: Arc<ValueOrigin>,
     /// Number of params in the source after it has undergone preprocessing (i.e., merging aliases etc.).
     pub param_count: usize,
+}
+
+/// Configuration serialization options.
+#[derive(Debug, Clone, Default)]
+#[non_exhaustive]
+pub struct SerializerOptions {
+    pub(crate) diff_with_default: bool,
+}
+
+impl SerializerOptions {
+    /// Will serialize only params with values differing from the default value.
+    pub fn diff_with_default() -> Self {
+        Self {
+            diff_with_default: true,
+        }
+    }
+
+    /// Serializes a config to JSON, recursively visiting its nested configs.
+    pub fn serialize<C: DescribeConfig>(self, config: &C) -> JsonObject {
+        let mut visitor = Serializer::new(&C::DESCRIPTION, self);
+        config.visit_config(&mut visitor);
+        visitor.into_inner()
+    }
 }
 
 /// Configuration repository containing zero or more [configuration sources](ConfigSource).
@@ -271,6 +297,38 @@ impl<'a> ConfigRepository<'a> {
     #[doc(hidden)] // not stable yet
     pub fn merged(&self) -> &WithOrigin {
         &self.merged
+    }
+
+    /// Returns canonical JSON for all configurations contained in the schema, with values filled both from the contained sources
+    /// and from defaults.
+    ///
+    /// This method differs from [`Self::merged()`] by taking defaults into account.
+    ///
+    /// # Errors
+    ///
+    /// If parsing any of the config fails, returns parsing errors early (i.e., errors are **not** exhaustive).
+    #[doc(hidden)] // not stable yet
+    pub fn canonicalize(&self, options: &SerializerOptions) -> Result<JsonObject, ParseErrors> {
+        let mut json = serde_json::Map::new();
+        for config_parser in self.iter() {
+            if !config_parser.config().is_top_level() {
+                // The config should be serialized as a part of the parent config.
+                continue;
+            }
+
+            let parsed = config_parser.parse()?;
+            let metadata = config_parser.config().metadata();
+            let visitor_fn = metadata.visitor;
+            let mut visitor = visit::Serializer::new(metadata, options.clone());
+            visitor_fn(parsed.as_ref(), &mut visitor);
+            merge_json(
+                &mut json,
+                metadata,
+                config_parser.config().prefix(),
+                visitor.into_inner(),
+            );
+        }
+        Ok(json)
     }
 
     /// Iterates over parsers for all configs in the schema.

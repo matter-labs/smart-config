@@ -15,7 +15,7 @@ term-transcript --version
 
 echo "Building CLI example..."
 cargo build -p smart-config-commands --example cli
-if [[ ! -x "$TARGET_DIR/examples/cli" ]]; then
+if [ ! -x "$TARGET_DIR/examples/cli" ]; then
   echo "Example executable not found at expected location"
   exit 1
 fi
@@ -29,3 +29,5 @@ echo "Creating debug snapshot..."
 term-transcript exec $TT_ARGS --scroll=540 "$TARGET_DIR/examples/cli debug" > "$THIS_DIR/debug.svg"
 echo "Creating errors snapshot..."
 term-transcript exec $TT_ARGS --scroll=540 "$TARGET_DIR/examples/cli debug --bogus" > "$THIS_DIR/errors.svg"
+echo "Create YAML serialization snapshot..."
+term-transcript exec $TT_ARGS "$TARGET_DIR/examples/cli serialize --diff" > "$THIS_DIR/ser-yaml.svg"

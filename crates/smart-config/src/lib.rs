@@ -223,6 +223,13 @@
 ///
 /// Allows to specify the default typed value for the param. The provided expression doesn't need to be constant.
 ///
+/// ## `example`
+///
+/// **Type:** expression with field type
+///
+/// Allows to specify the example value for the param. The example value can be specified together with the `default` / `default_t`
+/// attribute. In this case, the example value can be more "complex" than the default, to better illustrate how the configuration works.
+///
 /// ## `fallback`
 ///
 /// **Type:** constant expression evaluating to `&'static dyn `[`FallbackSource`](fallback::FallbackSource)
@@ -316,6 +323,57 @@ pub use smart_config_derive::DescribeConfig;
 /// This macro is intended to be used together with [`DescribeConfig`](macro@DescribeConfig). It reuses
 /// the same attributes, so see `DescribeConfig` docs for details and examples of usage.
 pub use smart_config_derive::DeserializeConfig;
+/// Derives the [`ExampleConfig`](trait@ExampleConfig) trait for a type.
+///
+/// This macro is intended to be used together with [`DescribeConfig`](macro@DescribeConfig); it reuses
+/// the same attributes. Specifically, for each config field, the default value is assigned from the following sources
+/// in the decreasing priority order:
+///
+/// 1. `example`
+/// 2. `default` / `default_t`, including implied ones for `Option`al fields
+/// 3. From [`ExampleConfig`](trait@ExampleConfig) implementation (only for nested / flattened configs)
+///
+/// # Examples
+///
+/// ```
+/// # use std::collections::HashSet;
+/// # use smart_config::{DescribeConfig, ExampleConfig, SerializerOptions};
+/// #[derive(DescribeConfig, ExampleConfig)]
+/// struct TestConfig {
+///     /// Required param that still has an example value.
+///     #[config(example = 42)]
+///     required: u32,
+///     optional: Option<String>,
+///     #[config(default_t = true)]
+///     with_default: bool,
+///     #[config(default, example = vec![5, 8])]
+///     values: Vec<u32>,
+///     #[config(nest)]
+///     nested: NestedConfig,
+/// }
+///
+/// #[derive(DescribeConfig, ExampleConfig)]
+/// struct NestedConfig {
+///     #[config(default, example = ["eth_call".into()].into())]
+///     methods: HashSet<String>,
+/// }
+///
+/// let example: TestConfig = TestConfig::example_config();
+/// let json = SerializerOptions::default().serialize(&example);
+/// assert_eq!(
+///     serde_json::Value::from(json),
+///     serde_json::json!({
+///         "required": 42,
+///         "optional": null,
+///         "with_default": true,
+///         "values": [5, 8],
+///         "nested": {
+///             "methods": ["eth_call"],
+///         },
+///     })
+/// );
+/// ```
+pub use smart_config_derive::ExampleConfig;
 
 pub use self::{
     de::DeserializeConfig,
@@ -323,7 +381,7 @@ pub use self::{
     schema::{ConfigMut, ConfigRef, ConfigSchema},
     source::{
         ConfigContents, ConfigParser, ConfigRepository, ConfigSource, ConfigSources, Environment,
-        Json, Prefixed, SourceInfo, Yaml,
+        Json, Prefixed, SerializerOptions, SourceInfo, Yaml,
     },
     types::ByteSize,
 };
@@ -348,6 +406,20 @@ pub mod visit;
 pub trait DescribeConfig: 'static + VisitConfig {
     /// Provides the config description.
     const DESCRIPTION: ConfigMetadata;
+}
+
+/// Provides an example for this configuration. The produced config can be used in tests etc.
+///
+/// For struct configs, this can be derived via [the corresponding proc macro](macro@ExampleConfig).
+pub trait ExampleConfig {
+    /// Constructs an example configuration.
+    fn example_config() -> Self;
+}
+
+impl<T: ExampleConfig> ExampleConfig for Option<T> {
+    fn example_config() -> Self {
+        Some(T::example_config())
+    }
 }
 
 #[cfg(doctest)]

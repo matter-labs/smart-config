@@ -14,11 +14,17 @@ use proc_macro::TokenStream;
 
 mod de;
 mod describe;
+mod example;
 mod utils;
 
 #[proc_macro_derive(DescribeConfig, attributes(config))]
 pub fn describe_config(input: TokenStream) -> TokenStream {
     describe::impl_describe_config(input)
+}
+
+#[proc_macro_derive(ExampleConfig, attributes(config))]
+pub fn example_config(input: TokenStream) -> TokenStream {
+    example::impl_example_config(input)
 }
 
 #[proc_macro_derive(DeserializeConfig, attributes(config))]

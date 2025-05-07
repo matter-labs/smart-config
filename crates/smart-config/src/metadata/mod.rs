@@ -80,6 +80,8 @@ pub struct ParamMetadata {
     pub deserializer: &'static dyn ErasedDeserializer,
     #[doc(hidden)] // implementation detail
     pub default_value: Option<fn() -> Box<dyn any::Any>>,
+    #[doc(hidden)] // implementation detail
+    pub example_value: Option<fn() -> Box<dyn any::Any>>,
     #[doc(hidden)]
     pub fallback: Option<&'static dyn FallbackSource>,
 }
@@ -94,6 +96,12 @@ impl ParamMetadata {
     pub fn default_value_json(&self) -> Option<serde_json::Value> {
         self.default_value()
             .map(|val| self.deserializer.serialize_param(val.as_ref()))
+    }
+
+    /// Returns the example value for the param serialized into JSON.
+    pub fn example_value_json(&self) -> Option<serde_json::Value> {
+        let example = self.example_value?();
+        Some(self.deserializer.serialize_param(example.as_ref()))
     }
 
     /// Returns the type description for this param as provided by its deserializer.

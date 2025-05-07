@@ -149,7 +149,8 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
     pub(crate) default: Option<DefaultValue>,
-    pub(crate) alt: Option<Expr>,
+    pub(crate) example: Option<Expr>,
+    pub(crate) fallback: Option<Expr>,
     pub(crate) flatten: bool,
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
@@ -158,12 +159,14 @@ pub(crate) struct ConfigFieldAttrs {
 }
 
 impl ConfigFieldAttrs {
+    #[allow(clippy::too_many_lines)]
     fn new(attrs: &[Attribute], is_option: bool) -> syn::Result<Self> {
         let config_attrs = attrs.iter().filter(|attr| attr.path().is_ident("config"));
 
         let mut rename = None;
         let mut aliases = vec![];
         let mut default = None;
+        let mut example = None;
         let mut fallback = None;
         let mut nested_span = None;
         let mut flatten_span = None;
@@ -187,6 +190,9 @@ impl ConfigFieldAttrs {
                     Ok(())
                 } else if meta.path.is_ident("default_t") {
                     default = Some(DefaultValue::Expr(meta.value()?.parse()?));
+                    Ok(())
+                } else if meta.path.is_ident("example") {
+                    example = Some(meta.value()?.parse::<Expr>()?);
                     Ok(())
                 } else if meta.path.is_ident("fallback") {
                     fallback = Some(meta.value()?.parse::<Expr>()?);
@@ -250,7 +256,8 @@ impl ConfigFieldAttrs {
             rename,
             aliases,
             default,
-            alt: fallback,
+            example,
+            fallback,
             flatten,
             nest,
             with,

@@ -170,11 +170,23 @@ impl ParamRef<'_> {
             self.write_tag_variant(tag_variant, writer)?;
         }
 
-        if let Some(default) = self.param.default_value_json() {
+        let default = self.param.default_value_json();
+        if let Some(default) = &default {
             write!(writer, "{INDENT}{FIELD}Default{FIELD:#}: ")?;
-            write_json_value(writer, &default, 2)?;
+            write_json_value(writer, default, 2)?;
             writeln!(writer)?;
         }
+
+        let example = self
+            .param
+            .example_value_json()
+            .filter(|val| Some(val) != default.as_ref());
+        if let Some(example) = example {
+            write!(writer, "{INDENT}{FIELD}Example{FIELD:#}: ")?;
+            write_json_value(writer, &example, 2)?;
+            writeln!(writer)?;
+        }
+
         if let Some(fallback) = self.param.fallback {
             write!(writer, "{INDENT}{FIELD}Fallbacks{FIELD:#}: ")?;
             let fallback = fallback.to_string();

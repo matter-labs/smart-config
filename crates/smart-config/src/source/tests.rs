@@ -13,14 +13,13 @@ use crate::{
     testing,
     testing::MockEnvGuard,
     testonly::{
-        extract_env_var_name, extract_json_name, serialize_to_json, test_config_roundtrip,
-        test_deserialize, AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes,
-        ConfigWithFallbacks, ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations,
-        DefaultingConfig, EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum,
-        ValueCoercingConfig,
+        extract_env_var_name, extract_json_name, test_config_roundtrip, test_deserialize,
+        AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks,
+        ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations, DefaultingConfig,
+        EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
     },
     value::StrValue,
-    ByteSize, DescribeConfig,
+    ByteSize, DescribeConfig, SerializerOptions,
 };
 
 #[test]
@@ -649,7 +648,8 @@ fn parsing_complex_param() {
     assert_eq!(config.param.repeated, HashSet::from([SimpleEnum::First]));
     assert_eq!(config.set, HashSet::from([1, 2, 3]));
 
-    let json = serialize_to_json(&config);
+    let json = SerializerOptions::default().serialize(&config);
+    assert!(json.contains_key("repeated"), "{json:?}");
     assert_eq!(
         json["param"],
         serde_json::json!({
@@ -662,8 +662,13 @@ fn parsing_complex_param() {
         })
     );
 
-    let config_copy: ValueCoercingConfig = testing::test(Json::new("test.json", json)).unwrap();
+    let config_copy: ValueCoercingConfig =
+        testing::test(Json::new("test.json", json.clone())).unwrap();
     assert_eq!(config_copy, config);
+
+    let json_diff = SerializerOptions::diff_with_default().serialize(&config);
+    assert!(!json_diff.contains_key("repeated"), "{json_diff:?}");
+    assert_eq!(json_diff["param"], json["param"]);
 
     let env = Environment::from_iter(
         "",
