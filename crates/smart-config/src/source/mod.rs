@@ -9,6 +9,7 @@ use std::{
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
+    error::ParseErrorCategory,
     fallback::Fallbacks,
     metadata::BasicTypes,
     schema::{ConfigRef, ConfigSchema},
@@ -314,7 +315,9 @@ impl<'a> ConfigRepository<'a> {
     ///
     /// # Errors
     ///
-    /// If parsing any of the config fails, returns parsing errors early (i.e., errors are **not** exhaustive).
+    /// If parsing any of the configs in the schema fails, returns parsing errors early (i.e., errors are **not** exhaustive).
+    /// Importantly, missing config / parameter errors are swallowed provided this is the only kind of errors for the config,
+    /// and the corresponding config serialization is skipped.
     #[doc(hidden)] // not stable yet
     pub fn canonicalize(&self, options: &SerializerOptions) -> Result<JsonObject, ParseErrors> {
         let mut json = serde_json::Map::new();
@@ -324,7 +327,23 @@ impl<'a> ConfigRepository<'a> {
                 continue;
             }
 
-            let parsed = config_parser.parse()?;
+            let parsed = match config_parser.parse() {
+                Ok(config) => config,
+                Err(err) => {
+                    if err
+                        .iter()
+                        .all(|err| matches!(err.category, ParseErrorCategory::MissingField))
+                    {
+                        tracing::debug!(
+                            config = ?config_parser.config().metadata().ty,
+                            prefix = config_parser.config().prefix(),
+                            "Skipped config because of missing fields"
+                        );
+                        continue;
+                    }
+                    return Err(err);
+                }
+            };
             let metadata = config_parser.config().metadata();
             let visitor_fn = metadata.visitor;
             let mut visitor = visit::Serializer::new(metadata, options.clone());

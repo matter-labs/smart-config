@@ -211,8 +211,8 @@ impl<'a> DeserializeContext<'a> {
 
     #[cold]
     fn push_generic_error(&mut self, err: ErrorWithOrigin, validation: Option<String>) {
-        let inner = match err.inner {
-            LowLevelError::Json(err) => err,
+        let (inner, category) = match err.inner {
+            LowLevelError::Json { err, category } => (err, category),
             LowLevelError::InvalidArray
             | LowLevelError::InvalidObject
             | LowLevelError::Validation => return,
@@ -227,6 +227,7 @@ impl<'a> DeserializeContext<'a> {
 
         self.errors.push(ParseError {
             inner,
+            category,
             path: self.path.clone(),
             origin,
             config: self.current_config,
