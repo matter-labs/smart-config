@@ -126,9 +126,9 @@ pub struct SourceInfo {
 
 /// Configuration serialization options.
 #[derive(Debug, Clone, Default)]
-#[non_exhaustive]
 pub struct SerializerOptions {
     pub(crate) diff_with_default: bool,
+    pub(crate) secret_placeholder: Option<String>,
 }
 
 impl SerializerOptions {
@@ -136,7 +136,15 @@ impl SerializerOptions {
     pub fn diff_with_default() -> Self {
         Self {
             diff_with_default: true,
+            secret_placeholder: None,
         }
+    }
+
+    /// Sets the placeholder string value for secret params. By default, secrets will be output as-is.
+    #[must_use]
+    pub fn with_secret_placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.secret_placeholder = Some(placeholder.into());
+        self
     }
 
     /// Serializes a config to JSON, recursively visiting its nested configs.
