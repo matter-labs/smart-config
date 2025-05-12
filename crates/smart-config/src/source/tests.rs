@@ -1541,6 +1541,16 @@ fn coercing_serde_enum() {
 }
 
 #[test]
+fn coercing_serde_enum_with_aliased_field() {
+    let json = config!("fields.str": "?", "fields.flag": false);
+    let config: EnumConfig = testing::test(json).unwrap();
+    assert_matches!(
+        config,
+        EnumConfig::WithFields { string: Some(s), flag: false, .. } if s == "?"
+    );
+}
+
+#[test]
 fn origins_for_coerced_serde_enum() {
     let schema = ConfigSchema::new(&EnumConfig::DESCRIPTION, "");
     let json = config!("fields.string": "!", "fields.flag": false, "fields.set": [123]);
