@@ -11,9 +11,9 @@ use crate::{
     de::{DeserializeContext, DeserializerOptions},
     error::ParseErrorCategory,
     fallback::Fallbacks,
-    metadata::BasicTypes,
+    metadata::{BasicTypes, ConfigTag},
     schema::{ConfigRef, ConfigSchema},
-    utils::{merge_json, JsonObject},
+    utils::{merge_json, EnumVariant, JsonObject},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     visit,
     visit::Serializer,
@@ -480,6 +480,7 @@ impl WithOrigin {
     ) -> usize {
         self.copy_aliased_values(schema);
         self.mark_secrets(schema);
+        self.convert_serde_enums(schema);
         self.nest_object_params_and_sub_configs(schema);
         self.nest_array_params(schema);
         self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
@@ -618,6 +619,101 @@ impl WithOrigin {
                         "param marked as secret has non-string value"
                     );
                 }
+            }
+        }
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    fn convert_serde_enums(&mut self, schema: &ConfigSchema) {
+        for (prefix, config_data) in schema.iter_ll() {
+            let Some(tag) = &config_data.metadata.tag else {
+                continue; // Not an enum config, nothing to do.
+            };
+            let Some(Self {
+                inner: Value::Object(config_object),
+                ..
+            }) = self.get_mut(prefix)
+            else {
+                continue;
+            };
+
+            if config_object.contains_key(tag.param.name) {
+                continue; // The source contains the relevant tag.
+            }
+
+            let _span_guard = tracing::info_span!(
+                "convert_serde_enum",
+                config = ?config_data.metadata.ty,
+                prefix = prefix.0,
+                tag = tag.param.name,
+            )
+            .entered();
+
+            Self::convert_serde_enum(config_object, tag);
+        }
+    }
+
+    fn convert_serde_enum(config_object: &mut Map, tag: &ConfigTag) {
+        let all_variant_names = tag.variants.iter().flat_map(|variant| {
+            iter::once(variant.name)
+                .chain(variant.aliases.iter().copied())
+                .filter_map(move |name| Some((EnumVariant::new(name)?.to_snake_case(), variant)))
+        });
+
+        let mut variant_match = None;
+        for (candidate_field_name, variant) in all_variant_names {
+            if config_object.contains_key(&candidate_field_name) {
+                if let Some((prev_field, _)) = &variant_match {
+                    tracing::info!(
+                        prev_field,
+                        field = candidate_field_name,
+                        "multiple serde-like variant fields present"
+                    );
+                    return;
+                }
+                variant_match = Some((candidate_field_name, variant));
+            }
+        }
+
+        let Some((field_name, variant)) = variant_match else {
+            return; // No matches found
+        };
+        let variant_content = config_object.get(&field_name).unwrap();
+        if !matches!(&variant_content.inner, Value::Object(_)) {
+            tracing::info!(
+                field = field_name,
+                "variant contents is not an object, skipping"
+            );
+            return;
+        }
+
+        tracing::debug!(
+            field = field_name,
+            variant = variant.name,
+            "copying variant contents"
+        );
+        let origin = ValueOrigin::Synthetic {
+            source: variant_content.origin.clone(),
+            transform: "coercing serde enum".to_owned(),
+        };
+        let Value::Object(variant_content) = variant_content.inner.clone() else {
+            unreachable!(); // checked above
+        };
+
+        config_object.insert(
+            tag.param.name.to_owned(),
+            WithOrigin::new(variant.name.to_owned().into(), Arc::new(origin)),
+        );
+
+        for (key, value) in variant_content {
+            #[allow(clippy::map_entry)] // False positive: `key` would need to be cloned
+            if config_object.contains_key(&key) {
+                tracing::info!(
+                    field = key,
+                    "config already contains field, not overwriting it"
+                );
+            } else {
+                config_object.insert(key, value);
             }
         }
     }

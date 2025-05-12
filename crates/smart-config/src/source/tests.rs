@@ -1511,3 +1511,84 @@ fn config_canonicalization_with_nesting() {
         })
     );
 }
+
+#[test]
+fn coercing_serde_enum() {
+    let json = config!("fields.string": "!", "fields.flag": false, "fields.set": [123]);
+    let config: EnumConfig = testing::test(json).unwrap();
+    assert_eq!(
+        config,
+        EnumConfig::WithFields {
+            string: Some("!".to_owned()),
+            flag: false,
+            set: HashSet::from([123]),
+        }
+    );
+
+    let json = config!(
+        "nested.renamed": "first_choice",
+        "nested.map": serde_json::json!({ "call": 100 }),
+    );
+    let config: EnumConfig = testing::test(json).unwrap();
+    assert_eq!(
+        config,
+        EnumConfig::Nested(NestedConfig {
+            simple_enum: SimpleEnum::First,
+            other_int: 42,
+            map: HashMap::from([("call".to_owned(), 100)]),
+        })
+    );
+}
+
+#[test]
+fn origins_for_coerced_serde_enum() {
+    let schema = ConfigSchema::new(&EnumConfig::DESCRIPTION, "");
+    let json = config!("fields.string": "!", "fields.flag": false, "fields.set": [123]);
+    let repo = ConfigRepository::new(&schema).with(json);
+
+    let tag = repo.merged().get(Pointer("type")).unwrap();
+    assert_matches!(&tag.inner, Value::String(StrValue::Plain(s)) if s == "WithFields");
+    let tag_origin = tag.origin.to_string();
+    assert!(
+        tag_origin.ends_with("-> path 'fields' -> coercing serde enum"),
+        "{tag_origin}"
+    );
+
+    let flag = repo.merged().get(Pointer("flag")).unwrap();
+    assert_matches!(flag.inner, Value::Bool(false));
+    let flag_origin = flag.origin.to_string();
+    assert!(
+        flag_origin.ends_with("-> path 'fields.flag'"),
+        "{flag_origin}"
+    );
+
+    // The original field should be garbage-collected.
+    assert!(repo.merged().get(Pointer("fields")).is_none());
+}
+
+#[test]
+fn coercing_serde_enum_negative_cases() {
+    // Tag field present; the variant field shouldn't be used.
+    let json = config!("type": "Fields", "fields.string": "!");
+    let config: EnumConfig = testing::test(json).unwrap();
+    assert_matches!(
+        config,
+        EnumConfig::WithFields {
+            string: None,
+            flag: true,
+            ..
+        }
+    );
+
+    // Multiple variant fields present
+    let json = config!("fields.string": "!", "with_fields.flag": false);
+    let err = testing::test::<EnumConfig>(json).unwrap_err();
+    assert_eq!(err.len(), 1);
+    assert_eq!(err.first().path(), "type");
+
+    // Variant field is not an object
+    let json = config!("fields": "!");
+    let err = testing::test::<EnumConfig>(json).unwrap_err();
+    assert_eq!(err.len(), 1);
+    assert_eq!(err.first().path(), "type");
+}

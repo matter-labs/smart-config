@@ -22,6 +22,11 @@ use crate::{
 pub struct DeserializerOptions {
     /// Enables coercion of variant names between cases, e.g. from `SHOUTING_CASE` to `shouting_case`.
     pub coerce_variant_names: bool,
+    /// Enables coercion of serde-like enums to canonical internally tagged representation.
+    ///
+    /// A serde-style enum is encoded as an object with a single field named after one of variants
+    /// (incl. aliases) converted to `snake_case`. Coercing is performed
+    pub coerce_serde_enums: bool,
 }
 
 impl WithOrigin {
