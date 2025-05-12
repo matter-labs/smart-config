@@ -278,8 +278,11 @@ impl<'a> ConfigRepository<'a> {
             },
         };
 
-        let param_count =
-            source_value.preprocess_source(self.schema, &self.prefixes_for_canonical_configs);
+        let param_count = source_value.preprocess_source(
+            self.schema,
+            &self.prefixes_for_canonical_configs,
+            &self.de_options,
+        );
         tracing::debug!(param_count, "Inserted source into config repo");
         self.merged
             .guided_merge(source_value, self.schema, Pointer(""));
@@ -477,10 +480,13 @@ impl WithOrigin {
         &mut self,
         schema: &ConfigSchema,
         prefixes_for_canonical_configs: &HashSet<Pointer<'_>>,
+        options: &DeserializerOptions,
     ) -> usize {
         self.copy_aliased_values(schema);
         self.mark_secrets(schema);
-        self.convert_serde_enums(schema);
+        if options.coerce_serde_enums {
+            self.convert_serde_enums(schema);
+        }
         self.nest_object_params_and_sub_configs(schema);
         self.nest_array_params(schema);
         self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))

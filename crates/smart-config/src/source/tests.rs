@@ -1515,7 +1515,10 @@ fn config_canonicalization_with_nesting() {
 #[test]
 fn coercing_serde_enum() {
     let json = config!("fields.string": "!", "fields.flag": false, "fields.set": [123]);
-    let config: EnumConfig = testing::test(json).unwrap();
+    let config: EnumConfig = testing::Tester::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap();
     assert_eq!(
         config,
         EnumConfig::WithFields {
@@ -1529,7 +1532,10 @@ fn coercing_serde_enum() {
         "nested.renamed": "first_choice",
         "nested.map": serde_json::json!({ "call": 100 }),
     );
-    let config: EnumConfig = testing::test(json).unwrap();
+    let config: EnumConfig = testing::Tester::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap();
     assert_eq!(
         config,
         EnumConfig::Nested(NestedConfig {
@@ -1543,7 +1549,10 @@ fn coercing_serde_enum() {
 #[test]
 fn coercing_serde_enum_with_aliased_field() {
     let json = config!("fields.str": "?", "fields.flag": false);
-    let config: EnumConfig = testing::test(json).unwrap();
+    let config: EnumConfig = testing::Tester::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap();
     assert_matches!(
         config,
         EnumConfig::WithFields { string: Some(s), flag: false, .. } if s == "?"
@@ -1553,8 +1562,10 @@ fn coercing_serde_enum_with_aliased_field() {
 #[test]
 fn origins_for_coerced_serde_enum() {
     let schema = ConfigSchema::new(&EnumConfig::DESCRIPTION, "");
+    let mut repo = ConfigRepository::new(&schema);
+    repo.deserializer_options().coerce_serde_enums = true;
     let json = config!("fields.string": "!", "fields.flag": false, "fields.set": [123]);
-    let repo = ConfigRepository::new(&schema).with(json);
+    repo = repo.with(json);
 
     let tag = repo.merged().get(Pointer("type")).unwrap();
     assert_matches!(&tag.inner, Value::String(StrValue::Plain(s)) if s == "WithFields");
@@ -1580,7 +1591,10 @@ fn origins_for_coerced_serde_enum() {
 fn coercing_serde_enum_negative_cases() {
     // Tag field present; the variant field shouldn't be used.
     let json = config!("type": "Fields", "fields.string": "!");
-    let config: EnumConfig = testing::test(json).unwrap();
+    let config: EnumConfig = testing::Tester::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap();
     assert_matches!(
         config,
         EnumConfig::WithFields {
@@ -1592,13 +1606,19 @@ fn coercing_serde_enum_negative_cases() {
 
     // Multiple variant fields present
     let json = config!("fields.string": "!", "with_fields.flag": false);
-    let err = testing::test::<EnumConfig>(json).unwrap_err();
+    let err = testing::Tester::<EnumConfig>::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap_err();
     assert_eq!(err.len(), 1);
     assert_eq!(err.first().path(), "type");
 
     // Variant field is not an object
     let json = config!("fields": "!");
-    let err = testing::test::<EnumConfig>(json).unwrap_err();
+    let err = testing::Tester::<EnumConfig>::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap_err();
     assert_eq!(err.len(), 1);
     assert_eq!(err.first().path(), "type");
 }
