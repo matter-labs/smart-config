@@ -677,7 +677,7 @@ impl WithOrigin {
             if let Some(new_values) = Self::convert_serde_enum(canonical_map, alias_maps, tag) {
                 let canonical_map = self.ensure_object(prefix, |_| {
                     Arc::new(ValueOrigin::Synthetic {
-                        source: Arc::default(), // FIXME: ???
+                        source: Arc::default(),
                         transform: "enum coercion".to_string(),
                     })
                 });
@@ -709,12 +709,14 @@ impl WithOrigin {
             for (candidate_field_name, variant) in all_variant_names.clone() {
                 if map.contains_key(&candidate_field_name) {
                     if let Some((_, prev_field, _)) = &variant_match {
-                        tracing::info!(
-                            prev_field,
-                            field = candidate_field_name,
-                            "multiple serde-like variant fields present"
-                        );
-                        return None;
+                        if *prev_field != candidate_field_name {
+                            tracing::info!(
+                                prev_field,
+                                field = candidate_field_name,
+                                "multiple serde-like variant fields present"
+                            );
+                            return None;
+                        }
                     }
                     variant_match = Some((map, candidate_field_name, variant));
                 }
