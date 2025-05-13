@@ -78,7 +78,8 @@ impl ConfigVisitor for Serializer {
 
     fn visit_param(&mut self, param_index: usize, value: &dyn Any) {
         let param = &self.metadata.params[param_index];
-        let value = param.deserializer.serialize_param(value);
+        // TODO: this exposes secret values, but we cannot easily avoid serialization because of `should_insert` filtering below.
+        let mut value = param.deserializer.serialize_param(value);
 
         // If a parameter has a fallback, it should be inserted regardless of whether it has the default value;
         // otherwise, since fallbacks have higher priority than defaults, the parameter value may be unexpected after parsing
@@ -87,6 +88,12 @@ impl ConfigVisitor for Serializer {
             || param.fallback.is_some()
             || param.default_value_json().as_ref() != Some(&value);
         if should_insert {
+            if let (Some(placeholder), true) = (
+                &self.options.secret_placeholder,
+                param.type_description().contains_secrets(),
+            ) {
+                value = placeholder.clone().into();
+            }
             self.json.insert(param.name.to_owned(), value);
         }
     }

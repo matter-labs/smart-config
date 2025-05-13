@@ -1457,3 +1457,57 @@ fn config_nested_validations() {
         "{inner}"
     );
 }
+
+#[test]
+fn config_canonicalization() {
+    let schema = ConfigSchema::new(&NestedConfig::DESCRIPTION, "");
+    let mut repo = ConfigRepository::new(&schema);
+    // There is a missing required param in the config, but it shouldn't be a fatal error.
+    let json = repo.canonicalize(&SerializerOptions::default()).unwrap();
+    assert!(json.is_empty(), "{json:?}");
+
+    repo = repo.with(config!("renamed": "first"));
+    let json = repo.canonicalize(&SerializerOptions::default()).unwrap();
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "renamed": "first",
+            "other_int": 42,
+            "map": {},
+        })
+    );
+
+    repo = repo.with(config!("renamed": "???"));
+    let err = repo
+        .canonicalize(&SerializerOptions::default())
+        .unwrap_err();
+    assert_eq!(err.len(), 1);
+    assert_eq!(err.first().param().unwrap().name, "renamed");
+}
+
+#[test]
+fn config_canonicalization_with_nesting() {
+    let schema = ConfigSchema::new(&ConfigWithNesting::DESCRIPTION, "");
+    let mut repo = ConfigRepository::new(&schema);
+    let json = repo.canonicalize(&SerializerOptions::default()).unwrap();
+    assert!(json.is_empty(), "{json:?}");
+
+    // The required nested config param is still missing.
+    repo = repo.with(config!("value": 42));
+    let json = repo.canonicalize(&SerializerOptions::default()).unwrap();
+    assert!(json.is_empty(), "{json:?}");
+
+    repo = repo.with(config!("nest.renamed": "first_choice"));
+    let json = repo
+        .canonicalize(&SerializerOptions::diff_with_default())
+        .unwrap();
+    assert_eq!(
+        serde_json::Value::from(json),
+        serde_json::json!({
+            "value": 42,
+            "nested": {
+                "renamed": "first",
+            },
+        })
+    );
+}

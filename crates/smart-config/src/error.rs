@@ -25,12 +25,25 @@ pub(crate) enum LocationInConfig {
     Param(usize),
 }
 
+#[doc(hidden)] // variants not stabilized yet
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub enum ParseErrorCategory {
+    /// Generic error.
+    Generic,
+    /// Missing field (parameter / config) error.
+    MissingField,
+}
+
 /// Low-level deserialization error.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum LowLevelError {
     /// Error coming from JSON deserialization logic.
-    Json(serde_json::Error),
+    Json {
+        err: serde_json::Error,
+        category: ParseErrorCategory,
+    },
     #[doc(hidden)] // implementation detail
     InvalidArray,
     #[doc(hidden)] // implementation detail
@@ -41,14 +54,17 @@ pub enum LowLevelError {
 
 impl From<serde_json::Error> for LowLevelError {
     fn from(err: serde_json::Error) -> Self {
-        Self::Json(err)
+        Self::Json {
+            err,
+            category: ParseErrorCategory::Generic,
+        }
     }
 }
 
 impl fmt::Display for LowLevelError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Json(err) => fmt::Display::fmt(err, formatter),
+            Self::Json { err, .. } => fmt::Display::fmt(err, formatter),
             Self::InvalidArray => formatter.write_str("error(s) deserializing array items"),
             Self::InvalidObject => formatter.write_str("error(s) deserializing object entries"),
             Self::Validation => formatter.write_str("validation failed"),
@@ -74,6 +90,14 @@ impl de::Error for ErrorWithOrigin {
     fn custom<T: fmt::Display>(msg: T) -> Self {
         Self::json(de::Error::custom(msg), Arc::default())
     }
+
+    fn missing_field(field: &'static str) -> Self {
+        let err = LowLevelError::Json {
+            err: de::Error::missing_field(field),
+            category: ParseErrorCategory::MissingField,
+        };
+        Self::new(err, Arc::default())
+    }
 }
 
 impl fmt::Display for ErrorWithOrigin {
@@ -85,7 +109,7 @@ impl fmt::Display for ErrorWithOrigin {
 impl std::error::Error for ErrorWithOrigin {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match &self.inner {
-            LowLevelError::Json(err) => Some(err),
+            LowLevelError::Json { err, .. } => Some(err),
             LowLevelError::InvalidArray
             | LowLevelError::InvalidObject
             | LowLevelError::Validation => None,
@@ -96,6 +120,7 @@ impl std::error::Error for ErrorWithOrigin {
 /// Config parameter deserialization errors.
 pub struct ParseError {
     pub(crate) inner: serde_json::Error,
+    pub(crate) category: ParseErrorCategory,
     pub(crate) path: String,
     pub(crate) origin: Arc<ValueOrigin>,
     pub(crate) config: &'static ConfigMetadata,
@@ -161,6 +186,7 @@ impl ParseError {
     pub(crate) fn generic(path: String, config: &'static ConfigMetadata) -> Self {
         Self {
             inner: serde_json::Error::custom("unspecified error deserializing configuration"),
+            category: ParseErrorCategory::Generic,
             path,
             origin: Arc::default(),
             config,
@@ -172,6 +198,11 @@ impl ParseError {
     /// Returns the wrapped error.
     pub fn inner(&self) -> &serde_json::Error {
         &self.inner
+    }
+
+    #[doc(hidden)]
+    pub fn category(&self) -> ParseErrorCategory {
+        self.category
     }
 
     /// Returns an absolute path on which this error has occurred.

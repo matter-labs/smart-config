@@ -73,10 +73,13 @@ impl ConfigVisitor for ParamValuesVisitor {
     }
 }
 
+/// Type ID of the config + path to the config / param.
+type ErrorKey = (any::TypeId, String);
+
 #[derive(Debug)]
 struct ConfigErrors {
-    by_param: HashMap<(any::TypeId, &'static str), Vec<ParseError>>,
-    by_config: HashMap<any::TypeId, Vec<ParseError>>,
+    by_param: HashMap<ErrorKey, Vec<ParseError>>,
+    by_config: HashMap<ErrorKey, Vec<ParseError>>,
 }
 
 impl ConfigErrors {
@@ -97,18 +100,15 @@ impl ConfigErrors {
                 let mut new_configs = HashSet::new();
 
                 for err in errors {
-                    let config_id = err.config().ty.id();
-                    if let Some(param) = err.param() {
-                        let key = (config_id, param.rust_field_name);
+                    let key = (err.config().ty.id(), err.path().to_owned());
+                    if err.param().is_some() {
                         if !by_param.contains_key(&key) || new_params.contains(&key) {
-                            by_param.entry(key).or_default().push(err);
+                            by_param.entry(key.clone()).or_default().push(err);
                             new_params.insert(key);
                         }
-                    } else if !by_config.contains_key(&config_id)
-                        || new_configs.contains(&config_id)
-                    {
-                        by_config.entry(config_id).or_default().push(err);
-                        new_configs.insert(config_id);
+                    } else if !by_config.contains_key(&key) || new_configs.contains(&key) {
+                        by_config.entry(key.clone()).or_default().push(err);
+                        new_configs.insert(key);
                     }
                 }
             }
@@ -137,7 +137,9 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
     ///
     /// # Errors
     ///
-    /// Propagates I/O errors.
+    /// - Propagates I/O errors.
+    /// - Returns the exhaustive parsing result. Depending on the application, some parsing errors (e.g., missing params for optional configs)
+    ///   may not be fatal.
     #[allow(clippy::missing_panics_doc)] // false positive
     pub fn print_debug(
         self,
@@ -165,7 +167,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
         for config_parser in repo.iter() {
             let config = config_parser.config();
             let config_name = config.metadata().ty.name_in_code();
-            let config_id = config.metadata().ty.id();
+            let config_id = (config.metadata().ty.id(), config.prefix().to_owned());
 
             if let Some(errors) = errors.by_config.get(&config_id) {
                 writeln!(
@@ -225,9 +227,10 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
                     param_written = true;
                 }
 
-                let field_name = param.rust_field_name;
-                if let Some(errors) = errors.by_param.get(&(config_id, field_name)) {
+                let param_id = (config_id.0, canonical_path.clone());
+                if let Some(errors) = errors.by_param.get(&param_id) {
                     if !param_written {
+                        let field_name = param.rust_field_name;
                         writeln!(
                             writer,
                             "{canonical_path} {RUST}[Rust: {config_name}.{field_name}]{RUST:#}"

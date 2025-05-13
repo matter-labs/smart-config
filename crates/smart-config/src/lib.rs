@@ -377,7 +377,7 @@ pub use smart_config_derive::ExampleConfig;
 
 pub use self::{
     de::DeserializeConfig,
-    error::{DeserializeConfigError, ErrorWithOrigin, ParseError, ParseErrors},
+    error::{DeserializeConfigError, ErrorWithOrigin, ParseError, ParseErrorCategory, ParseErrors},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
     source::{
         ConfigContents, ConfigParser, ConfigRepository, ConfigSource, ConfigSources, Environment,

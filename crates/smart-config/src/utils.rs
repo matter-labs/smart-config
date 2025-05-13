@@ -194,19 +194,21 @@ pub(crate) fn merge_json(
     path: &str,
     value: JsonObject,
 ) {
-    for segment in path.split('.') {
-        if !target.contains_key(segment) {
-            target.insert(segment.to_owned(), serde_json::Map::new().into());
-        }
+    if !path.is_empty() {
+        for segment in path.split('.') {
+            if !target.contains_key(segment) {
+                target.insert(segment.to_owned(), serde_json::Map::new().into());
+            }
 
-        // `unwrap()` is safe due to the check above.
-        let child = target.get_mut(segment).unwrap();
-        target = child.as_object_mut().unwrap_or_else(|| {
-            panic!(
-                "Internal error: Attempted to merge {config_name} at '{path}', which is not an object",
-                config_name = metadata.ty.name_in_code()
-            )
-        });
+            // `unwrap()` is safe due to the check above.
+            let child = target.get_mut(segment).unwrap();
+            target = child.as_object_mut().unwrap_or_else(|| {
+                panic!(
+                    "Internal error: Attempted to merge {config_name} at '{path}', which is not an object",
+                    config_name = metadata.ty.name_in_code()
+                )
+            });
+        }
     }
     deep_merge(target, value);
 }
