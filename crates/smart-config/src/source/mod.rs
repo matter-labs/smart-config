@@ -656,16 +656,14 @@ impl WithOrigin {
             let Some(tag) = &config_meta.tag else {
                 continue; // Not an enum config, nothing to do.
             };
-            let Some(Self {
-                inner: Value::Object(config_object),
-                ..
-            }) = self.get_mut(prefix)
-            else {
-                continue;
-            };
+            let canonical_map = self.get(prefix).and_then(|val| val.inner.as_object());
+            let alias_maps = config_data
+                .aliases()
+                .filter_map(|alias| self.get(Pointer(alias))?.inner.as_object());
 
-            if config_object.contains_key(tag.param.name) {
-                continue; // The source contains the relevant tag.
+            if canonical_map.is_some_and(|map| map.contains_key(tag.param.name)) {
+                // The source contains the relevant tag. It's sufficient to check the canonical map only since we've performed de-aliasing for tags already.
+                continue;
             }
 
             let _span_guard = tracing::info_span!(
@@ -676,48 +674,63 @@ impl WithOrigin {
             )
             .entered();
 
-            if Self::convert_serde_enum(config_object, tag) {
+            if let Some(new_values) = Self::convert_serde_enum(canonical_map, alias_maps, tag) {
+                let canonical_map = self.ensure_object(prefix, |_| {
+                    Arc::new(ValueOrigin::Synthetic {
+                        source: Arc::default(), // FIXME: ???
+                        transform: "enum coercion".to_string(),
+                    })
+                });
+                canonical_map.extend(new_values);
+
                 // Run local de-aliasing for the config again.
                 let (new_values, _) =
-                    Self::copy_aliases_for_config(config_meta, prefix, Some(config_object), &[]);
-                config_object.extend(new_values);
+                    Self::copy_aliases_for_config(config_meta, prefix, Some(canonical_map), &[]);
+                canonical_map.extend(new_values);
             }
         }
     }
 
-    /// Returns true if at least one field was copied. This doesn't include the inserted tag value.
-    fn convert_serde_enum(config_object: &mut Map, tag: &ConfigTag) -> bool {
+    #[must_use = "returned `Map` should be merged"]
+    fn convert_serde_enum<'a>(
+        canonical_map: Option<&'a Map>,
+        alias_maps: impl Iterator<Item = &'a Map>,
+        tag: &ConfigTag,
+    ) -> Option<Map> {
         let all_variant_names = tag.variants.iter().flat_map(|variant| {
             iter::once(variant.name)
                 .chain(variant.aliases.iter().copied())
                 .filter_map(move |name| Some((EnumVariant::new(name)?.to_snake_case(), variant)))
         });
 
+        // We need to look for variant fields in the alias maps because they were not copied during de-aliasing.
         let mut variant_match = None;
-        for (candidate_field_name, variant) in all_variant_names {
-            if config_object.contains_key(&candidate_field_name) {
-                if let Some((prev_field, _)) = &variant_match {
-                    tracing::info!(
-                        prev_field,
-                        field = candidate_field_name,
-                        "multiple serde-like variant fields present"
-                    );
-                    return false;
+        for map in canonical_map.into_iter().chain(alias_maps) {
+            for (candidate_field_name, variant) in all_variant_names.clone() {
+                if map.contains_key(&candidate_field_name) {
+                    if let Some((_, prev_field, _)) = &variant_match {
+                        tracing::info!(
+                            prev_field,
+                            field = candidate_field_name,
+                            "multiple serde-like variant fields present"
+                        );
+                        return None;
+                    }
+                    variant_match = Some((map, candidate_field_name, variant));
                 }
-                variant_match = Some((candidate_field_name, variant));
             }
         }
 
-        let Some((field_name, variant)) = variant_match else {
-            return false; // No matches found
+        let Some((map, field_name, variant)) = variant_match else {
+            return None; // No matches found
         };
-        let variant_content = config_object.get(&field_name).unwrap();
+        let variant_content = map.get(&field_name).unwrap();
         if !matches!(&variant_content.inner, Value::Object(_)) {
             tracing::info!(
                 field = field_name,
                 "variant contents is not an object, skipping"
             );
-            return false;
+            return None;
         }
 
         tracing::debug!(
@@ -733,25 +746,24 @@ impl WithOrigin {
             unreachable!(); // checked above
         };
 
-        config_object.insert(
+        let mut new_values = Map::new();
+        new_values.insert(
             tag.param.name.to_owned(),
             WithOrigin::new(variant.name.to_owned().into(), Arc::new(origin)),
         );
 
-        let mut fields_copied = false;
         for (key, value) in variant_content {
             #[allow(clippy::map_entry)] // False positive: `key` would need to be cloned
-            if config_object.contains_key(&key) {
+            if canonical_map.is_some_and(|map| map.contains_key(&key)) {
                 tracing::info!(
                     field = key,
                     "config already contains field, not overwriting it"
                 );
             } else {
-                config_object.insert(key, value);
-                fields_copied = true;
+                new_values.insert(key, value);
             }
         }
-        fields_copied
+        (!new_values.is_empty()).then_some(new_values)
     }
 
     /// Removes all values that do not correspond to canonical params or their ancestors.

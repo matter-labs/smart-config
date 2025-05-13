@@ -1640,3 +1640,45 @@ fn coercing_nested_enum_config() {
         }))
     );
 }
+
+#[test]
+fn coercing_aliased_enum_config() {
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    struct ConfigWithNestedEnum {
+        #[config(nest, alias = "value")]
+        val: EnumConfig,
+    }
+
+    // Base case: no aliasing.
+    let json = config!("val.with_fields.str": "what");
+    let config: ConfigWithNestedEnum = testing::Tester::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap();
+    assert_matches!(
+        &config.val,
+        EnumConfig::WithFields { string: Some(s), .. } if s == "what"
+    );
+
+    let json = config!("value.with_fields.string": "what");
+    let config: ConfigWithNestedEnum = testing::Tester::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap();
+    assert_matches!(
+        &config.val,
+        EnumConfig::WithFields { string: Some(s), .. } if s == "what"
+    );
+
+    // Some more aliases for variant and the enclosed field.
+    let json = config!("value.fields.str": "what");
+    let config: ConfigWithNestedEnum = testing::Tester::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap();
+    assert_matches!(
+        &config.val,
+        EnumConfig::WithFields { string: Some(s), .. } if s == "what"
+    );
+}
