@@ -131,6 +131,8 @@ pub(crate) enum RenamedEnumConfig {
     V2 {
         str: String,
     },
+    #[config(alias = "next")]
+    V3(EnumConfig),
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]

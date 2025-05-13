@@ -648,8 +648,12 @@ impl WithOrigin {
 
     #[tracing::instrument(level = "debug", skip_all)]
     fn convert_serde_enums(&mut self, schema: &ConfigSchema) {
-        for (prefix, config_data) in schema.iter_ll() {
-            let Some(tag) = &config_data.metadata.tag else {
+        // We need ordered iteration here (parent configs before children) to avoid skipping nested enum configs.
+        for config_data in schema.iter() {
+            let config_meta = config_data.metadata();
+            let prefix = Pointer(config_data.prefix());
+
+            let Some(tag) = &config_meta.tag else {
                 continue; // Not an enum config, nothing to do.
             };
             let Some(Self {
@@ -666,7 +670,7 @@ impl WithOrigin {
 
             let _span_guard = tracing::info_span!(
                 "convert_serde_enum",
-                config = ?config_data.metadata.ty,
+                config = ?config_meta.ty,
                 prefix = prefix.0,
                 tag = tag.param.name,
             )
@@ -674,12 +678,8 @@ impl WithOrigin {
 
             if Self::convert_serde_enum(config_object, tag) {
                 // Run local de-aliasing for the config again.
-                let (new_values, _) = Self::copy_aliases_for_config(
-                    config_data.metadata,
-                    prefix,
-                    Some(config_object),
-                    &[],
-                );
+                let (new_values, _) =
+                    Self::copy_aliases_for_config(config_meta, prefix, Some(config_object), &[]);
                 config_object.extend(new_values);
             }
         }

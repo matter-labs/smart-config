@@ -16,7 +16,8 @@ use crate::{
         extract_env_var_name, extract_json_name, test_config_roundtrip, test_deserialize,
         AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks,
         ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations, DefaultingConfig,
-        EnumConfig, KvTestConfig, NestedConfig, SecretConfig, SimpleEnum, ValueCoercingConfig,
+        EnumConfig, KvTestConfig, NestedConfig, RenamedEnumConfig, SecretConfig, SimpleEnum,
+        ValueCoercingConfig,
     },
     value::StrValue,
     ByteSize, DescribeConfig, SerializerOptions,
@@ -1621,4 +1622,21 @@ fn coercing_serde_enum_negative_cases() {
         .unwrap_err();
     assert_eq!(err.len(), 1);
     assert_eq!(err.first().path(), "type");
+}
+
+#[test]
+fn coercing_nested_enum_config() {
+    let json = config!("next.nested.renamed": "second");
+    let config: RenamedEnumConfig = testing::Tester::default()
+        .coerce_serde_enums()
+        .test(json)
+        .unwrap();
+    assert_eq!(
+        config,
+        RenamedEnumConfig::V3(EnumConfig::Nested(NestedConfig {
+            simple_enum: SimpleEnum::Second,
+            other_int: 42,
+            map: HashMap::new(),
+        }))
+    );
 }
