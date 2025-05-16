@@ -11,9 +11,9 @@ use crate::{
     de::{DeserializeContext, DeserializerOptions},
     error::ParseErrorCategory,
     fallback::Fallbacks,
-    metadata::BasicTypes,
+    metadata::{BasicTypes, ConfigMetadata, ConfigTag},
     schema::{ConfigRef, ConfigSchema},
-    utils::{merge_json, JsonObject},
+    utils::{merge_json, EnumVariant, JsonObject},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     visit,
     visit::Serializer,
@@ -278,8 +278,11 @@ impl<'a> ConfigRepository<'a> {
             },
         };
 
-        let param_count =
-            source_value.preprocess_source(self.schema, &self.prefixes_for_canonical_configs);
+        let param_count = source_value.preprocess_source(
+            self.schema,
+            &self.prefixes_for_canonical_configs,
+            &self.de_options,
+        );
         tracing::debug!(param_count, "Inserted source into config repo");
         self.merged
             .guided_merge(source_value, self.schema, Pointer(""));
@@ -477,9 +480,13 @@ impl WithOrigin {
         &mut self,
         schema: &ConfigSchema,
         prefixes_for_canonical_configs: &HashSet<Pointer<'_>>,
+        options: &DeserializerOptions,
     ) -> usize {
         self.copy_aliased_values(schema);
         self.mark_secrets(schema);
+        if options.coerce_serde_enums {
+            self.convert_serde_enums(schema);
+        }
         self.nest_object_params_and_sub_configs(schema);
         self.nest_array_params(schema);
         self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
@@ -509,56 +516,12 @@ impl WithOrigin {
                 })
                 .collect();
 
-            let mut new_values = Map::new();
-            let mut new_map_origin = None;
-            for param in config_data.metadata.params {
-                // Create a prioritized iterator of all candidates
-                let local_candidates = canonical_map
-                    .into_iter()
-                    .flat_map(|map| param.aliases.iter().map(move |&alias| (map, alias, None)));
-                let all_names = iter::once(param.name).chain(param.aliases.iter().copied());
-                let alias_candidates = alias_maps.iter().flat_map(|&(map, origin)| {
-                    all_names.clone().map(move |name| (map, name, Some(origin)))
-                });
-                let all_candidates = local_candidates.chain(alias_candidates);
-
-                for (map, name, origin) in all_candidates {
-                    // Copy all values in `map` that either match `name` exactly, or start with `{name}_`
-                    // (the latter can be used for object or array nesting).
-                    for (key, val) in map {
-                        let canonical_key_string;
-                        let canonical_key = if key == name {
-                            param.name // Exact match
-                        } else if let Some(key_suffix) = Self::strip_prefix(key, name) {
-                            canonical_key_string = format!("{}_{key_suffix}", param.name);
-                            &canonical_key_string
-                        } else {
-                            continue;
-                        };
-
-                        if canonical_map.is_some_and(|map| map.contains_key(canonical_key)) {
-                            // Key is already present in the original map
-                            continue;
-                        }
-
-                        if !new_values.contains_key(canonical_key) {
-                            tracing::trace!(
-                                prefix = prefix.0,
-                                config = ?config_data.metadata.ty,
-                                param = param.rust_field_name,
-                                name,
-                                ?origin,
-                                canonical_key,
-                                "copied aliased param"
-                            );
-                            new_values.insert(canonical_key.to_owned(), val.clone());
-                            if new_map_origin.is_none() {
-                                new_map_origin = origin.cloned();
-                            }
-                        }
-                    }
-                }
-            }
+            let (new_values, new_map_origin) = Self::copy_aliases_for_config(
+                config_data.metadata,
+                prefix,
+                canonical_map,
+                &alias_maps,
+            );
 
             if new_values.is_empty() {
                 continue;
@@ -575,6 +538,67 @@ impl WithOrigin {
             self.ensure_object(prefix, |_| new_map_origin.clone().unwrap())
                 .extend(new_values);
         }
+    }
+
+    #[must_use = "returned map should be inserted into the config"]
+    fn copy_aliases_for_config(
+        config: &ConfigMetadata,
+        prefix: Pointer<'_>,
+        canonical_map: Option<&Map>,
+        alias_maps: &[(&Map, &Arc<ValueOrigin>)],
+    ) -> (Map, Option<Arc<ValueOrigin>>) {
+        let mut new_values = Map::new();
+        let mut new_map_origin = None;
+        for param in config.params {
+            // Create a prioritized iterator of all candidates
+            let local_candidates = canonical_map
+                .into_iter()
+                .flat_map(|map| param.aliases.iter().map(move |&alias| (map, alias, None)));
+            let all_names = iter::once(param.name).chain(param.aliases.iter().copied());
+            let alias_candidates = alias_maps.iter().flat_map(|&(map, origin)| {
+                all_names.clone().map(move |name| (map, name, Some(origin)))
+            });
+            let all_candidates = local_candidates.chain(alias_candidates);
+
+            for (map, name, origin) in all_candidates {
+                // Copy all values in `map` that either match `name` exactly, or start with `{name}_`
+                // (the latter can be used for object or array nesting).
+                for (key, val) in map {
+                    let canonical_key_string;
+                    let canonical_key = if key == name {
+                        param.name // Exact match
+                    } else if let Some(key_suffix) = Self::strip_prefix(key, name) {
+                        canonical_key_string = format!("{}_{key_suffix}", param.name);
+                        &canonical_key_string
+                    } else {
+                        continue;
+                    };
+
+                    if canonical_map.is_some_and(|map| map.contains_key(canonical_key)) {
+                        // Key is already present in the original map
+                        continue;
+                    }
+
+                    if !new_values.contains_key(canonical_key) {
+                        tracing::trace!(
+                            prefix = prefix.0,
+                            config = ?config.ty,
+                            param = param.rust_field_name,
+                            name,
+                            ?origin,
+                            canonical_key,
+                            "copied aliased param"
+                        );
+                        new_values.insert(canonical_key.to_owned(), val.clone());
+                        if new_map_origin.is_none() {
+                            new_map_origin = origin.cloned();
+                        }
+                    }
+                }
+            }
+        }
+
+        (new_values, new_map_origin)
     }
 
     fn strip_prefix<'s>(s: &'s str, prefix: &str) -> Option<&'s str> {
@@ -620,6 +644,128 @@ impl WithOrigin {
                 }
             }
         }
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    fn convert_serde_enums(&mut self, schema: &ConfigSchema) {
+        // We need ordered iteration here (parent configs before children) to avoid skipping nested enum configs.
+        for config_data in schema.iter() {
+            let config_meta = config_data.metadata();
+            let prefix = Pointer(config_data.prefix());
+
+            let Some(tag) = &config_meta.tag else {
+                continue; // Not an enum config, nothing to do.
+            };
+            let canonical_map = self.get(prefix).and_then(|val| val.inner.as_object());
+            let alias_maps = config_data
+                .aliases()
+                .filter_map(|alias| self.get(Pointer(alias))?.inner.as_object());
+
+            if canonical_map.is_some_and(|map| map.contains_key(tag.param.name)) {
+                // The source contains the relevant tag. It's sufficient to check the canonical map only since we've performed de-aliasing for tags already.
+                continue;
+            }
+
+            let _span_guard = tracing::info_span!(
+                "convert_serde_enum",
+                config = ?config_meta.ty,
+                prefix = prefix.0,
+                tag = tag.param.name,
+            )
+            .entered();
+
+            if let Some(new_values) = Self::convert_serde_enum(canonical_map, alias_maps, tag) {
+                let canonical_map = self.ensure_object(prefix, |_| {
+                    Arc::new(ValueOrigin::Synthetic {
+                        source: Arc::default(),
+                        transform: "enum coercion".to_string(),
+                    })
+                });
+                canonical_map.extend(new_values);
+
+                // Run local de-aliasing for the config again.
+                let (new_values, _) =
+                    Self::copy_aliases_for_config(config_meta, prefix, Some(canonical_map), &[]);
+                canonical_map.extend(new_values);
+            }
+        }
+    }
+
+    #[must_use = "returned `Map` should be merged"]
+    fn convert_serde_enum<'a>(
+        canonical_map: Option<&'a Map>,
+        alias_maps: impl Iterator<Item = &'a Map>,
+        tag: &ConfigTag,
+    ) -> Option<Map> {
+        let all_variant_names = tag.variants.iter().flat_map(|variant| {
+            iter::once(variant.name)
+                .chain(variant.aliases.iter().copied())
+                .filter_map(move |name| Some((EnumVariant::new(name)?.to_snake_case(), variant)))
+        });
+
+        // We need to look for variant fields in the alias maps because they were not copied during de-aliasing.
+        let mut variant_match = None;
+        for map in canonical_map.into_iter().chain(alias_maps) {
+            for (candidate_field_name, variant) in all_variant_names.clone() {
+                if map.contains_key(&candidate_field_name) {
+                    if let Some((_, prev_field, _)) = &variant_match {
+                        if *prev_field != candidate_field_name {
+                            tracing::info!(
+                                prev_field,
+                                field = candidate_field_name,
+                                "multiple serde-like variant fields present"
+                            );
+                            return None;
+                        }
+                    }
+                    variant_match = Some((map, candidate_field_name, variant));
+                }
+            }
+        }
+
+        let Some((map, field_name, variant)) = variant_match else {
+            return None; // No matches found
+        };
+        let variant_content = map.get(&field_name).unwrap();
+        if !matches!(&variant_content.inner, Value::Object(_)) {
+            tracing::info!(
+                field = field_name,
+                "variant contents is not an object, skipping"
+            );
+            return None;
+        }
+
+        tracing::debug!(
+            field = field_name,
+            variant = variant.name,
+            "copying variant contents"
+        );
+        let origin = ValueOrigin::Synthetic {
+            source: variant_content.origin.clone(),
+            transform: "coercing serde enum".to_owned(),
+        };
+        let Value::Object(variant_content) = variant_content.inner.clone() else {
+            unreachable!(); // checked above
+        };
+
+        let mut new_values = Map::new();
+        new_values.insert(
+            tag.param.name.to_owned(),
+            WithOrigin::new(variant.name.to_owned().into(), Arc::new(origin)),
+        );
+
+        for (key, value) in variant_content {
+            #[allow(clippy::map_entry)] // False positive: `key` would need to be cloned
+            if canonical_map.is_some_and(|map| map.contains_key(&key)) {
+                tracing::info!(
+                    field = key,
+                    "config already contains field, not overwriting it"
+                );
+            } else {
+                new_values.insert(key, value);
+            }
+        }
+        (!new_values.is_empty()).then_some(new_values)
     }
 
     /// Removes all values that do not correspond to canonical params or their ancestors.

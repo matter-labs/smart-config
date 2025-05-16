@@ -167,6 +167,10 @@ impl<'a> EnumVariant<'a> {
         dest
     }
 
+    pub(crate) fn to_snake_case(&self) -> String {
+        self.transform(TargetCase::SnakeCase)
+    }
+
     // This logic can be optimized, e.g. by detecting the case in `variants`.
     pub(crate) fn try_match(&self, variants: &[&'static str]) -> Option<&'static str> {
         // First, search a complete match to provide a shortcut for the common case.

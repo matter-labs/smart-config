@@ -243,6 +243,12 @@ impl<C: DeserializeConfig + VisitConfig> Tester<C> {
         self
     }
 
+    /// Enables coercion of serde-style enums.
+    pub fn coerce_serde_enums(&mut self) -> &mut Self {
+        self.de_options.coerce_serde_enums = true;
+        self
+    }
+
     /// Sets mock environment variables that will be recognized by [`Environment`](crate::Environment)
     /// and [`Env`](crate::fallback::Env) fallbacks.
     ///
@@ -264,9 +270,9 @@ impl<C: DeserializeConfig + VisitConfig> Tester<C> {
     /// See [`test()`] for the examples of usage.
     #[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible
     pub fn test(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
-        let mut repo = ConfigRepository::new(&self.schema).with(sample);
+        let mut repo = ConfigRepository::new(&self.schema);
         *repo.deserializer_options() = self.de_options.clone();
-        repo.single::<C>().unwrap().parse()
+        repo.with(sample).single::<C>().unwrap().parse()
     }
 
     /// Tests config deserialization ensuring that *all* declared config params are covered.
@@ -285,8 +291,9 @@ impl<C: DeserializeConfig + VisitConfig> Tester<C> {
     /// See [`test_complete()`] for the examples of usage.
     #[track_caller]
     pub fn test_complete(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
-        let mut repo = ConfigRepository::new(&self.schema).with(sample);
+        let mut repo = ConfigRepository::new(&self.schema);
         *repo.deserializer_options() = self.de_options.clone();
+        let repo = repo.with(sample);
 
         let config: C = repo.single().unwrap().parse()?;
         let mut visitor = CompletenessChecker::new(repo.merged(), &C::DESCRIPTION);
