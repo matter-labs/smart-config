@@ -2,6 +2,6 @@ error[E0080]: evaluation of constant value failed
  --> tests/ui/config/invalid_path_delimiter.rs:2:5
   |
 2 |     smart_config::config!("what..1": 1);
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the evaluated program panicked at 'Path #0 `what..1` is invalid: name contains a disallowed char '.' at position 5; allowed chars are [_a-z]', $DIR/tests/ui/config/invalid_path_delimiter.rs:2:5
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation panicked: Path #0 `what..1` is invalid: name contains a disallowed char '.' at position 5; allowed chars are [_a-z]
   |
   = note: this error originates in the macro `smart_config::config` (in Nightly builds, run with -Z macro-backtrace for more info)

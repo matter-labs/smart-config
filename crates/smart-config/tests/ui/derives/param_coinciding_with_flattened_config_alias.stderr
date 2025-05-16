@@ -2,6 +2,6 @@ error[E0080]: evaluation of constant value failed
   --> tests/ui/derives/param_coinciding_with_flattened_config_alias.rs:14:10
    |
 14 | #[derive(DescribeConfig)]
-   |          ^^^^^^^^^^^^^^ the evaluated program panicked at 'Name / alias `value` of param `TestConfig.value` coincides with a name / alias of a nested config `FlattenedConfig.nested`. This is an unconditional error; config deserialization relies on the fact that configs never coincide with params', $DIR/tests/ui/derives/param_coinciding_with_flattened_config_alias.rs:14:10
+   |          ^^^^^^^^^^^^^^ evaluation panicked: Name / alias `value` of param `TestConfig.value` coincides with a name / alias of a nested config `FlattenedConfig.nested`. This is an unconditional error; config deserialization relies on the fact that configs never coincide with params
    |
    = note: this error originates in the derive macro `DescribeConfig` (in Nightly builds, run with -Z macro-backtrace for more info)
