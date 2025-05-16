@@ -60,7 +60,8 @@ fn getting_config_metadata() {
     assert_eq!(optional_metadata.name, "optional");
     assert_eq!(optional_metadata.aliases, [] as [&str; 0]);
     assert_eq!(optional_metadata.help, "Optional value.");
-    assert_eq!(optional_metadata.rust_type.name_in_code(), "Option"); // FIXME: does `Option<u32>` get printed only for nightly Rust?
+    let name_in_code = optional_metadata.rust_type.name_in_code();
+    assert!(name_in_code.starts_with("Option"), "{name_in_code}");
     assert_eq!(optional_metadata.expecting, BasicTypes::INTEGER);
 }
 
