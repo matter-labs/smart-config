@@ -1,12 +1,13 @@
 //! Testing tools for configurations.
 
-use std::{cell::RefCell, collections::HashMap, marker::PhantomData};
+use std::{any, cell::RefCell, collections::HashMap, marker::PhantomData, mem};
 
 use crate::{
     de::DeserializerOptions,
-    metadata::{ConfigMetadata, RustType},
+    metadata::{ConfigMetadata, ParamMetadata, RustType},
     schema::ConfigSchema,
     value::{Pointer, WithOrigin},
+    visit::{ConfigVisitor, VisitConfig},
     ConfigRepository, ConfigSource, DeserializeConfig, ParseErrors,
 };
 
@@ -154,34 +155,64 @@ pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseE
 /// testing::test_complete::<TestConfig>(incomplete_sample)?;
 /// # anyhow::Ok(())
 /// ```
+#[track_caller] // necessary for assertion panics to be located in the test code, rather than in this crate
 pub fn test_complete<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {
     Tester::default().test_complete(sample)
 }
 
-fn check_params(
-    current_path: Pointer<'_>,
-    sample: &WithOrigin,
-    metadata: &'static ConfigMetadata,
-    missing_params: &mut HashMap<String, RustType>,
-    missing_configs: &mut HashMap<String, RustType>,
-) {
-    for param in metadata.params {
-        if sample.get(Pointer(param.name)).is_none() {
-            missing_params.insert(current_path.join(param.name), param.rust_type);
+#[derive(Debug)]
+struct CompletenessChecker<'a> {
+    current_path: String,
+    sample: &'a WithOrigin,
+    config: &'static ConfigMetadata,
+    missing_params: HashMap<String, RustType>,
+}
+
+impl<'a> CompletenessChecker<'a> {
+    fn new(sample: &'a WithOrigin, config: &'static ConfigMetadata) -> Self {
+        Self {
+            current_path: String::new(),
+            sample,
+            config,
+            missing_params: HashMap::new(),
         }
     }
-    for nested in metadata.nested_configs {
-        let Some(child) = sample.get(Pointer(nested.name)) else {
-            missing_configs.insert(current_path.join(nested.name), nested.meta.ty);
-            continue;
+
+    fn check_param(&mut self, param: &ParamMetadata) {
+        let param_path = Pointer(&self.current_path).join(param.name);
+        if self.sample.get(Pointer(&param_path)).is_none() {
+            self.missing_params.insert(param_path, param.rust_type);
+        }
+    }
+}
+
+impl ConfigVisitor for CompletenessChecker<'_> {
+    fn visit_tag(&mut self, _variant_index: usize) {
+        let param = self.config.tag.unwrap().param;
+        self.check_param(param);
+    }
+
+    fn visit_param(&mut self, param_index: usize, _value: &dyn any::Any) {
+        let param = &self.config.params[param_index];
+        self.check_param(param);
+    }
+
+    fn visit_nested_config(&mut self, config_index: usize, config: &dyn VisitConfig) {
+        let config_meta = &self.config.nested_configs[config_index];
+        let prev_config = mem::replace(&mut self.config, config_meta.meta);
+        let prev_path = if config_meta.name.is_empty() {
+            None
+        } else {
+            let nested_path = Pointer(&self.current_path).join(config_meta.name);
+            Some(mem::replace(&mut self.current_path, nested_path))
         };
-        check_params(
-            Pointer(&current_path.join(nested.name)),
-            child,
-            nested.meta,
-            missing_params,
-            missing_configs,
-        );
+
+        config.visit_config(self);
+
+        self.config = prev_config;
+        if let Some(path) = prev_path {
+            self.current_path = path;
+        }
     }
 }
 
@@ -205,7 +236,7 @@ impl<C: DeserializeConfig> Default for Tester<C> {
     }
 }
 
-impl<C: DeserializeConfig> Tester<C> {
+impl<C: DeserializeConfig + VisitConfig> Tester<C> {
     /// Enables coercion of enum variant names.
     pub fn coerce_variant_names(&mut self) -> &mut Self {
         self.de_options.coerce_variant_names = true;
@@ -258,28 +289,22 @@ impl<C: DeserializeConfig> Tester<C> {
     /// # Examples
     ///
     /// See [`test_complete()`] for the examples of usage.
+    #[track_caller]
     pub fn test_complete(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
         let mut repo = ConfigRepository::new(&self.schema);
         *repo.deserializer_options() = self.de_options.clone();
         let repo = repo.with(sample);
 
-        let metadata = &C::DESCRIPTION;
-        let mut missing_params = HashMap::new();
-        let mut missing_configs = HashMap::new();
-        check_params(
-            Pointer(""),
-            repo.merged(),
-            metadata,
-            &mut missing_params,
-            &mut missing_configs,
-        );
+        let config: C = repo.single().unwrap().parse()?;
+        let mut visitor = CompletenessChecker::new(repo.merged(), &C::DESCRIPTION);
+        config.visit_config(&mut visitor);
+        let CompletenessChecker { missing_params, .. } = visitor;
 
         assert!(
-            missing_params.is_empty() && missing_configs.is_empty(),
-            "The provided sample is incomplete; missing params: {missing_params:?}, missing configs: {missing_configs:?}"
+            missing_params.is_empty(),
+            "The provided sample is incomplete; missing params: {missing_params:?}"
         );
-
-        repo.single::<C>().unwrap().parse()
+        Ok(config)
     }
 }
 
@@ -290,7 +315,7 @@ mod tests {
     use super::*;
     use crate::{
         config,
-        testonly::{CompoundConfig, DefaultingConfig, SimpleEnum},
+        testonly::{CompoundConfig, DefaultingConfig, EnumConfig, SimpleEnum},
         Environment, Json,
     };
 
@@ -314,7 +339,8 @@ mod tests {
     #[should_panic(expected = "missing params")]
     #[test]
     fn panicking_on_incomplete_sample() {
-        test_complete::<CompoundConfig>(Json::empty("test.json")).ok();
+        let json = config!("renamed": "first", "nested.renamed": "second");
+        test_complete::<CompoundConfig>(json).unwrap();
     }
 
     #[test]
@@ -364,5 +390,30 @@ mod tests {
             config.set,
             HashSet::from([SimpleEnum::First, SimpleEnum::Second])
         );
+    }
+
+    #[test]
+    fn complete_testing_for_enum_configs() {
+        let json = config!("type": "first");
+        let config = test_complete::<EnumConfig>(json).unwrap();
+        assert_eq!(config, EnumConfig::First);
+
+        let json = config!("type": "Fields", "string": "!", "flag": false, "set": [1, 2]);
+        let config = test_complete::<EnumConfig>(json).unwrap();
+        assert_eq!(
+            config,
+            EnumConfig::WithFields {
+                string: Some("!".to_owned()),
+                flag: false,
+                set: HashSet::from([1, 2]),
+            }
+        );
+    }
+
+    #[should_panic(expected = "missing params")]
+    #[test]
+    fn incomplete_enum_config() {
+        let json = config!("type": "Fields");
+        test_complete::<EnumConfig>(json).unwrap();
     }
 }
