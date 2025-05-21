@@ -110,7 +110,7 @@ pub(crate) enum EnumConfig {
     Nested(NestedConfig),
     #[config(alias = "Fields", alias = "With")]
     WithFields {
-        #[config(default)]
+        #[config(default, alias = "str")]
         string: Option<String>,
         #[config(default_t = true)]
         flag: bool,
@@ -131,6 +131,8 @@ pub(crate) enum RenamedEnumConfig {
     V2 {
         str: String,
     },
+    #[config(alias = "next")]
+    V3(EnumConfig),
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
