@@ -1701,3 +1701,28 @@ fn coercing_aliased_enum_config() {
         EnumConfig::WithFields { string: Some(s), .. } if s == "what"
     );
 }
+
+#[test]
+fn working_with_embedded_params() {
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    pub(crate) struct ConfigWithEmbeddedParams {
+        size: ByteSize,
+        size_overrides: ByteSize,
+    }
+
+    let json = config!("size_mb": 10, "size_overrides": "20 MB");
+    let config: ConfigWithEmbeddedParams = testing::test_complete(json).unwrap();
+    assert_eq!(config.size, 10 * SizeUnit::MiB);
+    assert_eq!(config.size_overrides, 20 * SizeUnit::MiB);
+
+    let json = config!("size.mb": 10, "size_overrides": "20 MB");
+    let config: ConfigWithEmbeddedParams = testing::test_complete(json).unwrap();
+    assert_eq!(config.size, 10 * SizeUnit::MiB);
+    assert_eq!(config.size_overrides, 20 * SizeUnit::MiB);
+
+    let json = config!("size_mb": 10, "size_overrides_mb": 20);
+    let config: ConfigWithEmbeddedParams = testing::test_complete(json).unwrap();
+    assert_eq!(config.size, 10 * SizeUnit::MiB);
+    assert_eq!(config.size_overrides, 20 * SizeUnit::MiB);
+}
