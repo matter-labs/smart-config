@@ -419,6 +419,7 @@ fn parsing_complex_types() {
             ip_addr: Ipv4Addr::LOCALHOST.into(),
             socket_addr: ([192, 168, 0, 1], 3000).into(),
             with_custom_deserializer: 0,
+            timeout: Duration::ZERO,
         }
     );
 
@@ -436,6 +437,7 @@ fn parsing_complex_types() {
         "ip_addr": "10.10.0.103",
         "socket_addr": "[::1]:4040",
         "with_custom_deserializer": "what",
+        "timeout": 5,
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -455,6 +457,7 @@ fn parsing_complex_types() {
             ip_addr: [10, 10, 0, 103].into(),
             socket_addr: (Ipv6Addr::LOCALHOST, 4040).into(),
             with_custom_deserializer: 4,
+            timeout: Duration::from_secs(5),
         }
     );
 
@@ -474,6 +477,7 @@ fn parsing_complex_types() {
         }),
         "socket_addr": "127.0.0.1:8000",
         "with_custom_deserializer": "!",
+        "timeout": "3 secs",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -493,6 +497,7 @@ fn parsing_complex_types() {
             ip_addr: Ipv4Addr::LOCALHOST.into(),
             socket_addr: ([127, 0, 0, 1], 8000).into(),
             with_custom_deserializer: 1,
+            timeout: Duration::from_secs(3),
         }
     );
 }

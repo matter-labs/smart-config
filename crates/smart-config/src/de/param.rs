@@ -469,3 +469,42 @@ where
         self.0.serialize_param(param)
     }
 }
+
+/// Combines two deserializers, with the first one having higher priority. The second deserializer will only be invoked
+/// if the first deserializer fails. If both deserializers fail, both their errors will be added to the context.
+impl<T, De, DeFallback> DeserializeParam<T> for (De, DeFallback)
+where
+    T: 'static,
+    De: DeserializeParam<T>,
+    DeFallback: DeserializeParam<T>,
+{
+    const EXPECTING: BasicTypes = De::EXPECTING.or(DeFallback::EXPECTING);
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.0.describe(description);
+        description.set_fallback(&self.1);
+    }
+
+    fn deserialize_param(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin> {
+        let main_err = match self.0.deserialize_param(ctx.borrow(), param) {
+            Ok(value) => return Ok(value),
+            Err(err) => err,
+        };
+        self.1
+            .deserialize_param(ctx.borrow(), param)
+            .map_err(|fallback_err| {
+                // Push both errors into the context.
+                ctx.push_error(fallback_err);
+                main_err
+            })
+    }
+
+    fn serialize_param(&self, param: &T) -> serde_json::Value {
+        // The main deserializer always has priority
+        self.0.serialize_param(param)
+    }
+}

@@ -241,10 +241,12 @@ struct ChildDescription {
 }
 
 impl ChildDescription {
-    fn new<T: 'static, De: DeserializeParam<T>>(deserializer: &De) -> Self {
+    fn new<T: 'static, De: DeserializeParam<T>>(deserializer: &De, set_type: bool) -> Self {
         let mut description = Box::default();
         deserializer.describe(&mut description);
-        description.rust_type = any::type_name::<T>();
+        if set_type {
+            description.rust_type = any::type_name::<T>();
+        }
         Self {
             expecting: De::EXPECTING,
             description,
@@ -265,6 +267,7 @@ pub struct TypeDescription {
     validations: Vec<String>,
     items: Option<ChildDescription>,
     entries: Option<(ChildDescription, ChildDescription)>,
+    fallback: Option<ChildDescription>,
 }
 
 impl TypeDescription {
@@ -305,6 +308,12 @@ impl TypeDescription {
     pub fn values(&self) -> Option<(BasicTypes, &Self)> {
         let keys = &self.entries.as_ref()?.1;
         Some((keys.expecting, &*keys.description))
+    }
+
+    /// Returns the fallback description, if any.
+    pub fn fallback(&self) -> Option<(BasicTypes, &Self)> {
+        let fallback = self.fallback.as_ref()?;
+        Some((fallback.expecting, &*fallback.description))
     }
 
     /// Checks whether this type or any child types (e.g., array items or map keys / values) are marked
@@ -355,7 +364,7 @@ impl TypeDescription {
 
     /// Adds a description of array items. This only makes sense for params accepting array input.
     pub fn set_items<T: 'static>(&mut self, items: &impl DeserializeParam<T>) -> &mut Self {
-        self.items = Some(ChildDescription::new(items));
+        self.items = Some(ChildDescription::new(items, true));
         self
     }
 
@@ -365,8 +374,15 @@ impl TypeDescription {
         keys: &impl DeserializeParam<K>,
         values: &impl DeserializeParam<V>,
     ) -> &mut Self {
-        self.entries = Some((ChildDescription::new(keys), ChildDescription::new(values)));
+        self.entries = Some((
+            ChildDescription::new(keys, true),
+            ChildDescription::new(values, true),
+        ));
         self
+    }
+
+    pub(crate) fn set_fallback<T: 'static>(&mut self, fallback: &impl DeserializeParam<T>) {
+        self.fallback = Some(ChildDescription::new(fallback, false));
     }
 }
 
