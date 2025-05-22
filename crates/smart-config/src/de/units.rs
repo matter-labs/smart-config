@@ -364,9 +364,9 @@ enum RawByteSize {
 impl EnumWithUnit for RawByteSize {
     impl_enum_with_unit!(
         "bytes" | "b" => Self::Bytes,
-        "kb" | "kib" => Self::Kilobytes,
-        "mb" | "mib" => Self::Megabytes,
-        "gb" | "gib" => Self::Gigabytes,
+        "kilobytes" | "kb" | "kib" => Self::Kilobytes,
+        "megabytes" | "mb" | "mib" => Self::Megabytes,
+        "gigabytes" | "gb" | "gib" => Self::Gigabytes,
     );
 }
 

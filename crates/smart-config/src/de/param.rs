@@ -472,6 +472,33 @@ where
 
 /// Combines two deserializers, with the first one having higher priority. The second deserializer will only be invoked
 /// if the first deserializer fails. If both deserializers fail, both their errors will be added to the context.
+///
+/// # Examples
+///
+/// ```
+/// # use std::time::Duration;
+/// # use smart_config::{DescribeConfig, DeserializeConfig, metadata::TimeUnit, testing};
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     /// Param that can be deserialized either using the standard duration format,
+///     /// or an integer representing seconds.
+///     #[config(with = ((), TimeUnit::Seconds))]
+///     duration: Duration,
+/// }
+///
+/// let json = smart_config::config!("duration": "5 sec");
+/// let config: TestConfig = testing::test(json)?;
+/// assert_eq!(config.duration, Duration::from_secs(5));
+///
+/// let json = smart_config::config!("duration_sec": 5);
+/// let config: TestConfig = testing::test(json)?;
+/// assert_eq!(config.duration, Duration::from_secs(5));
+///
+/// let json = smart_config::config!("duration": 5);
+/// let config: TestConfig = testing::test(json)?;
+/// assert_eq!(config.duration, Duration::from_secs(5));
+/// # anyhow::Ok(())
+/// ```
 impl<T, De, DeFallback> DeserializeParam<T> for (De, DeFallback)
 where
     T: 'static,
