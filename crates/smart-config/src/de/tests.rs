@@ -745,10 +745,7 @@ fn multiple_errors_for_composed_deserializers() {
         .find(|err| err.path() == "durations.1")
         .unwrap();
     let inner = err.inner().to_string();
-    assert!(
-        inner.contains("invalid value") && inner.contains("duration unit"),
-        "{inner}"
-    );
+    assert!(inner.contains("unknown variant"), "{inner}");
 
     let json = config!("map_of_ints": r#"{ "what": 120 }"#);
     let errors = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
