@@ -1,10 +1,10 @@
 //! Param deserializers based on units of measurement.
 
-use std::{str::FromStr, time::Duration};
+use std::{fmt, marker::PhantomData, str::FromStr, time::Duration};
 
 use serde::{
-    de::{Error as DeError, Unexpected},
-    Deserialize,
+    de::{self, EnumAccess, Error as DeError, Unexpected, VariantAccess},
+    Deserialize, Deserializer,
 };
 
 use crate::{
@@ -184,23 +184,81 @@ impl DeserializeParam<ByteSize> for SizeUnit {
 #[derive(Debug, Clone, Copy)]
 pub struct WithUnit;
 
+/// Helper trait allowing to unify enum parsing for durations and byte sizes.
+trait EnumWithUnit: Sized {
+    const VARIANTS: &'static [&'static str];
+
+    fn extract_variant(unit: &str) -> Option<fn(u64) -> Self>;
+
+    fn parse<E: de::Error>(unit: &str, value: u64) -> Result<Self, E> {
+        let variant_mapper = Self::extract_variant(unit)
+            .ok_or_else(|| DeError::unknown_variant(unit, Self::VARIANTS))?;
+        Ok(variant_mapper(value))
+    }
+}
+
+#[derive(Debug)]
+struct EnumVisitor<T>(PhantomData<T>);
+
+impl<'v, T: EnumWithUnit> de::Visitor<'v> for EnumVisitor<T> {
+    type Value = T;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "enum with one of {:?} variants",
+            RawDuration::VARIANTS
+        )
+    }
+
+    fn visit_enum<A: EnumAccess<'v>>(self, data: A) -> Result<Self::Value, A::Error> {
+        let (tag, payload) = data.variant::<String>()?;
+        let value = payload.newtype_variant::<u64>()?;
+        let unit = tag.strip_prefix("in_").unwrap_or(&tag);
+        T::parse(unit, value)
+    }
+}
+
 /// Raw `Duration` representation used by the `WithUnit` deserializer.
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-#[serde(rename_all = "lowercase")]
 enum RawDuration {
-    #[serde(alias = "ms", alias = "milliseconds")]
     Millis(u64),
-    #[serde(alias = "second", alias = "s", alias = "sec", alias = "secs")]
     Seconds(u64),
-    #[serde(alias = "minute", alias = "min", alias = "mins", alias = "m")]
     Minutes(u64),
-    #[serde(alias = "hour", alias = "hr", alias = "h")]
     Hours(u64),
-    #[serde(alias = "day", alias = "d")]
     Days(u64),
-    #[serde(alias = "week", alias = "w")]
     Weeks(u64),
+}
+
+macro_rules! impl_enum_with_unit {
+    ($($($name:tt)|+ => $func:expr,)+) => {
+        const VARIANTS: &'static [&'static str] = &[$($($name,)+)+];
+
+        fn extract_variant(unit: &str) -> Option<fn(u64) -> Self> {
+            Some(match unit {
+                $($($name )|+ => $func,)+
+                _ => return None,
+            })
+        }
+    };
+}
+
+impl EnumWithUnit for RawDuration {
+    impl_enum_with_unit!(
+        "milliseconds" | "millis" | "ms" => Self::Millis,
+        "seconds" | "second" | "secs" | "sec" | "s" => Self::Seconds,
+        "minutes" | "minute" | "mins" | "min" | "m" => Self::Minutes,
+        "hours" | "hour" | "hr" | "h" => Self::Hours,
+        "days" | "day" | "d" => Self::Days,
+        "weeks" | "week" | "w" => Self::Weeks,
+    );
+}
+
+impl<'de> Deserialize<'de> for RawDuration {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_enum("RawDuration", Self::VARIANTS, EnumVisitor(PhantomData))
+    }
 }
 
 impl RawDuration {
@@ -220,20 +278,7 @@ impl FromStr for RawDuration {
 
         let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
         let unit = s[unit_start..].trim();
-        Ok(match unit {
-            "milliseconds" | "millis" | "ms" => Self::Millis(value),
-            "seconds" | "second" | "secs" | "sec" | "s" => Self::Seconds(value),
-            "minutes" | "minute" | "mins" | "min" | "m" => Self::Minutes(value),
-            "hours" | "hour" | "hr" | "h" => Self::Hours(value),
-            "days" | "day" | "d" => Self::Days(value),
-            "weeks" | "week" | "w" => Self::Weeks(value),
-            _ => {
-                return Err(DeError::invalid_value(
-                    Unexpected::Str(unit),
-                    &"duration unit, like 'ms', up to 'weeks'",
-                ))
-            }
-        })
+        Self::parse(unit, value)
     }
 }
 
@@ -307,21 +352,32 @@ impl WellKnown for Duration {
     const DE: Self::Deserializer = WithUnit;
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
-#[serde(rename_all = "lowercase")]
 enum RawByteSize {
     Bytes(u64),
-    #[serde(alias = "kb", alias = "kib")]
     Kilobytes(u64),
-    #[serde(alias = "mb", alias = "mib")]
     Megabytes(u64),
-    #[serde(alias = "gb", alias = "gib")]
     Gigabytes(u64),
+}
+
+impl EnumWithUnit for RawByteSize {
+    impl_enum_with_unit!(
+        "bytes" | "b" => Self::Bytes,
+        "kilobytes" | "kb" | "kib" => Self::Kilobytes,
+        "megabytes" | "mb" | "mib" => Self::Megabytes,
+        "gigabytes" | "gb" | "gib" => Self::Gigabytes,
+    );
 }
 
 impl RawByteSize {
     const EXPECTING: &'static str = "value with unit, like '32 MB'";
+}
+
+impl<'de> Deserialize<'de> for RawByteSize {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_enum("RawByteSize", Self::VARIANTS, EnumVisitor(PhantomData))
+    }
 }
 
 impl FromStr for RawByteSize {
@@ -337,18 +393,7 @@ impl FromStr for RawByteSize {
 
         let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
         let unit = s[unit_start..].trim();
-        Ok(match unit.to_lowercase().as_str() {
-            "bytes" | "b" => Self::Bytes(value),
-            "kb" | "kib" => Self::Kilobytes(value),
-            "mb" | "mib" => Self::Megabytes(value),
-            "gb" | "gib" => Self::Gigabytes(value),
-            _ => {
-                return Err(DeError::invalid_value(
-                    Unexpected::Str(unit),
-                    &"duration unit, like 'KB', up to 'GB'",
-                ))
-            }
-        })
+        Self::parse(&unit.to_lowercase(), value)
     }
 }
 
@@ -452,8 +497,7 @@ mod tests {
         assert!(err.contains("too large"), "{err}");
 
         let err = "10 months".parse::<RawDuration>().unwrap_err().to_string();
-        assert!(err.starts_with("invalid value"), "{err}");
-        assert!(err.contains("duration unit"), "{err}");
+        assert!(err.starts_with("unknown variant"), "{err}");
     }
 
     #[test]

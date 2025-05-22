@@ -959,12 +959,22 @@ fn nesting_with_duration_param() {
     assert_eq!(config.long_dur, Duration::from_secs(3_600 * 4));
     test_config_roundtrip(&config);
 
+    let json = config!("array": [4, 5], "long_dur_in_hours": "4");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(3_600 * 4));
+    test_config_roundtrip(&config);
+
     let json = config!("array": [4, 5], "long_dur": "3min");
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(60 * 3));
     test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", 1)]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(86_400));
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "long_dur": HashMap::from([("in_days", 1)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(86_400));
     test_config_roundtrip(&config);
@@ -1008,12 +1018,22 @@ fn nesting_with_byte_size_param() {
     assert_eq!(config.disk_size.unwrap(), 64 * SizeUnit::MiB);
     test_config_roundtrip(&config);
 
+    let json = config!("array": [4, 5], "disk_size_in_mb": 64);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size.unwrap(), 64 * SizeUnit::MiB);
+    test_config_roundtrip(&config);
+
     let json = config!("array": [4, 5], "disk_size": "2 GiB");
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.disk_size.unwrap(), 2 * SizeUnit::GiB);
     test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "disk_size": HashMap::from([("kib", 512)]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size.unwrap(), 512 * SizeUnit::KiB);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "disk_size": HashMap::from([("in_kib", 512)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.disk_size.unwrap(), 512 * SizeUnit::KiB);
     test_config_roundtrip(&config);
@@ -1039,7 +1059,6 @@ fn nesting_with_duration_param_errors() {
     let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR_WHAT", "123")]);
     let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
     let err = assert_error(&err);
-    assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "LONG_DUR_WHAT");
     let inner = err.inner().to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
 
@@ -1048,7 +1067,7 @@ fn nesting_with_duration_param_errors() {
     let err = assert_error(&err);
     assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "LONG_DUR");
     let inner = err.inner().to_string();
-    assert!(inner.contains("expected duration unit"), "{inner}");
+    assert!(inner.contains("unknown variant"), "{inner}");
 
     let env = Environment::from_iter(
         "",
@@ -1095,7 +1114,7 @@ fn merging_duration_params_is_atomic() {
 
     // Prefixed override
     let base = config!("test.array": [4, 5], "test.long_dur": "3 secs");
-    let overrides = Environment::from_iter("", [("TEST_LONG_DUR_MIN", "1")]);
+    let overrides = Environment::from_iter("", [("TEST_LONG_DUR_IN_MIN", "1")]);
     let repo = ConfigRepository::new(&schema).with(base).with(overrides);
     assert_matches!(
         &repo.merged().get(Pointer("test.long_dur")).unwrap().inner,
@@ -1106,7 +1125,7 @@ fn merging_duration_params_is_atomic() {
     assert_eq!(config.long_dur, Duration::from_secs(60));
 
     // Prefixed base and override
-    let base = config!("test.array": [4, 5], "test.long_dur_secs": "3");
+    let base = config!("test.array": [4, 5], "test.long_dur_in_secs": "3");
     let mut repo = ConfigRepository::new(&schema).with(base);
     let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(3));
@@ -1189,7 +1208,7 @@ fn nesting_with_composed_deserializers_errors() {
     assert!(origin.ends_with("-> path 'map_of_sizes_small'"), "{origin}");
     let inner = err.inner().to_string();
     assert!(
-        inner.contains("invalid value") && inner.contains("gajillion"),
+        inner.contains("unknown variant") && inner.contains("gajillion"),
         "{inner}"
     );
 
@@ -1681,4 +1700,29 @@ fn coercing_aliased_enum_config() {
         &config.val,
         EnumConfig::WithFields { string: Some(s), .. } if s == "what"
     );
+}
+
+#[test]
+fn working_with_embedded_params() {
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    pub(crate) struct ConfigWithEmbeddedParams {
+        size: ByteSize,
+        size_overrides: ByteSize,
+    }
+
+    let json = config!("size_mb": 10, "size_overrides": "20 MB");
+    let config: ConfigWithEmbeddedParams = testing::test_complete(json).unwrap();
+    assert_eq!(config.size, 10 * SizeUnit::MiB);
+    assert_eq!(config.size_overrides, 20 * SizeUnit::MiB);
+
+    let json = config!("size.mb": 10, "size_overrides": "20 MB");
+    let config: ConfigWithEmbeddedParams = testing::test_complete(json).unwrap();
+    assert_eq!(config.size, 10 * SizeUnit::MiB);
+    assert_eq!(config.size_overrides, 20 * SizeUnit::MiB);
+
+    let json = config!("size_mb": 10, "size_overrides_mb": 20);
+    let config: ConfigWithEmbeddedParams = testing::test_complete(json).unwrap();
+    assert_eq!(config.size, 10 * SizeUnit::MiB);
+    assert_eq!(config.size_overrides, 20 * SizeUnit::MiB);
 }

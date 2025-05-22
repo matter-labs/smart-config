@@ -1,5 +1,5 @@
 use std::{
-    any,
+    any, cmp,
     collections::{BTreeMap, HashSet},
     iter,
     marker::PhantomData,
@@ -829,7 +829,20 @@ impl WithOrigin {
                 .iter()
                 .filter_map(|nested| (!nested.name.is_empty()).then_some(nested.name));
 
-            for child_name in object_params.chain(nested_configs) {
+            let mut child_names: Vec<_> = object_params.chain(nested_configs.clone()).collect();
+            // Sort all names in the reversed length order, so that if there are embedded names (e.g., `size` and `size_overrides`),
+            // the longer one is always visited first.
+            child_names.sort_unstable_by_key(|name| cmp::Reverse(name.len()));
+            let mut matched_fields: HashSet<_> = config_data
+                .metadata
+                .params
+                .iter()
+                .map(|param| param.name)
+                .chain(nested_configs)
+                .collect();
+            let mut insertions = vec![];
+
+            for child_name in child_names {
                 let target_object = match config_object.get(child_name) {
                     None => None,
                     Some(WithOrigin {
@@ -843,12 +856,19 @@ impl WithOrigin {
                 let matching_fields: Vec<_> = config_object
                     .iter()
                     .filter_map(|(name, field)| {
+                        if matched_fields.contains(name.as_str()) {
+                            // The field was already copied to a better fitting param / config, or matches a config / param.
+                            return None;
+                        }
+
                         let stripped_name = Self::strip_prefix(name, child_name)?;
                         if let Some(param_object) = target_object {
                             if param_object.contains_key(stripped_name) {
                                 return None; // Never overwrite existing fields
                             }
                         }
+
+                        matched_fields.insert(name);
                         Some((stripped_name.to_owned(), field.clone()))
                     })
                     .collect();
@@ -863,7 +883,10 @@ impl WithOrigin {
                     fields = ?matching_fields.iter().map(|(name, _)| name).collect::<Vec<_>>(),
                     "nesting for object param / config"
                 );
+                insertions.push((child_name, matching_fields));
+            }
 
+            for (child_name, matching_fields) in insertions {
                 if !config_object.contains_key(child_name) {
                     let origin = Arc::new(ValueOrigin::Synthetic {
                         source: config_origin.clone(),

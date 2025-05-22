@@ -260,6 +260,8 @@ pub(crate) struct ConfigWithComplexTypes {
     pub socket_addr: SocketAddr,
     #[config(default, with = StringLen)]
     pub with_custom_deserializer: usize,
+    #[config(default, with = ((), TimeUnit::Seconds))]
+    pub timeout: Duration,
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]

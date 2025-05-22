@@ -237,10 +237,13 @@ fn write_type_description(
     } else {
         String::new()
     };
-    let ty = format!(
-        "{maybe_secret}{expecting} {DIMMED}[Rust: {}]{DIMMED:#}",
-        description.rust_type()
-    );
+    let rust_type = description.rust_type();
+    let rust_type = if rust_type.is_empty() {
+        String::new()
+    } else {
+        format!(" {DIMMED}[Rust: {rust_type}]{DIMMED:#}")
+    };
+    let ty = format!("{maybe_secret}{expecting}{rust_type}");
 
     let details = if let Some(details) = description.details() {
         format!("; {details}")
@@ -273,6 +276,9 @@ fn write_type_description(
     }
     if let Some((expecting, value)) = description.values() {
         write_type_description(writer, "Map values", indent + 2, expecting, value)?;
+    }
+    if let Some((expecting, fallback)) = description.fallback() {
+        write_type_description(writer, "Fallback", indent + 2, expecting, fallback)?;
     }
 
     Ok(())
