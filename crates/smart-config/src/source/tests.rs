@@ -11,7 +11,7 @@ use secrecy::ExposeSecret;
 use super::*;
 use crate::{
     ByteSize, DescribeConfig, SerializerOptions, de,
-    metadata::{AliasOptions, SizeUnit},
+    metadata::{AliasOptions, EtherUnit, SizeUnit},
     testing,
     testing::MockEnvGuard,
     testonly::{
@@ -1004,6 +1004,28 @@ fn nesting_with_null_value() {
     let json = config!("array": [4, 5], "disk_size": None::<()>);
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.disk_size, None);
+}
+
+#[test]
+fn nesting_with_ether_amount_param() {
+    let json = config!("array": [4, 5], "fee_in_gwei": 200);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.fee, 200 * EtherUnit::Gwei);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "fee_ether": 1);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.fee, 1 * EtherUnit::Ether);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "fee": HashMap::from([("gwei", 250)]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.fee, 250 * EtherUnit::Gwei);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "fee": HashMap::from([("in_gwei", 300)]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.fee, 300 * EtherUnit::Gwei);
     test_config_roundtrip(&config);
 }
 

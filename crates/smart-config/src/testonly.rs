@@ -18,11 +18,11 @@ use serde::{Deserialize, Serialize, de::Error as DeError};
 
 use crate::{
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
-    ExampleConfig, Json, ParseErrors, SerializerOptions,
+    EtherAmount, ExampleConfig, Json, ParseErrors, SerializerOptions,
     de::{self, DeserializeContext, DeserializeParam, DeserializerOptions, Serde, WellKnown},
     fallback,
     fallback::FallbackSource,
-    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit},
+    metadata::{BasicTypes, EtherUnit, ParamMetadata, SizeUnit, TimeUnit},
     testing,
     validation::NotEmpty,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
@@ -263,6 +263,8 @@ pub(crate) struct ConfigWithComplexTypes {
     pub socket_addr: SocketAddr,
     #[config(default, with = StringLen)]
     pub with_custom_deserializer: usize,
+    #[config(default_t = 100 * EtherUnit::Gwei)]
+    pub fee: EtherAmount,
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
