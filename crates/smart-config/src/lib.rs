@@ -422,7 +422,7 @@ pub use self::{
         ConfigParser, ConfigRepository, ConfigSource, ConfigSourceKind, ConfigSources, Environment,
         Flat, Hierarchical, Json, Prefixed, SerializerOptions, SourceInfo, Yaml,
     },
-    types::ByteSize,
+    types::{ByteSize, EtherAmount},
 };
 use self::{metadata::ConfigMetadata, visit::VisitConfig};
 

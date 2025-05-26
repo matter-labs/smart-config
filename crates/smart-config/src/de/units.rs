@@ -120,7 +120,7 @@ impl DeserializeParam<ByteSize> for SizeUnit {
         ByteSize::checked(raw_value, *self).ok_or_else(|| {
             let err = DeError::custom(format!(
                 "{raw_value} {unit} does not fit into `u64`",
-                unit = self.plural()
+                unit = self.as_str()
             ));
             deserializer.enrich_err(err)
         })
@@ -500,7 +500,7 @@ impl TryFrom<RawByteSize> for ByteSize {
         ByteSize::checked(raw_value, unit).ok_or_else(|| {
             DeError::custom(format!(
                 "{raw_value} {unit} does not fit into `u64`",
-                unit = unit.plural()
+                unit = unit.as_str()
             ))
         })
     }
