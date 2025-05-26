@@ -8,10 +8,12 @@ use serde::{
 };
 
 use crate::{
-    ByteSize,
+    ByteSize, EtherAmount,
     de::{CustomKnownOption, DeserializeContext, DeserializeParam, Optional, WellKnown},
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
+    metadata::{
+        BasicTypes, EtherUnit, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes,
+    },
     value::Value,
 };
 
@@ -239,6 +241,7 @@ impl WithUnit {
 
 /// Helper trait allowing to unify enum parsing for durations and byte sizes.
 trait EnumWithUnit: FromStr<Err = serde_json::Error> {
+    const EXPECTING: &'static str;
     const VARIANTS: &'static [&'static str];
 
     fn extract_variant(unit: &str) -> Option<fn(u64) -> Self>;
@@ -254,6 +257,24 @@ trait EnumWithUnit: FromStr<Err = serde_json::Error> {
             .ok_or_else(|| DeError::unknown_variant(unit, Self::VARIANTS))?;
         // We want to check the variant first, and only then return `Ok(None)`.
         Ok(value.map(variant_mapper))
+    }
+
+    fn from_unit_str(s: &str, lowercase_unit: bool) -> Result<Self, serde_json::Error> {
+        let unit_start = s
+            .find(|ch: char| !ch.is_ascii_digit())
+            .ok_or_else(|| DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING))?;
+        if unit_start == 0 {
+            return Err(DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING));
+        }
+
+        let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
+        let mut unit = s[unit_start..].trim();
+        let lowercase_unit_string;
+        if lowercase_unit {
+            lowercase_unit_string = unit.to_lowercase();
+            unit = &lowercase_unit_string;
+        }
+        Self::parse(unit, value)
     }
 }
 
@@ -316,6 +337,8 @@ macro_rules! impl_enum_with_unit {
 }
 
 impl EnumWithUnit for RawDuration {
+    const EXPECTING: &'static str = "value with unit, like '10 ms'";
+
     impl_enum_with_unit!(
         "milliseconds" | "millis" | "ms" => Self::Millis,
         "seconds" | "second" | "secs" | "sec" | "s" => Self::Seconds,
@@ -326,24 +349,11 @@ impl EnumWithUnit for RawDuration {
     );
 }
 
-impl RawDuration {
-    const EXPECTING: &'static str = "value with unit, like '10 ms'";
-}
-
 impl FromStr for RawDuration {
     type Err = serde_json::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let unit_start = s
-            .find(|ch: char| !ch.is_ascii_digit())
-            .ok_or_else(|| DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING))?;
-        if unit_start == 0 {
-            return Err(DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING));
-        }
-
-        let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
-        let unit = s[unit_start..].trim();
-        Self::parse(unit, value)
+        Self::from_unit_str(s, false)
     }
 }
 
@@ -448,16 +458,14 @@ enum RawByteSize {
 }
 
 impl EnumWithUnit for RawByteSize {
+    const EXPECTING: &'static str = "value with unit, like '32 MB'";
+
     impl_enum_with_unit!(
         "bytes" | "b" => Self::Bytes,
         "kilobytes" | "kb" | "kib" => Self::Kilobytes,
         "megabytes" | "mb" | "mib" => Self::Megabytes,
         "gigabytes" | "gb" | "gib" => Self::Gigabytes,
     );
-}
-
-impl RawByteSize {
-    const EXPECTING: &'static str = "value with unit, like '32 MB'";
 }
 
 impl<'de> Deserialize<'de> for RawByteSize {
@@ -474,16 +482,7 @@ impl FromStr for RawByteSize {
     type Err = serde_json::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let unit_start = s
-            .find(|ch: char| !ch.is_ascii_digit())
-            .ok_or_else(|| DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING))?;
-        if unit_start == 0 {
-            return Err(DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING));
-        }
-
-        let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
-        let unit = s[unit_start..].trim();
-        Self::parse(&unit.to_lowercase(), value)
+        Self::from_unit_str(s, true)
     }
 }
 
@@ -574,6 +573,93 @@ impl TypeSuffixes {
             }
         }
     }
+}
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+enum RawEtherAmount {
+    Wei(u64),
+    Gwei(u64),
+    Ether(u64),
+}
+
+impl EnumWithUnit for RawEtherAmount {
+    const EXPECTING: &'static str = "value with unit, like '100 gwei'";
+
+    impl_enum_with_unit!(
+        "wei" => Self::Wei,
+        "gwei" => Self::Gwei,
+        "ether" => Self::Ether,
+    );
+}
+
+impl<'de> Deserialize<'de> for RawEtherAmount {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_enum(
+            "RawEtherAmount",
+            Self::VARIANTS,
+            EnumVisitor(PhantomData::<Self>),
+        )
+    }
+}
+
+impl FromStr for RawEtherAmount {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_unit_str(s, true)
+    }
+}
+
+impl TryFrom<RawEtherAmount> for EtherAmount {
+    type Error = serde_json::Error;
+
+    fn try_from(value: RawEtherAmount) -> Result<Self, Self::Error> {
+        let (unit, raw_value) = match value {
+            RawEtherAmount::Wei(val) => (EtherUnit::Wei, val),
+            RawEtherAmount::Gwei(val) => (EtherUnit::Gwei, val),
+            RawEtherAmount::Ether(val) => (EtherUnit::Ether, val),
+        };
+        EtherAmount::checked(raw_value, unit).ok_or_else(|| {
+            DeError::custom(format!(
+                "{raw_value} {unit} does not fit into `u64`",
+                unit = unit.as_str()
+            ))
+        })
+    }
+}
+
+impl DeserializeParam<EtherAmount> for WithUnit {
+    const EXPECTING: BasicTypes = BasicTypes::STRING.or(BasicTypes::OBJECT);
+
+    fn describe(&self, description: &mut TypeDescription) {
+        description.set_details("size with unit, or object with single unit key");
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<EtherAmount, ErrorWithOrigin> {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let raw = if let Value::String(s) = deserializer.value() {
+            s.expose()
+                .parse::<RawEtherAmount>()
+                .map_err(|err| deserializer.enrich_err(err))?
+        } else {
+            RawEtherAmount::deserialize(deserializer)?
+        };
+        raw.try_into().map_err(|err| deserializer.enrich_err(err))
+    }
+
+    fn serialize_param(&self, param: &EtherAmount) -> serde_json::Value {
+        param.to_string().into()
+    }
+}
+
+impl WellKnown for EtherAmount {
+    type Deserializer = WithUnit;
+    const DE: Self::Deserializer = WithUnit;
 }
 
 #[cfg(test)]
