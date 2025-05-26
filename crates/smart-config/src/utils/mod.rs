@@ -1,5 +1,7 @@
 #![allow(clippy::enum_variant_names)]
 
+mod decimal;
+
 use crate::metadata::ConfigMetadata;
 
 /// Sealed trait marker. Intentionally not re-exported publicly.
