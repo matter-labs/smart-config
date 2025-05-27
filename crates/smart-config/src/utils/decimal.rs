@@ -1,6 +1,6 @@
 use std::{cmp, fmt, str::FromStr};
 
-use serde::{de, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de};
 
 /// Ad-hoc decimal with `u64` precision.
 #[derive(Debug, Clone, Copy)]
@@ -187,7 +187,7 @@ impl FromStr for Decimal {
                     return Err(de::Error::invalid_value(
                         de::Unexpected::Str(s),
                         &Self::EXPECTING,
-                    ))
+                    ));
                 }
             }
         }

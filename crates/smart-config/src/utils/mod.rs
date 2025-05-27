@@ -2,6 +2,7 @@
 
 mod decimal;
 
+pub(crate) use self::decimal::Decimal;
 use crate::metadata::ConfigMetadata;
 
 /// Sealed trait marker. Intentionally not re-exported publicly.

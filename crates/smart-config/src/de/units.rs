@@ -11,9 +11,8 @@ use crate::{
     ByteSize, EtherAmount,
     de::{CustomKnownOption, DeserializeContext, DeserializeParam, Optional, WellKnown},
     error::ErrorWithOrigin,
-    metadata::{
-        BasicTypes, EtherUnit, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes,
-    },
+    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
+    utils::Decimal,
     value::Value,
 };
 
@@ -241,18 +240,20 @@ impl WithUnit {
 
 /// Helper trait allowing to unify enum parsing for durations and byte sizes.
 trait EnumWithUnit: FromStr<Err = serde_json::Error> {
+    type Value: FromStr<Err: fmt::Display> + de::DeserializeOwned;
+
     const EXPECTING: &'static str;
     const VARIANTS: &'static [&'static str];
 
-    fn extract_variant(unit: &str) -> Option<fn(u64) -> Self>;
+    fn extract_variant(unit: &str) -> Option<fn(Self::Value) -> Self>;
 
-    fn parse<E: de::Error>(unit: &str, value: u64) -> Result<Self, E> {
+    fn parse<E: de::Error>(unit: &str, value: Self::Value) -> Result<Self, E> {
         let variant_mapper = Self::extract_variant(unit)
             .ok_or_else(|| DeError::unknown_variant(unit, Self::VARIANTS))?;
         Ok(variant_mapper(value))
     }
 
-    fn parse_opt<E: de::Error>(unit: &str, value: Option<u64>) -> Result<Option<Self>, E> {
+    fn parse_opt<E: de::Error>(unit: &str, value: Option<Self::Value>) -> Result<Option<Self>, E> {
         let variant_mapper = Self::extract_variant(unit)
             .ok_or_else(|| DeError::unknown_variant(unit, Self::VARIANTS))?;
         // We want to check the variant first, and only then return `Ok(None)`.
@@ -261,13 +262,13 @@ trait EnumWithUnit: FromStr<Err = serde_json::Error> {
 
     fn from_unit_str(s: &str, lowercase_unit: bool) -> Result<Self, serde_json::Error> {
         let unit_start = s
-            .find(|ch: char| !ch.is_ascii_digit())
+            .find(|ch: char| !ch.is_ascii_digit() && ch != '_' && ch != '.')
             .ok_or_else(|| DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING))?;
         if unit_start == 0 {
             return Err(DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING));
         }
 
-        let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
+        let value: Self::Value = s[..unit_start].parse().map_err(DeError::custom)?;
         let mut unit = s[unit_start..].trim();
         let lowercase_unit_string;
         if lowercase_unit {
@@ -281,7 +282,10 @@ trait EnumWithUnit: FromStr<Err = serde_json::Error> {
 #[derive(Debug)]
 struct EnumVisitor<T>(PhantomData<T>);
 
-impl<'v, T: EnumWithUnit> de::Visitor<'v> for EnumVisitor<T> {
+impl<'v, T> de::Visitor<'v> for EnumVisitor<T>
+where
+    T: EnumWithUnit<Value: de::DeserializeOwned>,
+{
     type Value = T;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -327,7 +331,7 @@ macro_rules! impl_enum_with_unit {
     ($($($name:tt)|+ => $func:expr,)+) => {
         const VARIANTS: &'static [&'static str] = &[$($($name,)+)+];
 
-        fn extract_variant(unit: &str) -> Option<fn(u64) -> Self> {
+        fn extract_variant(unit: &str) -> Option<fn(Self::Value) -> Self> {
             Some(match unit {
                 $($($name )|+ => $func,)+
                 _ => return None,
@@ -337,6 +341,8 @@ macro_rules! impl_enum_with_unit {
 }
 
 impl EnumWithUnit for RawDuration {
+    type Value = u64;
+
     const EXPECTING: &'static str = "value with unit, like '10 ms'";
 
     impl_enum_with_unit!(
@@ -458,6 +464,8 @@ enum RawByteSize {
 }
 
 impl EnumWithUnit for RawByteSize {
+    type Value = u64;
+
     const EXPECTING: &'static str = "value with unit, like '32 MB'";
 
     impl_enum_with_unit!(
@@ -578,12 +586,14 @@ impl TypeSuffixes {
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 enum RawEtherAmount {
-    Wei(u64),
-    Gwei(u64),
-    Ether(u64),
+    Wei(Decimal),
+    Gwei(Decimal),
+    Ether(Decimal),
 }
 
 impl EnumWithUnit for RawEtherAmount {
+    type Value = Decimal;
+
     const EXPECTING: &'static str = "value with unit, like '100 gwei'";
 
     impl_enum_with_unit!(
@@ -615,17 +625,13 @@ impl TryFrom<RawEtherAmount> for EtherAmount {
     type Error = serde_json::Error;
 
     fn try_from(value: RawEtherAmount) -> Result<Self, Self::Error> {
-        let (unit, raw_value) = match value {
-            RawEtherAmount::Wei(val) => (EtherUnit::Wei, val),
-            RawEtherAmount::Gwei(val) => (EtherUnit::Gwei, val),
-            RawEtherAmount::Ether(val) => (EtherUnit::Ether, val),
+        let (scale, raw_value) = match value {
+            RawEtherAmount::Wei(val) => (1, val),
+            RawEtherAmount::Gwei(val) => (9, val),
+            RawEtherAmount::Ether(val) => (18, val),
         };
-        EtherAmount::checked(raw_value, unit).ok_or_else(|| {
-            DeError::custom(format!(
-                "{raw_value} {unit} does not fit into `u64`",
-                unit = unit.as_str()
-            ))
-        })
+        let value = raw_value.scale(scale)?;
+        Ok(Self(value))
     }
 }
 
