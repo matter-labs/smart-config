@@ -1,0 +1,1 @@
+searchState.loadedDescShard("smart_config_derive", 0, "Procedural macros for <code>smart-config</code>.")
