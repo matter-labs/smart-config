@@ -1,5 +1,5 @@
 <!-- Created with term-transcript v0.4.0-beta.1 (https://github.com/slowli/term-transcript) -->
-<svg viewBox="0 -22 860 636" width="860" height="636" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 -22 860 618" width="860" height="618" xmlns="http://www.w3.org/2000/svg">
   <style>
     .container {
       font: 14px SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace;
@@ -38,9 +38,9 @@
   <circle cx="17" cy="-9" r="7" style="fill: #de382b;"/>
   <circle cx="37" cy="-9" r="7" style="fill: #ffc706;"/>
   <circle cx="57" cy="-9" r="7" style="fill: #38b54a;"/>
-    <svg x="0" y="10" width="860" height="594" viewBox="0 0 860 594">
+    <svg x="0" y="10" width="860" height="576" viewBox="0 0 860 576">
       <g class="input-bg"></g>
-      <text class="container fg7 line-numbers"><tspan x="34" y="14">1</tspan><tspan x="34" y="32">2</tspan><tspan x="34" y="50">3</tspan><tspan x="34" y="68">4</tspan><tspan x="34" y="86">5</tspan><tspan x="34" y="104">6</tspan><tspan x="34" y="122">7</tspan><tspan x="34" y="140">8</tspan><tspan x="34" y="158">9</tspan><tspan x="34" y="176">10</tspan><tspan x="34" y="194">11</tspan><tspan x="34" y="212">12</tspan><tspan x="34" y="230">13</tspan><tspan x="34" y="248">14</tspan><tspan x="34" y="266">15</tspan><tspan x="34" y="284">16</tspan><tspan x="34" y="302">17</tspan><tspan x="34" y="320">18</tspan><tspan x="34" y="338">19</tspan><tspan x="34" y="356">20</tspan><tspan x="34" y="374">21</tspan><tspan x="34" y="392">22</tspan><tspan x="34" y="410">23</tspan><tspan x="34" y="428">24</tspan><tspan x="34" y="446">25</tspan><tspan x="34" y="464">26</tspan><tspan x="34" y="482">27</tspan><tspan x="34" y="500">28</tspan><tspan x="34" y="518">29</tspan><tspan x="34" y="536">30</tspan><tspan x="34" y="554">31</tspan><tspan x="34" y="572">32</tspan><tspan x="34" y="590">33</tspan></text>
+      <text class="container fg7 line-numbers"><tspan x="34" y="14">1</tspan><tspan x="34" y="32">2</tspan><tspan x="34" y="50">3</tspan><tspan x="34" y="68">4</tspan><tspan x="34" y="86">5</tspan><tspan x="34" y="104">6</tspan><tspan x="34" y="122">7</tspan><tspan x="34" y="140">8</tspan><tspan x="34" y="158">9</tspan><tspan x="34" y="176">10</tspan><tspan x="34" y="194">11</tspan><tspan x="34" y="212">12</tspan><tspan x="34" y="230">13</tspan><tspan x="34" y="248">14</tspan><tspan x="34" y="266">15</tspan><tspan x="34" y="284">16</tspan><tspan x="34" y="302">17</tspan><tspan x="34" y="320">18</tspan><tspan x="34" y="338">19</tspan><tspan x="34" y="356">20</tspan><tspan x="34" y="374">21</tspan><tspan x="34" y="392">22</tspan><tspan x="34" y="410">23</tspan><tspan x="34" y="428">24</tspan><tspan x="34" y="446">25</tspan><tspan x="34" y="464">26</tspan><tspan x="34" y="482">27</tspan><tspan x="34" y="500">28</tspan><tspan x="34" y="518">29</tspan><tspan x="34" y="536">30</tspan><tspan x="34" y="554">31</tspan><tspan x="34" y="572">32</tspan></text>
       <text class="container fg7"><tspan xml:space="preserve" x="42" y="14" class="output"><tspan class="bold">test</tspan>:
 </tspan><tspan xml:space="preserve" x="42" y="32" class="output">  <tspan class="bold">app_name</tspan>: <tspan class="fg6">test</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="50" class="output">  <tspan class="bold">cache_size</tspan>: <tspan class="fg6">128 MiB</tspan>
@@ -52,28 +52,27 @@
 </tspan><tspan xml:space="preserve" x="42" y="158" class="output">    <tspan class="bold">api_key</tspan>: <tspan class="fg6">correct horse battery staple</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="176" class="output">    <tspan class="bold">balance</tspan>: <tspan class="fg6">'0x123456'</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="194" class="output">    <tspan class="bold">secret_key</tspan>: <tspan class="fg6">0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="212" class="output">  <tspan class="bold">legacy_timeout</tspan>: <tspan class="fg6">3s</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="230" class="output">  <tspan class="bold">nested</tspan>:
-</tspan><tspan xml:space="preserve" x="42" y="248" class="output">    <tspan class="bold">complex</tspan>:
-</tspan><tspan xml:space="preserve" x="42" y="266" class="output">      <tspan class="bold">array</tspan>:
-</tspan><tspan xml:space="preserve" x="42" y="284" class="output">        - <tspan class="fg2">1</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="302" class="output">        - <tspan class="fg2">2</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="320" class="output">      <tspan class="bold">map</tspan>:
-</tspan><tspan xml:space="preserve" x="42" y="338" class="output">        <tspan class="bold">value</tspan>: <tspan class="fg2">25</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="356" class="output">    <tspan class="bold">exit_on_error</tspan>: <tspan class="fg3">false</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="374" class="output">    <tspan class="bold">method_limits</tspan>:
-</tspan><tspan xml:space="preserve" x="42" y="392" class="output">      - <tspan class="bold">method</tspan>: <tspan class="fg6">eth_getLogs</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="410" class="output">        <tspan class="bold">rps</tspan>: <tspan class="fg2">100</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="428" class="output">      - <tspan class="bold">method</tspan>: <tspan class="fg6">eth_blockNumber</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="446" class="output">        <tspan class="bold">rps</tspan>: <tspan class="fg2">3</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="464" class="output">  <tspan class="bold">object_store</tspan>:
-</tspan><tspan xml:space="preserve" x="42" y="482" class="output">    <tspan class="bold">bucket_name</tspan>: <tspan class="fg6">test-bucket</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="500" class="output">    <tspan class="bold">type</tspan>: <tspan class="fg6">gcs</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="518" class="output">  <tspan class="bold">poll_latency</tspan>: <tspan class="fg6">300ms</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="536" class="output">  <tspan class="bold">port</tspan>: <tspan class="fg2">3000</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="554" class="output">  <tspan class="bold">required</tspan>: <tspan class="fg2">123</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="572" class="output">  <tspan class="bold">scaling_factor</tspan>: <tspan class="fg2">4.199999809265137</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="590" class="output">  <tspan class="bold">temp_dir</tspan>: <tspan class="fg6">/var/folders/mw/lhb7m9dj3jbdm3w994t0_c8h0000gn/T/</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="212" class="output">  <tspan class="bold">nested</tspan>:
+</tspan><tspan xml:space="preserve" x="42" y="230" class="output">    <tspan class="bold">complex</tspan>:
+</tspan><tspan xml:space="preserve" x="42" y="248" class="output">      <tspan class="bold">array</tspan>:
+</tspan><tspan xml:space="preserve" x="42" y="266" class="output">        - <tspan class="fg2">1</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="284" class="output">        - <tspan class="fg2">2</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="302" class="output">      <tspan class="bold">map</tspan>:
+</tspan><tspan xml:space="preserve" x="42" y="320" class="output">        <tspan class="bold">value</tspan>: <tspan class="fg2">25</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="338" class="output">    <tspan class="bold">exit_on_error</tspan>: <tspan class="fg3">false</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="356" class="output">    <tspan class="bold">method_limits</tspan>:
+</tspan><tspan xml:space="preserve" x="42" y="374" class="output">      - <tspan class="bold">method</tspan>: <tspan class="fg6">eth_getLogs</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="392" class="output">        <tspan class="bold">rps</tspan>: <tspan class="fg2">100</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="410" class="output">      - <tspan class="bold">method</tspan>: <tspan class="fg6">eth_blockNumber</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="428" class="output">        <tspan class="bold">rps</tspan>: <tspan class="fg2">3</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="446" class="output">  <tspan class="bold">object_store</tspan>:
+</tspan><tspan xml:space="preserve" x="42" y="464" class="output">    <tspan class="bold">bucket_name</tspan>: <tspan class="fg6">test-bucket</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="482" class="output">    <tspan class="bold">type</tspan>: <tspan class="fg6">gcs</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="500" class="output">  <tspan class="bold">poll_latency</tspan>: <tspan class="fg6">300ms</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="518" class="output">  <tspan class="bold">port</tspan>: <tspan class="fg2">3000</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="536" class="output">  <tspan class="bold">required</tspan>: <tspan class="fg2">123</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="554" class="output">  <tspan class="bold">scaling_factor</tspan>: <tspan class="fg2">4.199999809265137</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="572" class="output">  <tspan class="bold">temp_dir</tspan>: <tspan class="fg6">/var/folders/mw/lhb7m9dj3jbdm3w994t0_c8h0000gn/T/</tspan>
 </tspan></text>
     </svg>
 </svg>

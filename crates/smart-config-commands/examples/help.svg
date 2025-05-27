@@ -40,9 +40,9 @@
   <circle cx="37" cy="-9" r="7" style="fill: #ffc706;"/>
   <circle cx="57" cy="-9" r="7" style="fill: #38b54a;"/>
     <svg x="0" y="10" width="860" height="540" viewBox="0 0 860 540">
-      <animate attributeName="viewBox" values="0 0 860 540;0 72 860 540;0 144 860 540;0 216 860 540;0 288 860 540;0 360 860 540;0 432 860 540;0 504 860 540;0 576 860 540;0 648 860 540;0 720 860 540;0 792 860 540;0 864 860 540;0 936 860 540;0 1008 860 540;0 1080 860 540;0 1152 860 540;0 1224 860 540;0 1296 860 540;0 1368 860 540;0 1440 860 540;0 1512 860 540;0 1584 860 540;0 1656 860 540;0 1728 860 540;0 1800 860 540;0 1872 860 540;0 1944 860 540;0 2016 860 540;0 2088 860 540;0 2160 860 540;0 2232 860 540;0 2304 860 540;0 2376 860 540;0 2448 860 540;0 2520 860 540" dur="140.0s" repeatCount="indefinite" calcMode="discrete" />
+      <animate attributeName="viewBox" values="0 0 860 540;0 72 860 540;0 144 860 540;0 216 860 540;0 288 860 540;0 360 860 540;0 432 860 540;0 504 860 540;0 576 860 540;0 648 860 540;0 720 860 540;0 792 860 540;0 864 860 540;0 936 860 540;0 1008 860 540;0 1080 860 540;0 1152 860 540;0 1224 860 540;0 1296 860 540;0 1368 860 540;0 1440 860 540;0 1512 860 540;0 1584 860 540;0 1656 860 540;0 1728 860 540;0 1800 860 540;0 1872 860 540;0 1944 860 540;0 2016 860 540;0 2088 860 540;0 2160 860 540;0 2232 860 540;0 2304 860 540;0 2376 860 540;0 2448 860 540" dur="136.0s" repeatCount="indefinite" calcMode="discrete" />
       <g class="input-bg"></g>
-      <text class="container fg7 line-numbers"><tspan x="34" y="14">1</tspan><tspan x="34" y="32">2</tspan><tspan x="34" y="50">3</tspan><tspan x="34" y="68">4</tspan><tspan x="34" y="86">5</tspan><tspan x="34" y="104">6</tspan><tspan x="34" y="122">7</tspan><tspan x="34" y="140">8</tspan><tspan x="34" y="158">9</tspan><tspan x="34" y="176">10</tspan><tspan x="34" y="194">11</tspan><tspan x="34" y="212">12</tspan><tspan x="34" y="230">13</tspan><tspan x="34" y="248">14</tspan><tspan x="34" y="266">15</tspan><tspan x="34" y="284">16</tspan><tspan x="34" y="302">17</tspan><tspan x="34" y="320">18</tspan><tspan x="34" y="338">19</tspan><tspan x="34" y="356">20</tspan><tspan x="34" y="374">21</tspan><tspan x="34" y="392">22</tspan><tspan x="34" y="410">23</tspan><tspan x="34" y="428">24</tspan><tspan x="34" y="446">25</tspan><tspan x="34" y="464">26</tspan><tspan x="34" y="482">27</tspan><tspan x="34" y="500">28</tspan><tspan x="34" y="518">29</tspan><tspan x="34" y="536">30</tspan><tspan x="34" y="554">31</tspan><tspan x="34" y="572">32</tspan><tspan x="34" y="590">33</tspan><tspan x="34" y="608">34</tspan><tspan x="34" y="626">35</tspan><tspan x="34" y="644">36</tspan><tspan x="34" y="662">37</tspan><tspan x="34" y="680">38</tspan><tspan x="34" y="698">39</tspan><tspan x="34" y="716">40</tspan><tspan x="34" y="734">41</tspan><tspan x="34" y="752">42</tspan><tspan x="34" y="770">43</tspan><tspan x="34" y="788">44</tspan><tspan x="34" y="806">45</tspan><tspan x="34" y="824">46</tspan><tspan x="34" y="842">47</tspan><tspan x="34" y="860">48</tspan><tspan x="34" y="878">49</tspan><tspan x="34" y="896">50</tspan><tspan x="34" y="914">51</tspan><tspan x="34" y="932">52</tspan><tspan x="34" y="950">53</tspan><tspan x="34" y="968">54</tspan><tspan x="34" y="986">55</tspan><tspan x="34" y="1004">56</tspan><tspan x="34" y="1022">57</tspan><tspan x="34" y="1040">58</tspan><tspan x="34" y="1058">59</tspan><tspan x="34" y="1076">60</tspan><tspan x="34" y="1094">61</tspan><tspan x="34" y="1112">62</tspan><tspan x="34" y="1130">63</tspan><tspan x="34" y="1148">64</tspan><tspan x="34" y="1166">65</tspan><tspan x="34" y="1184">66</tspan><tspan x="34" y="1202">67</tspan><tspan x="34" y="1220">68</tspan><tspan x="34" y="1238">69</tspan><tspan x="34" y="1256">70</tspan><tspan x="34" y="1274">71</tspan><tspan x="34" y="1292">72</tspan><tspan x="34" y="1310">73</tspan><tspan x="34" y="1328">74</tspan><tspan x="34" y="1346">75</tspan><tspan x="34" y="1364">76</tspan><tspan x="34" y="1382">77</tspan><tspan x="34" y="1400">78</tspan><tspan x="34" y="1418">79</tspan><tspan x="34" y="1436">80</tspan><tspan x="34" y="1454">81</tspan><tspan x="34" y="1472">82</tspan><tspan x="34" y="1490">83</tspan><tspan x="34" y="1508">84</tspan><tspan x="34" y="1526">85</tspan><tspan x="34" y="1544">86</tspan><tspan x="34" y="1562">87</tspan><tspan x="34" y="1580">88</tspan><tspan x="34" y="1598">89</tspan><tspan x="34" y="1616">90</tspan><tspan x="34" y="1634">91</tspan><tspan x="34" y="1652">92</tspan><tspan x="34" y="1670">93</tspan><tspan x="34" y="1688">94</tspan><tspan x="34" y="1706">95</tspan><tspan x="34" y="1724">96</tspan><tspan x="34" y="1742">97</tspan><tspan x="34" y="1760">98</tspan><tspan x="34" y="1778">99</tspan><tspan x="34" y="1796">100</tspan><tspan x="34" y="1814">101</tspan><tspan x="34" y="1832">102</tspan><tspan x="34" y="1850">103</tspan><tspan x="34" y="1868">104</tspan><tspan x="34" y="1886">105</tspan><tspan x="34" y="1904">106</tspan><tspan x="34" y="1922">107</tspan><tspan x="34" y="1940">108</tspan><tspan x="34" y="1958">109</tspan><tspan x="34" y="1976">110</tspan><tspan x="34" y="1994">111</tspan><tspan x="34" y="2012">112</tspan><tspan x="34" y="2030">113</tspan><tspan x="34" y="2048">114</tspan><tspan x="34" y="2066">115</tspan><tspan x="34" y="2084">116</tspan><tspan x="34" y="2102">117</tspan><tspan x="34" y="2120">118</tspan><tspan x="34" y="2138">119</tspan><tspan x="34" y="2156">120</tspan><tspan x="34" y="2174">121</tspan><tspan x="34" y="2192">122</tspan><tspan x="34" y="2210">123</tspan><tspan x="34" y="2228">124</tspan><tspan x="34" y="2246">125</tspan><tspan x="34" y="2264">126</tspan><tspan x="34" y="2282">127</tspan><tspan x="34" y="2300">128</tspan><tspan x="34" y="2318">129</tspan><tspan x="34" y="2336">130</tspan><tspan x="34" y="2354">131</tspan><tspan x="34" y="2372">132</tspan><tspan x="34" y="2390">133</tspan><tspan x="34" y="2408">134</tspan><tspan x="34" y="2426">135</tspan><tspan x="34" y="2444">136</tspan><tspan x="34" y="2462">137</tspan><tspan x="34" y="2480">138</tspan><tspan x="34" y="2498">139</tspan><tspan x="34" y="2516">140</tspan><tspan x="34" y="2534">141</tspan><tspan x="34" y="2552">142</tspan><tspan x="34" y="2570">143</tspan><tspan x="34" y="2588">144</tspan><tspan x="34" y="2606">145</tspan><tspan x="34" y="2624">146</tspan><tspan x="34" y="2642">147</tspan><tspan x="34" y="2660">148</tspan><tspan x="34" y="2678">149</tspan><tspan x="34" y="2696">150</tspan><tspan x="34" y="2714">151</tspan><tspan x="34" y="2732">152</tspan><tspan x="34" y="2750">153</tspan><tspan x="34" y="2768">154</tspan><tspan x="34" y="2786">155</tspan><tspan x="34" y="2804">156</tspan><tspan x="34" y="2822">157</tspan><tspan x="34" y="2840">158</tspan><tspan x="34" y="2858">159</tspan><tspan x="34" y="2876">160</tspan><tspan x="34" y="2894">161</tspan><tspan x="34" y="2912">162</tspan><tspan x="34" y="2930">163</tspan><tspan x="34" y="2948">164</tspan><tspan x="34" y="2966">165</tspan><tspan x="34" y="2984">166</tspan><tspan x="34" y="3002">167</tspan><tspan x="34" y="3020">168</tspan><tspan x="34" y="3038">169</tspan><tspan x="34" y="3056">170</tspan></text>
+      <text class="container fg7 line-numbers"><tspan x="34" y="14">1</tspan><tspan x="34" y="32">2</tspan><tspan x="34" y="50">3</tspan><tspan x="34" y="68">4</tspan><tspan x="34" y="86">5</tspan><tspan x="34" y="104">6</tspan><tspan x="34" y="122">7</tspan><tspan x="34" y="140">8</tspan><tspan x="34" y="158">9</tspan><tspan x="34" y="176">10</tspan><tspan x="34" y="194">11</tspan><tspan x="34" y="212">12</tspan><tspan x="34" y="230">13</tspan><tspan x="34" y="248">14</tspan><tspan x="34" y="266">15</tspan><tspan x="34" y="284">16</tspan><tspan x="34" y="302">17</tspan><tspan x="34" y="320">18</tspan><tspan x="34" y="338">19</tspan><tspan x="34" y="356">20</tspan><tspan x="34" y="374">21</tspan><tspan x="34" y="392">22</tspan><tspan x="34" y="410">23</tspan><tspan x="34" y="428">24</tspan><tspan x="34" y="446">25</tspan><tspan x="34" y="464">26</tspan><tspan x="34" y="482">27</tspan><tspan x="34" y="500">28</tspan><tspan x="34" y="518">29</tspan><tspan x="34" y="536">30</tspan><tspan x="34" y="554">31</tspan><tspan x="34" y="572">32</tspan><tspan x="34" y="590">33</tspan><tspan x="34" y="608">34</tspan><tspan x="34" y="626">35</tspan><tspan x="34" y="644">36</tspan><tspan x="34" y="662">37</tspan><tspan x="34" y="680">38</tspan><tspan x="34" y="698">39</tspan><tspan x="34" y="716">40</tspan><tspan x="34" y="734">41</tspan><tspan x="34" y="752">42</tspan><tspan x="34" y="770">43</tspan><tspan x="34" y="788">44</tspan><tspan x="34" y="806">45</tspan><tspan x="34" y="824">46</tspan><tspan x="34" y="842">47</tspan><tspan x="34" y="860">48</tspan><tspan x="34" y="878">49</tspan><tspan x="34" y="896">50</tspan><tspan x="34" y="914">51</tspan><tspan x="34" y="932">52</tspan><tspan x="34" y="950">53</tspan><tspan x="34" y="968">54</tspan><tspan x="34" y="986">55</tspan><tspan x="34" y="1004">56</tspan><tspan x="34" y="1022">57</tspan><tspan x="34" y="1040">58</tspan><tspan x="34" y="1058">59</tspan><tspan x="34" y="1076">60</tspan><tspan x="34" y="1094">61</tspan><tspan x="34" y="1112">62</tspan><tspan x="34" y="1130">63</tspan><tspan x="34" y="1148">64</tspan><tspan x="34" y="1166">65</tspan><tspan x="34" y="1184">66</tspan><tspan x="34" y="1202">67</tspan><tspan x="34" y="1220">68</tspan><tspan x="34" y="1238">69</tspan><tspan x="34" y="1256">70</tspan><tspan x="34" y="1274">71</tspan><tspan x="34" y="1292">72</tspan><tspan x="34" y="1310">73</tspan><tspan x="34" y="1328">74</tspan><tspan x="34" y="1346">75</tspan><tspan x="34" y="1364">76</tspan><tspan x="34" y="1382">77</tspan><tspan x="34" y="1400">78</tspan><tspan x="34" y="1418">79</tspan><tspan x="34" y="1436">80</tspan><tspan x="34" y="1454">81</tspan><tspan x="34" y="1472">82</tspan><tspan x="34" y="1490">83</tspan><tspan x="34" y="1508">84</tspan><tspan x="34" y="1526">85</tspan><tspan x="34" y="1544">86</tspan><tspan x="34" y="1562">87</tspan><tspan x="34" y="1580">88</tspan><tspan x="34" y="1598">89</tspan><tspan x="34" y="1616">90</tspan><tspan x="34" y="1634">91</tspan><tspan x="34" y="1652">92</tspan><tspan x="34" y="1670">93</tspan><tspan x="34" y="1688">94</tspan><tspan x="34" y="1706">95</tspan><tspan x="34" y="1724">96</tspan><tspan x="34" y="1742">97</tspan><tspan x="34" y="1760">98</tspan><tspan x="34" y="1778">99</tspan><tspan x="34" y="1796">100</tspan><tspan x="34" y="1814">101</tspan><tspan x="34" y="1832">102</tspan><tspan x="34" y="1850">103</tspan><tspan x="34" y="1868">104</tspan><tspan x="34" y="1886">105</tspan><tspan x="34" y="1904">106</tspan><tspan x="34" y="1922">107</tspan><tspan x="34" y="1940">108</tspan><tspan x="34" y="1958">109</tspan><tspan x="34" y="1976">110</tspan><tspan x="34" y="1994">111</tspan><tspan x="34" y="2012">112</tspan><tspan x="34" y="2030">113</tspan><tspan x="34" y="2048">114</tspan><tspan x="34" y="2066">115</tspan><tspan x="34" y="2084">116</tspan><tspan x="34" y="2102">117</tspan><tspan x="34" y="2120">118</tspan><tspan x="34" y="2138">119</tspan><tspan x="34" y="2156">120</tspan><tspan x="34" y="2174">121</tspan><tspan x="34" y="2192">122</tspan><tspan x="34" y="2210">123</tspan><tspan x="34" y="2228">124</tspan><tspan x="34" y="2246">125</tspan><tspan x="34" y="2264">126</tspan><tspan x="34" y="2282">127</tspan><tspan x="34" y="2300">128</tspan><tspan x="34" y="2318">129</tspan><tspan x="34" y="2336">130</tspan><tspan x="34" y="2354">131</tspan><tspan x="34" y="2372">132</tspan><tspan x="34" y="2390">133</tspan><tspan x="34" y="2408">134</tspan><tspan x="34" y="2426">135</tspan><tspan x="34" y="2444">136</tspan><tspan x="34" y="2462">137</tspan><tspan x="34" y="2480">138</tspan><tspan x="34" y="2498">139</tspan><tspan x="34" y="2516">140</tspan><tspan x="34" y="2534">141</tspan><tspan x="34" y="2552">142</tspan><tspan x="34" y="2570">143</tspan><tspan x="34" y="2588">144</tspan><tspan x="34" y="2606">145</tspan><tspan x="34" y="2624">146</tspan><tspan x="34" y="2642">147</tspan><tspan x="34" y="2660">148</tspan><tspan x="34" y="2678">149</tspan><tspan x="34" y="2696">150</tspan><tspan x="34" y="2714">151</tspan><tspan x="34" y="2732">152</tspan><tspan x="34" y="2750">153</tspan><tspan x="34" y="2768">154</tspan><tspan x="34" y="2786">155</tspan><tspan x="34" y="2804">156</tspan><tspan x="34" y="2822">157</tspan><tspan x="34" y="2840">158</tspan><tspan x="34" y="2858">159</tspan><tspan x="34" y="2876">160</tspan><tspan x="34" y="2894">161</tspan><tspan x="34" y="2912">162</tspan><tspan x="34" y="2930">163</tspan><tspan x="34" y="2948">164</tspan></text>
       <text class="container fg7"><tspan xml:space="preserve" x="42" y="14" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">port</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="32" class="output"><tspan class="dimmed">test.</tspan>bind_to
 </tspan><tspan xml:space="preserve" x="42" y="50" class="output">  <tspan class="underline">Type</tspan>: integer <tspan class="dimmed">[Rust: u16]</tspan>
@@ -89,133 +89,127 @@
 </tspan><tspan xml:space="preserve" x="42" y="788" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg2">60</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="806" class="output">  Timeout for some operation.
 </tspan><tspan xml:space="preserve" x="42" y="824" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="842" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">legacy_timeout</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="860" class="output">  <tspan class="underline">Type</tspan>: integer | string | object <tspan class="dimmed">[Rust: Duration]</tspan>; duration with unit, or object with single unit key
-</tspan><tspan xml:space="preserve" x="42" y="878" class="output">    <tspan class="underline">Fallback</tspan>: integer; time duration; unit: <tspan class="fg6">seconds</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="896" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg6">"0s"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="914" class="output">  Timeout with implicit time unit.
-</tspan><tspan xml:space="preserve" x="42" y="932" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="950" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">cache_size</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="968" class="output">  <tspan class="underline">Type</tspan>: string | object <tspan class="dimmed">[Rust: ByteSize]</tspan>; size with unit, or object with single unit key
-</tspan><tspan xml:space="preserve" x="42" y="986" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg6">"16 MiB"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1004" class="output">  In-memory cache size.
-</tspan><tspan xml:space="preserve" x="42" y="1022" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1040" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">required</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1058" class="output">  <tspan class="underline">Type</tspan>: integer <tspan class="dimmed">[Rust: u64]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1076" class="output">  <tspan class="underline">Example</tspan>: <tspan class="fg2">42</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1094" class="output">  Required param.
+</tspan><tspan xml:space="preserve" x="42" y="842" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">cache_size</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="860" class="output">  <tspan class="underline">Type</tspan>: string | object <tspan class="dimmed">[Rust: ByteSize]</tspan>; size with unit, or object with single unit key
+</tspan><tspan xml:space="preserve" x="42" y="878" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg6">"16 MiB"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="896" class="output">  In-memory cache size.
+</tspan><tspan xml:space="preserve" x="42" y="914" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="932" class="output"><tspan class="dimmed">test.</tspan><tspan class="bold">required</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="950" class="output">  <tspan class="underline">Type</tspan>: integer <tspan class="dimmed">[Rust: u64]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="968" class="output">  <tspan class="underline">Example</tspan>: <tspan class="fg2">42</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="986" class="output">  Required param.
+</tspan><tspan xml:space="preserve" x="42" y="1004" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="1022" class="output"><tspan class="bold fg3">test.funding</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1040" class="output"><tspan class="fg3">test.funds</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1058" class="output">  <tspan class="underline">Config</tspan>: FundingConfig
+</tspan><tspan xml:space="preserve" x="42" y="1076" class="output">  <tspan class="underline">Validations</tspan>:
+</tspan><tspan xml:space="preserve" x="42" y="1094" class="output">  - `address` should be non-zero for non-zero `balance`
 </tspan><tspan xml:space="preserve" x="42" y="1112" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1130" class="output"><tspan class="bold fg3">test.funding</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1148" class="output"><tspan class="fg3">test.funds</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1166" class="output">  <tspan class="underline">Config</tspan>: FundingConfig
-</tspan><tspan xml:space="preserve" x="42" y="1184" class="output">  <tspan class="underline">Validations</tspan>:
-</tspan><tspan xml:space="preserve" x="42" y="1202" class="output">  - `address` should be non-zero for non-zero `balance`
+</tspan><tspan xml:space="preserve" x="42" y="1130" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">address</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1148" class="output"><tspan class="dimmed">test.funds.</tspan>address
+</tspan><tspan xml:space="preserve" x="42" y="1166" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: Address]</tspan>; hex string with optional 0x prefix
+</tspan><tspan xml:space="preserve" x="42" y="1184" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg6">"0x0000000000000000000000000000000000000000"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1202" class="output">  Ethereum-like address to fund.
 </tspan><tspan xml:space="preserve" x="42" y="1220" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1238" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">address</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1256" class="output"><tspan class="dimmed">test.funds.</tspan>address
-</tspan><tspan xml:space="preserve" x="42" y="1274" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: Address]</tspan>; hex string with optional 0x prefix
-</tspan><tspan xml:space="preserve" x="42" y="1292" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg6">"0x0000000000000000000000000000000000000000"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1310" class="output">  Ethereum-like address to fund.
+</tspan><tspan xml:space="preserve" x="42" y="1238" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">balance</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1256" class="output"><tspan class="dimmed">test.funds.</tspan>balance
+</tspan><tspan xml:space="preserve" x="42" y="1274" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: U256]</tspan>; 0x-prefixed hex number
+</tspan><tspan xml:space="preserve" x="42" y="1292" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg6">"0x0"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1310" class="output">  Initial balance for the address.
 </tspan><tspan xml:space="preserve" x="42" y="1328" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1346" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">balance</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1364" class="output"><tspan class="dimmed">test.funds.</tspan>balance
-</tspan><tspan xml:space="preserve" x="42" y="1382" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: U256]</tspan>; 0x-prefixed hex number
-</tspan><tspan xml:space="preserve" x="42" y="1400" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg6">"0x0"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">  Initial balance for the address.
-</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1454" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">api_key</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1472" class="output"><tspan class="dimmed">test.funds.</tspan>api_key
-</tspan><tspan xml:space="preserve" x="42" y="1490" class="output-bg">        <tspan class="fg6">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="1490" class="output">  <tspan class="underline">Type</tspan>: <tspan class="bg6">secret</tspan> string <tspan class="dimmed">[Rust: Option]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1508" class="output">  <tspan class="underline">Default</tspan>: <tspan class="bold">null</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1526" class="output">  <tspan class="underline">Example</tspan>: <tspan class="fg6">"correct horse battery staple"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1544" class="output">  Secret string value.
-</tspan><tspan xml:space="preserve" x="42" y="1562" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1580" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">secret_key</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1598" class="output"><tspan class="dimmed">test.funds.</tspan>secret_key
-</tspan><tspan xml:space="preserve" x="42" y="1616" class="output-bg">        <tspan class="fg6">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="1616" class="output">  <tspan class="underline">Type</tspan>: <tspan class="bg6">secret</tspan> string <tspan class="dimmed">[Rust: Option]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1634" class="output">  <tspan class="underline">Default</tspan>: <tspan class="bold">null</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1652" class="output">  <tspan class="underline">Example</tspan>: <tspan class="fg6">"0x0000000000000000000000000000000000000000000000000000000000000000"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1670" class="output">  Secret key.
-</tspan><tspan xml:space="preserve" x="42" y="1688" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1706" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">exit_on_error</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1724" class="output">  <tspan class="underline">Type</tspan>: Boolean <tspan class="dimmed">[Rust: bool]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1742" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg3">true</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1760" class="output">  Whether to exit the application on error.
-</tspan><tspan xml:space="preserve" x="42" y="1778" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="1796" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">complex</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1814" class="output">  <tspan class="underline">Type</tspan>: object <tspan class="dimmed">[Rust: ComplexParam]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1832" class="output">  <tspan class="underline">Default</tspan>: {
-</tspan><tspan xml:space="preserve" x="42" y="1850" class="output">    <tspan class="bold">"array"</tspan>: [],
-</tspan><tspan xml:space="preserve" x="42" y="1868" class="output">    <tspan class="bold">"map"</tspan>: {}
-</tspan><tspan xml:space="preserve" x="42" y="1886" class="output">  }
-</tspan><tspan xml:space="preserve" x="42" y="1904" class="output">  <tspan class="underline">Example</tspan>: {
-</tspan><tspan xml:space="preserve" x="42" y="1922" class="output">    <tspan class="bold">"array"</tspan>: [
-</tspan><tspan xml:space="preserve" x="42" y="1940" class="output">      <tspan class="fg2">3</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1958" class="output">      <tspan class="fg2">5</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1976" class="output">    ],
-</tspan><tspan xml:space="preserve" x="42" y="1994" class="output">    <tspan class="bold">"map"</tspan>: {
-</tspan><tspan xml:space="preserve" x="42" y="2012" class="output">      <tspan class="bold">"var"</tspan>: <tspan class="fg2">3</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2030" class="output">    }
-</tspan><tspan xml:space="preserve" x="42" y="2048" class="output">  }
-</tspan><tspan xml:space="preserve" x="42" y="2066" class="output">  Complex parameter deserialized from an object.
-</tspan><tspan xml:space="preserve" x="42" y="2084" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="2102" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">more_timeouts</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2120" class="output"><tspan class="dimmed">test.nested.</tspan>timeouts
-</tspan><tspan xml:space="preserve" x="42" y="2138" class="output">  <tspan class="underline">Type</tspan>: string | array <tspan class="dimmed">[Rust: Vec]</tspan>; using "," delimiter
-</tspan><tspan xml:space="preserve" x="42" y="2156" class="output">    <tspan class="underline">Array items</tspan>: string | object <tspan class="dimmed">[Rust: core::time::Duration]</tspan>; duration with unit, or object with single unit key
-</tspan><tspan xml:space="preserve" x="42" y="2174" class="output">  <tspan class="underline">Default</tspan>: []
-</tspan><tspan xml:space="preserve" x="42" y="2192" class="output">  <tspan class="underline">Example</tspan>: [
-</tspan><tspan xml:space="preserve" x="42" y="2210" class="output">    <tspan class="fg6">"5s"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2228" class="output">  ]
-</tspan><tspan xml:space="preserve" x="42" y="2246" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="2264" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">method_limits</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2282" class="output">  <tspan class="underline">Type</tspan>: array | object <tspan class="dimmed">[Rust: HashMap]</tspan>; map or array of { "method": _, "rps": _ } tuples
-</tspan><tspan xml:space="preserve" x="42" y="2300" class="output">    <tspan class="underline">Map keys</tspan>: string <tspan class="dimmed">[Rust: alloc::string::String]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2318" class="output">    <tspan class="underline">Map values</tspan>: integer <tspan class="dimmed">[Rust: core::num::nonzero::NonZero&lt;u32&gt;]</tspan>; non-zero
-</tspan><tspan xml:space="preserve" x="42" y="2336" class="output">  <tspan class="underline">Default</tspan>: []
-</tspan><tspan xml:space="preserve" x="42" y="2354" class="output">  <tspan class="underline">Example</tspan>: [
-</tspan><tspan xml:space="preserve" x="42" y="2372" class="output">    {
-</tspan><tspan xml:space="preserve" x="42" y="2390" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="2408" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">1</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2426" class="output">    },
-</tspan><tspan xml:space="preserve" x="42" y="2444" class="output">    {
-</tspan><tspan xml:space="preserve" x="42" y="2462" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_call"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="2480" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2498" class="output">    }
-</tspan><tspan xml:space="preserve" x="42" y="2516" class="output">  ]
-</tspan><tspan xml:space="preserve" x="42" y="2534" class="output">  Can be deserialized either from a map or an array of tuples.
-</tspan><tspan xml:space="preserve" x="42" y="2552" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="2570" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">type</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2588" class="output">  <tspan class="underline">Type</tspan>: string tag with variants:
-</tspan><tspan xml:space="preserve" x="42" y="2606" class="output">  - <tspan class="fg6">'local'</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig::Local]</tspan> <tspan class="bold">(default)</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2624" class="output">    Stores object locally as files.
-</tspan><tspan xml:space="preserve" x="42" y="2642" class="output">  - <tspan class="fg6">'s3'</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig::S3]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2660" class="output">    Stores objects in AWS S3.
-</tspan><tspan xml:space="preserve" x="42" y="2678" class="output">  - <tspan class="fg6">'gcs'</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig::Gcs]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2696" class="output">    <tspan class="underline">Aliases</tspan>: <tspan class="fg6">'google'</tspan>, <tspan class="fg6">'google_cloud'</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2714" class="output">    Stores objects in Google Cloud Storage.
-</tspan><tspan xml:space="preserve" x="42" y="2732" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">path</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2750" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: PathBuf]</tspan>; filesystem path
-</tspan><tspan xml:space="preserve" x="42" y="2768" class="output">  <tspan class="underline">Tag</tspan>: test.object_store.type == <tspan class="fg6">'local'</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2786" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg6">"."</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2804" class="output">  Path to the root directory.
-</tspan><tspan xml:space="preserve" x="42" y="2822" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="2840" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">bucket_name</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2858" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: String]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2876" class="output">  <tspan class="underline">Tag</tspan>: test.object_store.type == <tspan class="fg6">'s3'</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2894" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="2912" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">region</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2930" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: Option]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2948" class="output">  <tspan class="underline">Tag</tspan>: test.object_store.type == <tspan class="fg6">'s3'</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2966" class="output">  <tspan class="underline">Default</tspan>: <tspan class="bold">null</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="2984" class="output">
-</tspan><tspan xml:space="preserve" x="42" y="3002" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">bucket_name</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="3020" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: String]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="3038" class="output">  <tspan class="underline">Tag</tspan>: test.object_store.type == <tspan class="fg6">'gcs'</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="3056" class="output">  Bucket to put objects into.
+</tspan><tspan xml:space="preserve" x="42" y="1346" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">api_key</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1364" class="output"><tspan class="dimmed">test.funds.</tspan>api_key
+</tspan><tspan xml:space="preserve" x="42" y="1382" class="output-bg">        <tspan class="fg6">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="1382" class="output">  <tspan class="underline">Type</tspan>: <tspan class="bg6">secret</tspan> string <tspan class="dimmed">[Rust: Option]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1400" class="output">  <tspan class="underline">Default</tspan>: <tspan class="bold">null</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">  <tspan class="underline">Example</tspan>: <tspan class="fg6">"correct horse battery staple"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">  Secret string value.
+</tspan><tspan xml:space="preserve" x="42" y="1454" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="1472" class="output"><tspan class="dimmed">test.funding.</tspan><tspan class="bold">secret_key</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1490" class="output"><tspan class="dimmed">test.funds.</tspan>secret_key
+</tspan><tspan xml:space="preserve" x="42" y="1508" class="output-bg">        <tspan class="fg6">██████</tspan></tspan><tspan xml:space="preserve" x="42" y="1508" class="output">  <tspan class="underline">Type</tspan>: <tspan class="bg6">secret</tspan> string <tspan class="dimmed">[Rust: Option]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1526" class="output">  <tspan class="underline">Default</tspan>: <tspan class="bold">null</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1544" class="output">  <tspan class="underline">Example</tspan>: <tspan class="fg6">"0x0000000000000000000000000000000000000000000000000000000000000000"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1562" class="output">  Secret key.
+</tspan><tspan xml:space="preserve" x="42" y="1580" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="1598" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">exit_on_error</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1616" class="output">  <tspan class="underline">Type</tspan>: Boolean <tspan class="dimmed">[Rust: bool]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1634" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg3">true</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1652" class="output">  Whether to exit the application on error.
+</tspan><tspan xml:space="preserve" x="42" y="1670" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="1688" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">complex</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1706" class="output">  <tspan class="underline">Type</tspan>: object <tspan class="dimmed">[Rust: ComplexParam]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1724" class="output">  <tspan class="underline">Default</tspan>: {
+</tspan><tspan xml:space="preserve" x="42" y="1742" class="output">    <tspan class="bold">"array"</tspan>: [],
+</tspan><tspan xml:space="preserve" x="42" y="1760" class="output">    <tspan class="bold">"map"</tspan>: {}
+</tspan><tspan xml:space="preserve" x="42" y="1778" class="output">  }
+</tspan><tspan xml:space="preserve" x="42" y="1796" class="output">  <tspan class="underline">Example</tspan>: {
+</tspan><tspan xml:space="preserve" x="42" y="1814" class="output">    <tspan class="bold">"array"</tspan>: [
+</tspan><tspan xml:space="preserve" x="42" y="1832" class="output">      <tspan class="fg2">3</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1850" class="output">      <tspan class="fg2">5</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1868" class="output">    ],
+</tspan><tspan xml:space="preserve" x="42" y="1886" class="output">    <tspan class="bold">"map"</tspan>: {
+</tspan><tspan xml:space="preserve" x="42" y="1904" class="output">      <tspan class="bold">"var"</tspan>: <tspan class="fg2">3</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1922" class="output">    }
+</tspan><tspan xml:space="preserve" x="42" y="1940" class="output">  }
+</tspan><tspan xml:space="preserve" x="42" y="1958" class="output">  Complex parameter deserialized from an object.
+</tspan><tspan xml:space="preserve" x="42" y="1976" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="1994" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">more_timeouts</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2012" class="output"><tspan class="dimmed">test.nested.</tspan>timeouts
+</tspan><tspan xml:space="preserve" x="42" y="2030" class="output">  <tspan class="underline">Type</tspan>: string | array <tspan class="dimmed">[Rust: Vec]</tspan>; using "," delimiter
+</tspan><tspan xml:space="preserve" x="42" y="2048" class="output">    <tspan class="underline">Array items</tspan>: string | object <tspan class="dimmed">[Rust: core::time::Duration]</tspan>; duration with unit, or object with single unit key
+</tspan><tspan xml:space="preserve" x="42" y="2066" class="output">  <tspan class="underline">Default</tspan>: []
+</tspan><tspan xml:space="preserve" x="42" y="2084" class="output">  <tspan class="underline">Example</tspan>: [
+</tspan><tspan xml:space="preserve" x="42" y="2102" class="output">    <tspan class="fg6">"5s"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2120" class="output">  ]
+</tspan><tspan xml:space="preserve" x="42" y="2138" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="2156" class="output"><tspan class="dimmed">test.nested.</tspan><tspan class="bold">method_limits</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2174" class="output">  <tspan class="underline">Type</tspan>: array | object <tspan class="dimmed">[Rust: HashMap]</tspan>; map or array of { "method": _, "rps": _ } tuples
+</tspan><tspan xml:space="preserve" x="42" y="2192" class="output">    <tspan class="underline">Map keys</tspan>: string <tspan class="dimmed">[Rust: alloc::string::String]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2210" class="output">    <tspan class="underline">Map values</tspan>: integer <tspan class="dimmed">[Rust: core::num::nonzero::NonZero&lt;u32&gt;]</tspan>; non-zero
+</tspan><tspan xml:space="preserve" x="42" y="2228" class="output">  <tspan class="underline">Default</tspan>: []
+</tspan><tspan xml:space="preserve" x="42" y="2246" class="output">  <tspan class="underline">Example</tspan>: [
+</tspan><tspan xml:space="preserve" x="42" y="2264" class="output">    {
+</tspan><tspan xml:space="preserve" x="42" y="2282" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_call"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="2300" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2318" class="output">    },
+</tspan><tspan xml:space="preserve" x="42" y="2336" class="output">    {
+</tspan><tspan xml:space="preserve" x="42" y="2354" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="2372" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">1</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2390" class="output">    }
+</tspan><tspan xml:space="preserve" x="42" y="2408" class="output">  ]
+</tspan><tspan xml:space="preserve" x="42" y="2426" class="output">  Can be deserialized either from a map or an array of tuples.
+</tspan><tspan xml:space="preserve" x="42" y="2444" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="2462" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">type</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2480" class="output">  <tspan class="underline">Type</tspan>: string tag with variants:
+</tspan><tspan xml:space="preserve" x="42" y="2498" class="output">  - <tspan class="fg6">'local'</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig::Local]</tspan> <tspan class="bold">(default)</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2516" class="output">    Stores object locally as files.
+</tspan><tspan xml:space="preserve" x="42" y="2534" class="output">  - <tspan class="fg6">'s3'</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig::S3]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2552" class="output">    Stores objects in AWS S3.
+</tspan><tspan xml:space="preserve" x="42" y="2570" class="output">  - <tspan class="fg6">'gcs'</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig::Gcs]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2588" class="output">    <tspan class="underline">Aliases</tspan>: <tspan class="fg6">'google'</tspan>, <tspan class="fg6">'google_cloud'</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2606" class="output">    Stores objects in Google Cloud Storage.
+</tspan><tspan xml:space="preserve" x="42" y="2624" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">path</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2642" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: PathBuf]</tspan>; filesystem path
+</tspan><tspan xml:space="preserve" x="42" y="2660" class="output">  <tspan class="underline">Tag</tspan>: test.object_store.type == <tspan class="fg6">'local'</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2678" class="output">  <tspan class="underline">Default</tspan>: <tspan class="fg6">"."</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2696" class="output">  Path to the root directory.
+</tspan><tspan xml:space="preserve" x="42" y="2714" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="2732" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">bucket_name</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2750" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: String]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2768" class="output">  <tspan class="underline">Tag</tspan>: test.object_store.type == <tspan class="fg6">'s3'</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2786" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="2804" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">region</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2822" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: Option]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2840" class="output">  <tspan class="underline">Tag</tspan>: test.object_store.type == <tspan class="fg6">'s3'</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2858" class="output">  <tspan class="underline">Default</tspan>: <tspan class="bold">null</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2876" class="output">
+</tspan><tspan xml:space="preserve" x="42" y="2894" class="output"><tspan class="dimmed">test.object_store.</tspan><tspan class="bold">bucket_name</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2912" class="output">  <tspan class="underline">Type</tspan>: string <tspan class="dimmed">[Rust: String]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2930" class="output">  <tspan class="underline">Tag</tspan>: test.object_store.type == <tspan class="fg6">'gcs'</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="2948" class="output">  Bucket to put objects into.
 </tspan></text>
     </svg>
   <rect class="scrollbar" x="853" y="10" width="5" height="40">
-    <animateTransform attributeName="transform" attributeType="XML" type="translate" values="0 0;0 14;0 28;0 42;0 57;0 71;0 85;0 100;0 114;0 128;0 142;0 157;0 171;0 185;0 200;0 214;0 228;0 242;0 257;0 271;0 285;0 300;0 314;0 328;0 342;0 357;0 371;0 385;0 400;0 414;0 428;0 442;0 457;0 471;0 485;0 500" dur="140.0s" repeatCount="indefinite" calcMode="discrete" />
+    <animateTransform attributeName="transform" attributeType="XML" type="translate" values="0 0;0 14;0 29;0 44;0 58;0 73;0 88;0 102;0 117;0 132;0 147;0 161;0 176;0 191;0 205;0 220;0 235;0 250;0 264;0 279;0 294;0 308;0 323;0 338;0 352;0 367;0 382;0 397;0 411;0 426;0 441;0 455;0 470;0 485;0 500" dur="136.0s" repeatCount="indefinite" calcMode="discrete" />
   </rect>
 </svg>

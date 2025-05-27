@@ -381,7 +381,8 @@ impl TypeDescription {
         self
     }
 
-    pub(crate) fn set_fallback<T: 'static>(&mut self, fallback: &impl DeserializeParam<T>) {
+    /// Adds a fallback deserializer description.
+    pub fn set_fallback<T: 'static>(&mut self, fallback: &impl DeserializeParam<T>) {
         self.fallback = Some(ChildDescription::new(fallback, false));
     }
 }

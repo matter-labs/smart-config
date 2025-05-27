@@ -46,9 +46,6 @@ pub struct TestConfig {
     /// Timeout for some operation.
     #[config(default_t = 1 * TimeUnit::Minutes, with = TimeUnit::Seconds)]
     pub timeout_sec: Duration,
-    /// Timeout with implicit time unit.
-    #[config(default, with = ((), TimeUnit::Seconds))]
-    pub legacy_timeout: Duration,
     /// In-memory cache size.
     #[config(default_t = 16 * SizeUnit::MiB)]
     pub cache_size: ByteSize,
@@ -199,7 +196,6 @@ const YAML: &str = r#"
 test:
   port: 3000
   poll_latency_in_ms: 300
-  legacy_timeout: 3
   dir_paths:
     - /bin
     - /usr/bin

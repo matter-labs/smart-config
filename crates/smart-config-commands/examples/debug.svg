@@ -40,13 +40,13 @@
   <circle cx="37" cy="-9" r="7" style="fill: #ffc706;"/>
   <circle cx="57" cy="-9" r="7" style="fill: #38b54a;"/>
     <svg x="0" y="10" width="860" height="540" viewBox="0 0 860 540">
-      <animate attributeName="viewBox" values="0 0 860 540;0 72 860 540;0 144 860 540;0 216 860 540;0 288 860 540;0 360 860 540;0 432 860 540;0 504 860 540;0 576 860 540;0 648 860 540;0 720 860 540;0 792 860 540;0 864 860 540;0 936 860 540;0 1008 860 540;0 1080 860 540;0 1152 860 540;0 1224 860 540;0 1296 860 540;0 1368 860 540;0 1440 860 540;0 1512 860 540" dur="84.0s" repeatCount="indefinite" calcMode="discrete" />
+      <animate attributeName="viewBox" values="0 0 860 540;0 72 860 540;0 144 860 540;0 216 860 540;0 288 860 540;0 360 860 540;0 432 860 540;0 504 860 540;0 576 860 540;0 648 860 540;0 720 860 540;0 792 860 540;0 864 860 540;0 936 860 540;0 1008 860 540;0 1080 860 540;0 1152 860 540;0 1224 860 540;0 1296 860 540;0 1368 860 540;0 1440 860 540" dur="80.0s" repeatCount="indefinite" calcMode="discrete" />
       <g class="input-bg"></g>
-      <text class="container fg7 line-numbers"><tspan x="34" y="14">1</tspan><tspan x="34" y="32">2</tspan><tspan x="34" y="50">3</tspan><tspan x="34" y="68">4</tspan><tspan x="34" y="86">5</tspan><tspan x="34" y="104">6</tspan><tspan x="34" y="122">7</tspan><tspan x="34" y="140">8</tspan><tspan x="34" y="158">9</tspan><tspan x="34" y="176">10</tspan><tspan x="34" y="194">11</tspan><tspan x="34" y="212">12</tspan><tspan x="34" y="230">13</tspan><tspan x="34" y="248">14</tspan><tspan x="34" y="266">15</tspan><tspan x="34" y="284">16</tspan><tspan x="34" y="302">17</tspan><tspan x="34" y="320">18</tspan><tspan x="34" y="338">19</tspan><tspan x="34" y="356">20</tspan><tspan x="34" y="374">21</tspan><tspan x="34" y="392">22</tspan><tspan x="34" y="410">23</tspan><tspan x="34" y="428">24</tspan><tspan x="34" y="446">25</tspan><tspan x="34" y="464">26</tspan><tspan x="34" y="482">27</tspan><tspan x="34" y="500">28</tspan><tspan x="34" y="518">29</tspan><tspan x="34" y="536">30</tspan><tspan x="34" y="554">31</tspan><tspan x="34" y="572">32</tspan><tspan x="34" y="590">33</tspan><tspan x="34" y="608">34</tspan><tspan x="34" y="626">35</tspan><tspan x="34" y="644">36</tspan><tspan x="34" y="662">37</tspan><tspan x="34" y="680">38</tspan><tspan x="34" y="698">39</tspan><tspan x="34" y="716">40</tspan><tspan x="34" y="734">41</tspan><tspan x="34" y="752">42</tspan><tspan x="34" y="770">43</tspan><tspan x="34" y="788">44</tspan><tspan x="34" y="806">45</tspan><tspan x="34" y="824">46</tspan><tspan x="34" y="842">47</tspan><tspan x="34" y="860">48</tspan><tspan x="34" y="878">49</tspan><tspan x="34" y="896">50</tspan><tspan x="34" y="914">51</tspan><tspan x="34" y="932">52</tspan><tspan x="34" y="950">53</tspan><tspan x="34" y="968">54</tspan><tspan x="34" y="986">55</tspan><tspan x="34" y="1004">56</tspan><tspan x="34" y="1022">57</tspan><tspan x="34" y="1040">58</tspan><tspan x="34" y="1058">59</tspan><tspan x="34" y="1076">60</tspan><tspan x="34" y="1094">61</tspan><tspan x="34" y="1112">62</tspan><tspan x="34" y="1130">63</tspan><tspan x="34" y="1148">64</tspan><tspan x="34" y="1166">65</tspan><tspan x="34" y="1184">66</tspan><tspan x="34" y="1202">67</tspan><tspan x="34" y="1220">68</tspan><tspan x="34" y="1238">69</tspan><tspan x="34" y="1256">70</tspan><tspan x="34" y="1274">71</tspan><tspan x="34" y="1292">72</tspan><tspan x="34" y="1310">73</tspan><tspan x="34" y="1328">74</tspan><tspan x="34" y="1346">75</tspan><tspan x="34" y="1364">76</tspan><tspan x="34" y="1382">77</tspan><tspan x="34" y="1400">78</tspan><tspan x="34" y="1418">79</tspan><tspan x="34" y="1436">80</tspan><tspan x="34" y="1454">81</tspan><tspan x="34" y="1472">82</tspan><tspan x="34" y="1490">83</tspan><tspan x="34" y="1508">84</tspan><tspan x="34" y="1526">85</tspan><tspan x="34" y="1544">86</tspan><tspan x="34" y="1562">87</tspan><tspan x="34" y="1580">88</tspan><tspan x="34" y="1598">89</tspan><tspan x="34" y="1616">90</tspan><tspan x="34" y="1634">91</tspan><tspan x="34" y="1652">92</tspan><tspan x="34" y="1670">93</tspan><tspan x="34" y="1688">94</tspan><tspan x="34" y="1706">95</tspan><tspan x="34" y="1724">96</tspan><tspan x="34" y="1742">97</tspan><tspan x="34" y="1760">98</tspan><tspan x="34" y="1778">99</tspan><tspan x="34" y="1796">100</tspan><tspan x="34" y="1814">101</tspan><tspan x="34" y="1832">102</tspan><tspan x="34" y="1850">103</tspan><tspan x="34" y="1868">104</tspan><tspan x="34" y="1886">105</tspan><tspan x="34" y="1904">106</tspan><tspan x="34" y="1922">107</tspan><tspan x="34" y="1940">108</tspan><tspan x="34" y="1958">109</tspan><tspan x="34" y="1976">110</tspan><tspan x="34" y="1994">111</tspan></text>
+      <text class="container fg7 line-numbers"><tspan x="34" y="14">1</tspan><tspan x="34" y="32">2</tspan><tspan x="34" y="50">3</tspan><tspan x="34" y="68">4</tspan><tspan x="34" y="86">5</tspan><tspan x="34" y="104">6</tspan><tspan x="34" y="122">7</tspan><tspan x="34" y="140">8</tspan><tspan x="34" y="158">9</tspan><tspan x="34" y="176">10</tspan><tspan x="34" y="194">11</tspan><tspan x="34" y="212">12</tspan><tspan x="34" y="230">13</tspan><tspan x="34" y="248">14</tspan><tspan x="34" y="266">15</tspan><tspan x="34" y="284">16</tspan><tspan x="34" y="302">17</tspan><tspan x="34" y="320">18</tspan><tspan x="34" y="338">19</tspan><tspan x="34" y="356">20</tspan><tspan x="34" y="374">21</tspan><tspan x="34" y="392">22</tspan><tspan x="34" y="410">23</tspan><tspan x="34" y="428">24</tspan><tspan x="34" y="446">25</tspan><tspan x="34" y="464">26</tspan><tspan x="34" y="482">27</tspan><tspan x="34" y="500">28</tspan><tspan x="34" y="518">29</tspan><tspan x="34" y="536">30</tspan><tspan x="34" y="554">31</tspan><tspan x="34" y="572">32</tspan><tspan x="34" y="590">33</tspan><tspan x="34" y="608">34</tspan><tspan x="34" y="626">35</tspan><tspan x="34" y="644">36</tspan><tspan x="34" y="662">37</tspan><tspan x="34" y="680">38</tspan><tspan x="34" y="698">39</tspan><tspan x="34" y="716">40</tspan><tspan x="34" y="734">41</tspan><tspan x="34" y="752">42</tspan><tspan x="34" y="770">43</tspan><tspan x="34" y="788">44</tspan><tspan x="34" y="806">45</tspan><tspan x="34" y="824">46</tspan><tspan x="34" y="842">47</tspan><tspan x="34" y="860">48</tspan><tspan x="34" y="878">49</tspan><tspan x="34" y="896">50</tspan><tspan x="34" y="914">51</tspan><tspan x="34" y="932">52</tspan><tspan x="34" y="950">53</tspan><tspan x="34" y="968">54</tspan><tspan x="34" y="986">55</tspan><tspan x="34" y="1004">56</tspan><tspan x="34" y="1022">57</tspan><tspan x="34" y="1040">58</tspan><tspan x="34" y="1058">59</tspan><tspan x="34" y="1076">60</tspan><tspan x="34" y="1094">61</tspan><tspan x="34" y="1112">62</tspan><tspan x="34" y="1130">63</tspan><tspan x="34" y="1148">64</tspan><tspan x="34" y="1166">65</tspan><tspan x="34" y="1184">66</tspan><tspan x="34" y="1202">67</tspan><tspan x="34" y="1220">68</tspan><tspan x="34" y="1238">69</tspan><tspan x="34" y="1256">70</tspan><tspan x="34" y="1274">71</tspan><tspan x="34" y="1292">72</tspan><tspan x="34" y="1310">73</tspan><tspan x="34" y="1328">74</tspan><tspan x="34" y="1346">75</tspan><tspan x="34" y="1364">76</tspan><tspan x="34" y="1382">77</tspan><tspan x="34" y="1400">78</tspan><tspan x="34" y="1418">79</tspan><tspan x="34" y="1436">80</tspan><tspan x="34" y="1454">81</tspan><tspan x="34" y="1472">82</tspan><tspan x="34" y="1490">83</tspan><tspan x="34" y="1508">84</tspan><tspan x="34" y="1526">85</tspan><tspan x="34" y="1544">86</tspan><tspan x="34" y="1562">87</tspan><tspan x="34" y="1580">88</tspan><tspan x="34" y="1598">89</tspan><tspan x="34" y="1616">90</tspan><tspan x="34" y="1634">91</tspan><tspan x="34" y="1652">92</tspan><tspan x="34" y="1670">93</tspan><tspan x="34" y="1688">94</tspan><tspan x="34" y="1706">95</tspan><tspan x="34" y="1724">96</tspan><tspan x="34" y="1742">97</tspan><tspan x="34" y="1760">98</tspan><tspan x="34" y="1778">99</tspan><tspan x="34" y="1796">100</tspan><tspan x="34" y="1814">101</tspan><tspan x="34" y="1832">102</tspan><tspan x="34" y="1850">103</tspan><tspan x="34" y="1868">104</tspan><tspan x="34" y="1886">105</tspan><tspan x="34" y="1904">106</tspan><tspan x="34" y="1922">107</tspan><tspan x="34" y="1940">108</tspan></text>
       <text class="container fg7"><tspan xml:space="preserve" x="42" y="14" class="output"><tspan class="bold">Configuration sources:</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="32" class="output">- fallbacks, 1 param(s)
 </tspan><tspan xml:space="preserve" x="42" y="50" class="output-bg">  <tspan class="fg6">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="50" class="output">- <tspan class="bg6">JSON:</tspan>/config/base.json <tspan class="bold">-&gt;</tspan> prefixed with `test`, 4 param(s)
-</tspan><tspan xml:space="preserve" x="42" y="68" class="output-bg">  <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="68" class="output">- <tspan class="bg2">YAML:</tspan>/config/test.yml, 11 param(s)
+</tspan><tspan xml:space="preserve" x="42" y="68" class="output-bg">  <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="68" class="output">- <tspan class="bg2">YAML:</tspan>/config/test.yml, 10 param(s)
 </tspan><tspan xml:space="preserve" x="42" y="86" class="output-bg">  <tspan class="fg5">███</tspan></tspan><tspan xml:space="preserve" x="42" y="86" class="output">- <tspan class="bg5">env</tspan>, 6 param(s)
 </tspan><tspan xml:space="preserve" x="42" y="104" class="output">
 </tspan><tspan xml:space="preserve" x="42" y="122" class="output"><tspan class="bold">Values:</tspan>
@@ -74,89 +74,86 @@
 </tspan><tspan xml:space="preserve" x="42" y="518" class="output">  Raw: <tspan class="fg6">"/usr/bin:/usr/local/bin"</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="536" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="536" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_DIRS"
 </tspan><tspan xml:space="preserve" x="42" y="554" class="output">test.timeout_sec <tspan class="dimmed">[Rust: TestConfig.timeout_sec]</tspan> = <tspan class="fg2">60</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="572" class="output">test.legacy_timeout <tspan class="dimmed">[Rust: TestConfig.legacy_timeout]</tspan> = <tspan class="fg6">"3s"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="590" class="output">  Raw: <tspan class="fg2">3</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="608" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="608" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.legacy_timeout
-</tspan><tspan xml:space="preserve" x="42" y="626" class="output">test.cache_size <tspan class="dimmed">[Rust: TestConfig.cache_size]</tspan> = <tspan class="fg6">"128 MiB"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="644" class="output">  Raw: <tspan class="fg6">"128 MiB"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="662" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="662" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_CACHE_SIZE"
-</tspan><tspan xml:space="preserve" x="42" y="680" class="output">test.required <tspan class="dimmed">[Rust: TestConfig.required]</tspan> = <tspan class="fg2">123</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="698" class="output">  Raw: <tspan class="fg6">"123"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="716" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="716" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_REQUIRED"
-</tspan><tspan xml:space="preserve" x="42" y="734" class="output">test.funding.address <tspan class="dimmed">[Rust: FundingConfig.address]</tspan> = <tspan class="fg6">"0x0000000000000000000000000000000000001234"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="752" class="output">  Raw: <tspan class="fg6">"0x0000000000000000000000000000000000001234"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="770" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="770" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.funding.address
-</tspan><tspan xml:space="preserve" x="42" y="788" class="output">test.funding.balance <tspan class="dimmed">[Rust: FundingConfig.balance]</tspan> = <tspan class="fg6">"0x123456"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="806" class="output">  Raw: <tspan class="fg6">"0x123456"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="824" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="824" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.funding.balance
-</tspan><tspan xml:space="preserve" x="42" y="842" class="output">test.funding.api_key <tspan class="dimmed">[Rust: FundingConfig.api_key]</tspan> = <tspan class="fg6">"[REDACTED]"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="572" class="output">test.cache_size <tspan class="dimmed">[Rust: TestConfig.cache_size]</tspan> = <tspan class="fg6">"128 MiB"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="590" class="output">  Raw: <tspan class="fg6">"128 MiB"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="608" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="608" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_CACHE_SIZE"
+</tspan><tspan xml:space="preserve" x="42" y="626" class="output">test.required <tspan class="dimmed">[Rust: TestConfig.required]</tspan> = <tspan class="fg2">123</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="644" class="output">  Raw: <tspan class="fg6">"123"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="662" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="662" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_REQUIRED"
+</tspan><tspan xml:space="preserve" x="42" y="680" class="output">test.funding.address <tspan class="dimmed">[Rust: FundingConfig.address]</tspan> = <tspan class="fg6">"0x0000000000000000000000000000000000001234"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="698" class="output">  Raw: <tspan class="fg6">"0x0000000000000000000000000000000000001234"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="716" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="716" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.funding.address
+</tspan><tspan xml:space="preserve" x="42" y="734" class="output">test.funding.balance <tspan class="dimmed">[Rust: FundingConfig.balance]</tspan> = <tspan class="fg6">"0x123456"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="752" class="output">  Raw: <tspan class="fg6">"0x123456"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="770" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="770" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.funding.balance
+</tspan><tspan xml:space="preserve" x="42" y="788" class="output">test.funding.api_key <tspan class="dimmed">[Rust: FundingConfig.api_key]</tspan> = <tspan class="fg6">"[REDACTED]"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="806" class="output-bg">       <tspan class="fg6">██████████</tspan></tspan><tspan xml:space="preserve" x="42" y="806" class="output">  Raw: <tspan class="bg6">[REDACTED]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="824" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="824" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_FUNDS_API_KEY"
+</tspan><tspan xml:space="preserve" x="42" y="842" class="output">test.funding.secret_key <tspan class="dimmed">[Rust: FundingConfig.secret_key]</tspan> = <tspan class="fg6">"[REDACTED]"</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="860" class="output-bg">       <tspan class="fg6">██████████</tspan></tspan><tspan xml:space="preserve" x="42" y="860" class="output">  Raw: <tspan class="bg6">[REDACTED]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="878" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="878" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_FUNDS_API_KEY"
-</tspan><tspan xml:space="preserve" x="42" y="896" class="output">test.funding.secret_key <tspan class="dimmed">[Rust: FundingConfig.secret_key]</tspan> = <tspan class="fg6">"[REDACTED]"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="914" class="output-bg">       <tspan class="fg6">██████████</tspan></tspan><tspan xml:space="preserve" x="42" y="914" class="output">  Raw: <tspan class="bg6">[REDACTED]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="932" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="932" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_FUNDS_SECRET_KEY"
-</tspan><tspan xml:space="preserve" x="42" y="950" class="output">test.nested.exit_on_error <tspan class="dimmed">[Rust: NestedConfig.exit_on_error]</tspan> = <tspan class="fg3">false</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="968" class="output">  Raw: <tspan class="fg3">false</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="986" class="output-bg">          <tspan class="fg6">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="986" class="output">  Origin: <tspan class="bg6">JSON:</tspan>/config/base.json <tspan class="bold">-&gt;</tspan> .nested.exit_on_error
-</tspan><tspan xml:space="preserve" x="42" y="1004" class="output">test.nested.complex <tspan class="dimmed">[Rust: NestedConfig.complex]</tspan> = {
-</tspan><tspan xml:space="preserve" x="42" y="1022" class="output">  <tspan class="bold">"array"</tspan>: [
-</tspan><tspan xml:space="preserve" x="42" y="1040" class="output">    <tspan class="fg2">1</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1058" class="output">    <tspan class="fg2">2</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1076" class="output">  ],
-</tspan><tspan xml:space="preserve" x="42" y="1094" class="output">  <tspan class="bold">"map"</tspan>: {
-</tspan><tspan xml:space="preserve" x="42" y="1112" class="output">    <tspan class="bold">"value"</tspan>: <tspan class="fg2">25</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1130" class="output">  }
-</tspan><tspan xml:space="preserve" x="42" y="1148" class="output">}
-</tspan><tspan xml:space="preserve" x="42" y="1166" class="output">  Raw: {
+</tspan><tspan xml:space="preserve" x="42" y="878" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="878" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_FUNDS_SECRET_KEY"
+</tspan><tspan xml:space="preserve" x="42" y="896" class="output">test.nested.exit_on_error <tspan class="dimmed">[Rust: NestedConfig.exit_on_error]</tspan> = <tspan class="fg3">false</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="914" class="output">  Raw: <tspan class="fg3">false</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="932" class="output-bg">          <tspan class="fg6">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="932" class="output">  Origin: <tspan class="bg6">JSON:</tspan>/config/base.json <tspan class="bold">-&gt;</tspan> .nested.exit_on_error
+</tspan><tspan xml:space="preserve" x="42" y="950" class="output">test.nested.complex <tspan class="dimmed">[Rust: NestedConfig.complex]</tspan> = {
+</tspan><tspan xml:space="preserve" x="42" y="968" class="output">  <tspan class="bold">"array"</tspan>: [
+</tspan><tspan xml:space="preserve" x="42" y="986" class="output">    <tspan class="fg2">1</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1004" class="output">    <tspan class="fg2">2</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1022" class="output">  ],
+</tspan><tspan xml:space="preserve" x="42" y="1040" class="output">  <tspan class="bold">"map"</tspan>: {
+</tspan><tspan xml:space="preserve" x="42" y="1058" class="output">    <tspan class="bold">"value"</tspan>: <tspan class="fg2">25</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1076" class="output">  }
+</tspan><tspan xml:space="preserve" x="42" y="1094" class="output">}
+</tspan><tspan xml:space="preserve" x="42" y="1112" class="output">  Raw: {
+</tspan><tspan xml:space="preserve" x="42" y="1130" class="output">    <tspan class="bold">"map"</tspan>: {
+</tspan><tspan xml:space="preserve" x="42" y="1148" class="output">      <tspan class="bold">"value"</tspan>: <tspan class="fg2">25</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1166" class="output">    },
 </tspan><tspan xml:space="preserve" x="42" y="1184" class="output">    <tspan class="bold">"array"</tspan>: [
 </tspan><tspan xml:space="preserve" x="42" y="1202" class="output">      <tspan class="fg2">1</tspan>,
 </tspan><tspan xml:space="preserve" x="42" y="1220" class="output">      <tspan class="fg2">2</tspan>,
 </tspan><tspan xml:space="preserve" x="42" y="1238" class="output">    ],
-</tspan><tspan xml:space="preserve" x="42" y="1256" class="output">    <tspan class="bold">"map"</tspan>: {
-</tspan><tspan xml:space="preserve" x="42" y="1274" class="output">      <tspan class="bold">"value"</tspan>: <tspan class="fg2">25</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1292" class="output">    },
-</tspan><tspan xml:space="preserve" x="42" y="1310" class="output">  }
-</tspan><tspan xml:space="preserve" x="42" y="1328" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1328" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.nested.complex
-</tspan><tspan xml:space="preserve" x="42" y="1346" class="output">test.nested.more_timeouts <tspan class="dimmed">[Rust: NestedConfig.more_timeouts]</tspan> = []
-</tspan><tspan xml:space="preserve" x="42" y="1364" class="output">test.nested.method_limits <tspan class="dimmed">[Rust: NestedConfig.method_limits]</tspan> = [
-</tspan><tspan xml:space="preserve" x="42" y="1382" class="output">  {
-</tspan><tspan xml:space="preserve" x="42" y="1400" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">  },
-</tspan><tspan xml:space="preserve" x="42" y="1454" class="output">  {
-</tspan><tspan xml:space="preserve" x="42" y="1472" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_getLogs"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1490" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1508" class="output">  }
-</tspan><tspan xml:space="preserve" x="42" y="1526" class="output">]
-</tspan><tspan xml:space="preserve" x="42" y="1544" class="output">  Raw: [
-</tspan><tspan xml:space="preserve" x="42" y="1562" class="output">    {
-</tspan><tspan xml:space="preserve" x="42" y="1580" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1598" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_getLogs"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1616" class="output">    },
-</tspan><tspan xml:space="preserve" x="42" y="1634" class="output">    {
-</tspan><tspan xml:space="preserve" x="42" y="1652" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1670" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1688" class="output">    },
-</tspan><tspan xml:space="preserve" x="42" y="1706" class="output">  ]
-</tspan><tspan xml:space="preserve" x="42" y="1724" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1724" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.nested.method_limits
-</tspan><tspan xml:space="preserve" x="42" y="1742" class="output"><tspan class="italic">test.object_store.bucket_name</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig.bucket_name]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1760" class="output">  Inactive: test.object_store.type != <tspan class="fg6">'s3'</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1778" class="output">  Raw: <tspan class="fg6">"test-bucket"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1796" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1796" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.object_store.bucket_name
-</tspan><tspan xml:space="preserve" x="42" y="1814" class="output"><tspan class="italic">test.object_store.region</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig.region]</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1832" class="output">  Inactive: test.object_store.type != <tspan class="fg6">'s3'</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1850" class="output">  Raw: <tspan class="fg6">"euw1"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1868" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1868" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.object_store.region
-</tspan><tspan xml:space="preserve" x="42" y="1886" class="output">test.object_store.bucket_name <tspan class="dimmed">[Rust: ObjectStoreConfig.bucket_name]</tspan> = <tspan class="fg6">"test-bucket"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1904" class="output">  Active: test.object_store.type == <tspan class="fg6">'gcs'</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1922" class="output">  Raw: <tspan class="fg6">"test-bucket"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1940" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1940" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.object_store.bucket_name
-</tspan><tspan xml:space="preserve" x="42" y="1958" class="output">test.object_store.type <tspan class="dimmed">[Rust: ObjectStoreConfig.type]</tspan> = <tspan class="fg6">"gcs"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1976" class="output">  Raw: <tspan class="fg6">"google"</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="1994" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1994" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.object_store.type
+</tspan><tspan xml:space="preserve" x="42" y="1256" class="output">  }
+</tspan><tspan xml:space="preserve" x="42" y="1274" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1274" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.nested.complex
+</tspan><tspan xml:space="preserve" x="42" y="1292" class="output">test.nested.more_timeouts <tspan class="dimmed">[Rust: NestedConfig.more_timeouts]</tspan> = []
+</tspan><tspan xml:space="preserve" x="42" y="1310" class="output">test.nested.method_limits <tspan class="dimmed">[Rust: NestedConfig.method_limits]</tspan> = [
+</tspan><tspan xml:space="preserve" x="42" y="1328" class="output">  {
+</tspan><tspan xml:space="preserve" x="42" y="1346" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_getLogs"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1364" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1382" class="output">  },
+</tspan><tspan xml:space="preserve" x="42" y="1400" class="output">  {
+</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1454" class="output">  }
+</tspan><tspan xml:space="preserve" x="42" y="1472" class="output">]
+</tspan><tspan xml:space="preserve" x="42" y="1490" class="output">  Raw: [
+</tspan><tspan xml:space="preserve" x="42" y="1508" class="output">    {
+</tspan><tspan xml:space="preserve" x="42" y="1526" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_getLogs"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1544" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1562" class="output">    },
+</tspan><tspan xml:space="preserve" x="42" y="1580" class="output">    {
+</tspan><tspan xml:space="preserve" x="42" y="1598" class="output">      <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1616" class="output">      <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1634" class="output">    },
+</tspan><tspan xml:space="preserve" x="42" y="1652" class="output">  ]
+</tspan><tspan xml:space="preserve" x="42" y="1670" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1670" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.nested.method_limits
+</tspan><tspan xml:space="preserve" x="42" y="1688" class="output"><tspan class="italic">test.object_store.bucket_name</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig.bucket_name]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1706" class="output">  Inactive: test.object_store.type != <tspan class="fg6">'s3'</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1724" class="output">  Raw: <tspan class="fg6">"test-bucket"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1742" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1742" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.object_store.bucket_name
+</tspan><tspan xml:space="preserve" x="42" y="1760" class="output"><tspan class="italic">test.object_store.region</tspan> <tspan class="dimmed">[Rust: ObjectStoreConfig.region]</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1778" class="output">  Inactive: test.object_store.type != <tspan class="fg6">'s3'</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1796" class="output">  Raw: <tspan class="fg6">"euw1"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1814" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1814" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.object_store.region
+</tspan><tspan xml:space="preserve" x="42" y="1832" class="output">test.object_store.bucket_name <tspan class="dimmed">[Rust: ObjectStoreConfig.bucket_name]</tspan> = <tspan class="fg6">"test-bucket"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1850" class="output">  Active: test.object_store.type == <tspan class="fg6">'gcs'</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1868" class="output">  Raw: <tspan class="fg6">"test-bucket"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1886" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1886" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.object_store.bucket_name
+</tspan><tspan xml:space="preserve" x="42" y="1904" class="output">test.object_store.type <tspan class="dimmed">[Rust: ObjectStoreConfig.type]</tspan> = <tspan class="fg6">"gcs"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1922" class="output">  Raw: <tspan class="fg6">"google"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1940" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1940" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.object_store.type
 </tspan></text>
     </svg>
   <rect class="scrollbar" x="853" y="10" width="5" height="40">
-    <animateTransform attributeName="transform" attributeType="XML" type="translate" values="0 0;0 23;0 47;0 71;0 95;0 119;0 142;0 166;0 190;0 214;0 238;0 261;0 285;0 309;0 333;0 357;0 380;0 404;0 428;0 452;0 476;0 500" dur="84.0s" repeatCount="indefinite" calcMode="discrete" />
+    <animateTransform attributeName="transform" attributeType="XML" type="translate" values="0 0;0 25;0 50;0 75;0 100;0 125;0 150;0 175;0 200;0 225;0 250;0 275;0 300;0 325;0 350;0 375;0 400;0 425;0 450;0 475;0 500" dur="80.0s" repeatCount="indefinite" calcMode="discrete" />
   </rect>
 </svg>
