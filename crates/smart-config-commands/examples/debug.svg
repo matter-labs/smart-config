@@ -58,7 +58,7 @@
 </tspan><tspan xml:space="preserve" x="42" y="230" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="230" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_APP_NAME"
 </tspan><tspan xml:space="preserve" x="42" y="248" class="output">test.poll_latency <tspan class="dimmed">[Rust: TestConfig.poll_latency]</tspan> = <tspan class="fg6">"300ms"</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="266" class="output">  Raw: {
-</tspan><tspan xml:space="preserve" x="42" y="284" class="output">    <tspan class="bold">"ms"</tspan>: <tspan class="fg2">300</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="284" class="output">    <tspan class="bold">"in_ms"</tspan>: <tspan class="fg2">300</tspan>,
 </tspan><tspan xml:space="preserve" x="42" y="302" class="output">  }
 </tspan><tspan xml:space="preserve" x="42" y="320" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="320" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test <tspan class="bold">-&gt;</tspan> nesting for object param 'poll_latency'
 </tspan><tspan xml:space="preserve" x="42" y="338" class="output">test.scaling_factor <tspan class="dimmed">[Rust: TestConfig.scaling_factor]</tspan> = <tspan class="fg2">4.199999809265137</tspan>
@@ -69,7 +69,7 @@
 </tspan><tspan xml:space="preserve" x="42" y="428" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="428" class="output">  Origin: <tspan class="bg5">env:</tspan>"TMPDIR" <tspan class="bold">-&gt;</tspan> fallback for `TestConfig.temp_dir`
 </tspan><tspan xml:space="preserve" x="42" y="446" class="output">test.dir_paths <tspan class="dimmed">[Rust: TestConfig.dir_paths]</tspan> = [
 </tspan><tspan xml:space="preserve" x="42" y="464" class="output">  <tspan class="fg6">"/usr/bin"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="482" class="output">  <tspan class="fg6">"/usr/local/bin"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="482" class="output">  <tspan class="fg6">"/usr/local/bin"</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="500" class="output">]
 </tspan><tspan xml:space="preserve" x="42" y="518" class="output">  Raw: <tspan class="fg6">"/usr/bin:/usr/local/bin"</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="536" class="output-bg">          <tspan class="fg5">████</tspan></tspan><tspan xml:space="preserve" x="42" y="536" class="output">  Origin: <tspan class="bg5">env:</tspan>"APP_TEST_DIRS"
@@ -98,11 +98,11 @@
 </tspan><tspan xml:space="preserve" x="42" y="950" class="output">test.nested.complex <tspan class="dimmed">[Rust: NestedConfig.complex]</tspan> = {
 </tspan><tspan xml:space="preserve" x="42" y="968" class="output">  <tspan class="bold">"array"</tspan>: [
 </tspan><tspan xml:space="preserve" x="42" y="986" class="output">    <tspan class="fg2">1</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1004" class="output">    <tspan class="fg2">2</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1004" class="output">    <tspan class="fg2">2</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="1022" class="output">  ],
 </tspan><tspan xml:space="preserve" x="42" y="1040" class="output">  <tspan class="bold">"map"</tspan>: {
-</tspan><tspan xml:space="preserve" x="42" y="1058" class="output">    <tspan class="bold">"value"</tspan>: <tspan class="fg2">25</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1076" class="output">  },
+</tspan><tspan xml:space="preserve" x="42" y="1058" class="output">    <tspan class="bold">"value"</tspan>: <tspan class="fg2">25</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1076" class="output">  }
 </tspan><tspan xml:space="preserve" x="42" y="1094" class="output">}
 </tspan><tspan xml:space="preserve" x="42" y="1112" class="output">  Raw: {
 </tspan><tspan xml:space="preserve" x="42" y="1130" class="output">    <tspan class="bold">"map"</tspan>: {
@@ -117,13 +117,13 @@
 </tspan><tspan xml:space="preserve" x="42" y="1292" class="output">test.nested.more_timeouts <tspan class="dimmed">[Rust: NestedConfig.more_timeouts]</tspan> = []
 </tspan><tspan xml:space="preserve" x="42" y="1310" class="output">test.nested.method_limits <tspan class="dimmed">[Rust: NestedConfig.method_limits]</tspan> = [
 </tspan><tspan xml:space="preserve" x="42" y="1328" class="output">  {
-</tspan><tspan xml:space="preserve" x="42" y="1346" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1364" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1346" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_getLogs"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1364" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="1382" class="output">  },
 </tspan><tspan xml:space="preserve" x="42" y="1400" class="output">  {
-</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_getLogs"</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">100</tspan>,
-</tspan><tspan xml:space="preserve" x="42" y="1454" class="output">  },
+</tspan><tspan xml:space="preserve" x="42" y="1418" class="output">    <tspan class="bold">"method"</tspan>: <tspan class="fg6">"eth_blockNumber"</tspan>,
+</tspan><tspan xml:space="preserve" x="42" y="1436" class="output">    <tspan class="bold">"rps"</tspan>: <tspan class="fg2">3</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1454" class="output">  }
 </tspan><tspan xml:space="preserve" x="42" y="1472" class="output">]
 </tspan><tspan xml:space="preserve" x="42" y="1490" class="output">  Raw: [
 </tspan><tspan xml:space="preserve" x="42" y="1508" class="output">    {

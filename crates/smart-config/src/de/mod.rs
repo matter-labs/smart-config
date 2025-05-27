@@ -137,7 +137,8 @@ impl<'a> DeserializeContext<'a> {
         }
     }
 
-    fn borrow(&mut self) -> DeserializeContext<'_> {
+    /// Mutably borrows this context with a shorter lifetime.
+    pub fn borrow(&mut self) -> DeserializeContext<'_> {
         DeserializeContext {
             de_options: self.de_options,
             root_value: self.root_value,
@@ -205,7 +206,8 @@ impl<'a> DeserializeContext<'a> {
         )
     }
 
-    fn push_error(&mut self, err: ErrorWithOrigin) {
+    /// Pushes a deserialization error into the context.
+    pub fn push_error(&mut self, err: ErrorWithOrigin) {
         self.push_generic_error(err, None);
     }
 

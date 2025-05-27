@@ -45,8 +45,8 @@
 </tspan><tspan xml:space="preserve" x="42" y="32" class="output">  <tspan class="bold">app_name</tspan>: <tspan class="fg6">test</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="50" class="output">  <tspan class="bold">cache_size</tspan>: <tspan class="fg6">128 MiB</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="68" class="output">  <tspan class="bold">dir_paths</tspan>:
-</tspan><tspan xml:space="preserve" x="42" y="86" class="output">    - <tspan class="fg6">/usr/bin</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="104" class="output">    - <tspan class="fg6">/usr/local/bin</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="86" class="output">    - <tspan class="fg6">/usr/local/bin</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="104" class="output">    - <tspan class="fg6">/usr/bin</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="122" class="output">  <tspan class="bold">funding</tspan>:
 </tspan><tspan xml:space="preserve" x="42" y="140" class="output">    <tspan class="bold">address</tspan>: <tspan class="fg6">'0x0000000000000000000000000000000000001234'</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="158" class="output">    <tspan class="bold">api_key</tspan>: <tspan class="fg6">correct horse battery staple</tspan>

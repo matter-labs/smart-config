@@ -195,7 +195,7 @@ const JSON: &str = r#"
 const YAML: &str = r#"
 test:
   port: 3000
-  poll_latency_ms: 300
+  poll_latency_in_ms: 300
   dir_paths:
     - /bin
     - /usr/bin
