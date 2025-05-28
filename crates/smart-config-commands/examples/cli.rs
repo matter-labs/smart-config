@@ -313,7 +313,7 @@ fn main() {
         Cli::Print { filter } => {
             let filter = |param_ref: ParamRef<'_>| {
                 filter.as_ref().map_or(true, |needle| {
-                    param_ref.all_paths().any(|path| path.contains(needle))
+                    param_ref.all_paths().any(|(path, _)| path.contains(needle))
                 })
             };
             Printer::stderr().print_help(&schema, filter).unwrap();
@@ -322,7 +322,7 @@ fn main() {
             let repo = create_mock_repo(&schema, bogus);
             let filter = |param_ref: ParamRef<'_>| {
                 filter.as_ref().map_or(true, |needle| {
-                    param_ref.all_paths().any(|path| path.contains(needle))
+                    param_ref.all_paths().any(|(path, _)| path.contains(needle))
                 })
             };
 

@@ -11,7 +11,7 @@ use crate::{
     de::{DeserializeContext, DeserializerOptions},
     error::ParseErrorCategory,
     fallback::Fallbacks,
-    metadata::{BasicTypes, ConfigMetadata, ConfigTag},
+    metadata::{AliasOptions, BasicTypes, ConfigMetadata, ConfigTag},
     schema::{ConfigRef, ConfigSchema},
     utils::{merge_json, EnumVariant, JsonObject},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
@@ -510,9 +510,9 @@ impl WithOrigin {
 
             let alias_maps: Vec<_> = config_data
                 .aliases()
-                .filter_map(|alias| {
+                .filter_map(|(alias, options)| {
                     let val = self.get(Pointer(alias))?;
-                    Some((val.inner.as_object()?, &val.origin))
+                    Some((val.inner.as_object()?, &val.origin, options))
                 })
                 .collect();
 
@@ -545,22 +545,28 @@ impl WithOrigin {
         config: &ConfigMetadata,
         prefix: Pointer<'_>,
         canonical_map: Option<&Map>,
-        alias_maps: &[(&Map, &Arc<ValueOrigin>)],
+        alias_maps: &[(&Map, &Arc<ValueOrigin>, AliasOptions)],
     ) -> (Map, Option<Arc<ValueOrigin>>) {
         let mut new_values = Map::new();
         let mut new_map_origin = None;
         for param in config.params {
             // Create a prioritized iterator of all candidates
-            let local_candidates = canonical_map
-                .into_iter()
-                .flat_map(|map| param.aliases.iter().map(move |&alias| (map, alias, None)));
-            let all_names = iter::once(param.name).chain(param.aliases.iter().copied());
-            let alias_candidates = alias_maps.iter().flat_map(|&(map, origin)| {
-                all_names.clone().map(move |name| (map, name, Some(origin)))
+            let local_candidates = canonical_map.into_iter().flat_map(|map| {
+                param
+                    .aliases
+                    .iter()
+                    .map(move |&(alias, options)| (map, alias, options, None))
+            });
+            let all_names = iter::once((param.name, AliasOptions::default()))
+                .chain(param.aliases.iter().copied());
+            let alias_candidates = alias_maps.iter().flat_map(|&(map, origin, map_options)| {
+                all_names.clone().map(move |(name, options)| {
+                    (map, name, options.combine(map_options), Some(origin))
+                })
             });
             let all_candidates = local_candidates.chain(alias_candidates);
 
-            for (map, name, origin) in all_candidates {
+            for (map, name, options, origin) in all_candidates {
                 // Copy all values in `map` that either match `name` exactly, or start with `{name}_`
                 // (the latter can be used for object or array nesting).
                 for (key, val) in map {
@@ -580,6 +586,8 @@ impl WithOrigin {
                     }
 
                     if !new_values.contains_key(canonical_key) {
+                        assert!(!options.is_deprecated); // FIXME
+
                         tracing::trace!(
                             prefix = prefix.0,
                             config = ?config.ty,
@@ -659,7 +667,7 @@ impl WithOrigin {
             let canonical_map = self.get(prefix).and_then(|val| val.inner.as_object());
             let alias_maps = config_data
                 .aliases()
-                .filter_map(|alias| self.get(Pointer(alias))?.inner.as_object());
+                .filter_map(|(alias, _)| self.get(Pointer(alias))?.inner.as_object());
 
             if canonical_map.is_some_and(|map| map.contains_key(tag.param.name)) {
                 // The source contains the relevant tag. It's sufficient to check the canonical map only since we've performed de-aliasing for tags already.

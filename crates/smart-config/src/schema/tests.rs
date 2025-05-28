@@ -51,14 +51,14 @@ fn getting_config_metadata() {
 
     let str_metadata = &metadata.params[0];
     assert_eq!(str_metadata.name, "str");
-    assert_eq!(str_metadata.aliases, ["string"]);
+    assert_eq!(str_metadata.aliases, [("string", AliasOptions::new())]);
     assert_eq!(str_metadata.help, "String value.");
     assert_eq!(str_metadata.rust_type.name_in_code(), "String");
     assert_eq!(str_metadata.default_value_json().unwrap(), "default");
 
     let optional_metadata = &metadata.params[1];
     assert_eq!(optional_metadata.name, "optional");
-    assert_eq!(optional_metadata.aliases, [] as [&str; 0]);
+    assert_eq!(optional_metadata.aliases, [] as [_; 0]);
     assert_eq!(optional_metadata.help, "Optional value.");
     let name_in_code = optional_metadata.rust_type.name_in_code();
     assert!(name_in_code.starts_with("Option"), "{name_in_code}");
@@ -378,19 +378,26 @@ fn aliasing_info_for_nested_configs() {
         .unwrap()
         .aliases()
         .collect();
-    assert_eq!(aliases, ["alias"]);
+    assert_eq!(aliases, [("alias", AliasOptions::new())]);
     let aliases: Vec<_> = schema
         .get(&NestedAliasedConfig::DESCRIPTION, "test")
         .unwrap()
         .aliases()
         .collect();
-    assert_eq!(aliases, ["alias"]);
+    assert_eq!(aliases, [("alias", AliasOptions::new())]);
     let aliases: Vec<_> = schema
         .get(&NestedAliasedConfig::DESCRIPTION, "test.nested")
         .unwrap()
         .aliases()
         .collect();
-    assert_eq!(aliases, ["test.nest", "alias.nested", "alias.nest"]);
+    assert_eq!(
+        aliases,
+        [
+            ("test.nest", AliasOptions::new()),
+            ("alias.nested", AliasOptions::new()),
+            ("alias.nest", AliasOptions::new())
+        ]
+    );
 
     let param_paths = [
         "test_nested_str",

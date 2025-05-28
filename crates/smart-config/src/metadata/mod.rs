@@ -14,6 +14,45 @@ pub mod _private;
 #[cfg(test)]
 mod tests;
 
+/// Options for a param or config alias.
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(test, derive(PartialEq))]
+#[non_exhaustive]
+pub struct AliasOptions {
+    /// Is this alias deprecated?
+    pub is_deprecated: bool,
+}
+
+impl Default for AliasOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AliasOptions {
+    /// Creates default options.
+    pub const fn new() -> Self {
+        AliasOptions {
+            is_deprecated: false,
+        }
+    }
+
+    /// Marks the alias as deprecated.
+    #[must_use]
+    pub const fn deprecated(mut self) -> Self {
+        self.is_deprecated = true;
+        self
+    }
+
+    #[doc(hidden)] // not stable yet
+    #[must_use]
+    pub fn combine(self, other: Self) -> Self {
+        Self {
+            is_deprecated: self.is_deprecated || other.is_deprecated,
+        }
+    }
+}
+
 /// Metadata for a configuration (i.e., a group of related parameters).
 #[derive(Debug, Clone)]
 pub struct ConfigMetadata {
@@ -52,7 +91,7 @@ pub struct ConfigVariant {
     /// Canonical param name in the config sources. Not necessarily the Rust name!
     pub name: &'static str,
     /// Param aliases.
-    pub aliases: &'static [&'static str],
+    pub aliases: &'static [&'static str], // FIXME: also support deprecated?
     /// Name of the corresponding enum variant in Rust code.
     pub rust_name: &'static str,
     /// Human-readable param help parsed from the doc comment.
@@ -65,7 +104,7 @@ pub struct ParamMetadata {
     /// Canonical param name in the config sources. Not necessarily the Rust field name!
     pub name: &'static str,
     /// Param aliases.
-    pub aliases: &'static [&'static str],
+    pub aliases: &'static [(&'static str, AliasOptions)],
     /// Human-readable param help parsed from the doc comment.
     pub help: &'static str,
     /// Name of the param field in Rust code.
@@ -405,7 +444,7 @@ pub struct NestedConfigMetadata {
     /// Name of the config in config sources. Empty for flattened configs. Not necessarily the Rust field name!
     pub name: &'static str,
     /// Aliases for the config. Cannot be present for flattened configs.
-    pub aliases: &'static [&'static str],
+    pub aliases: &'static [(&'static str, AliasOptions)],
     /// Name of the config field in Rust code.
     pub rust_field_name: &'static str,
     /// Tag variant in the enclosing [`ConfigMetadata`] that enables this parameter. `None` means that the parameter is unconditionally enabled.

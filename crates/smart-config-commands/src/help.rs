@@ -15,6 +15,7 @@ use crate::{
 const INDENT: &str = "  ";
 const DIMMED: Style = Style::new().dimmed();
 const MAIN_NAME: Style = Style::new().bold();
+const DEPRECATED: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
 const DEFAULT_VARIANT: Style = Style::new().bold();
 const FIELD: Style = Style::new().underline();
 const UNIT: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
@@ -74,8 +75,18 @@ fn write_config_help(writer: &mut impl io::Write, config: ConfigRef<'_>) -> io::
         "{MAIN_NAME}{CONFIG_PATH}{}{CONFIG_PATH:#}{MAIN_NAME:#}",
         config.prefix()
     )?;
-    for alias in config.aliases() {
-        writeln!(writer, "{CONFIG_PATH}{alias}{CONFIG_PATH:#}")?;
+    for (alias, options) in config.aliases() {
+        let config_style = if options.is_deprecated {
+            CONFIG_PATH.strikethrough()
+        } else {
+            CONFIG_PATH
+        };
+        write!(writer, "{config_style}{alias}{config_style:#}")?;
+        if options.is_deprecated {
+            writeln!(writer, " {DEPRECATED}[deprecated]{DEPRECATED:#}")?;
+        } else {
+            writeln!(writer)?;
+        }
     }
     writeln!(
         writer,
@@ -145,18 +156,30 @@ impl ParamRef<'_> {
     fn write_locations(&self, writer: &mut impl io::Write) -> io::Result<()> {
         let all_paths = self.all_paths_inner();
         let mut main_name = true;
-        for (prefix, name) in all_paths {
+        for (prefix, name, options) in all_paths {
             let prefix_sep = if prefix.is_empty() || prefix.ends_with('.') {
                 ""
             } else {
                 "."
             };
-            let name_style = if main_name { MAIN_NAME } else { Style::new() };
+            let name_style = if main_name {
+                MAIN_NAME
+            } else if options.is_deprecated {
+                Style::new().strikethrough()
+            } else {
+                Style::new()
+            };
             main_name = false;
-            writeln!(
+            write!(
                 writer,
                 "{DIMMED}{prefix}{prefix_sep}{DIMMED:#}{name_style}{name}{name_style:#}"
             )?;
+
+            if options.is_deprecated {
+                writeln!(writer, " {DEPRECATED}[deprecated]{DEPRECATED:#}")?;
+            } else {
+                writeln!(writer)?;
+            }
         }
         Ok(())
     }

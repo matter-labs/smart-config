@@ -11,7 +11,7 @@ use anyhow::Context;
 
 use self::mount::{MountingPoint, MountingPoints};
 use crate::{
-    metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
+    metadata::{AliasOptions, BasicTypes, ConfigMetadata, ParamMetadata},
     value::Pointer,
 };
 
@@ -23,12 +23,15 @@ mod tests;
 pub(crate) struct ConfigData {
     pub(crate) metadata: &'static ConfigMetadata,
     pub(crate) is_top_level: bool,
-    all_paths: Vec<Cow<'static, str>>,
+    all_paths: Vec<(Cow<'static, str>, AliasOptions)>,
 }
 
 impl ConfigData {
-    pub(crate) fn aliases(&self) -> impl Iterator<Item = &str> + '_ {
-        self.all_paths.iter().skip(1).map(Cow::as_ref)
+    pub(crate) fn aliases(&self) -> impl Iterator<Item = (&str, AliasOptions)> + '_ {
+        self.all_paths
+            .iter()
+            .skip(1)
+            .map(|(path, options)| (path.as_ref(), *options))
     }
 }
 
@@ -56,7 +59,7 @@ impl<'a> ConfigRef<'a> {
     }
 
     /// Iterates over all aliases for this config.
-    pub fn aliases(&self) -> impl Iterator<Item = &'a str> + '_ {
+    pub fn aliases(&self) -> impl Iterator<Item = (&'a str, AliasOptions)> + '_ {
         self.data.aliases()
     }
 }
@@ -76,7 +79,7 @@ impl ConfigMut<'_> {
     }
 
     /// Iterates over all aliases for this config.
-    pub fn aliases(&self) -> impl Iterator<Item = &str> + '_ {
+    pub fn aliases(&self) -> impl Iterator<Item = (&str, AliasOptions)> + '_ {
         let data = &self.schema.configs[self.prefix.as_str()].inner[&self.type_id];
         data.aliases()
     }
@@ -88,8 +91,27 @@ impl ConfigMut<'_> {
     /// Returns an error if adding a config leads to violations of fundamental invariants
     /// (same as for [`ConfigSchema::insert()`]).
     pub fn push_alias(self, alias: &'static str) -> anyhow::Result<Self> {
+        self.push_alias_inner(alias, AliasOptions::new())
+    }
+
+    /// Same as [`Self::push_alias()`], but also marks the alias as deprecated.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if adding a config leads to violations of fundamental invariants
+    /// (same as for [`ConfigSchema::insert()`]).
+    pub fn push_deprecated_alias(self, alias: &'static str) -> anyhow::Result<Self> {
+        self.push_alias_inner(
+            alias,
+            AliasOptions {
+                is_deprecated: true,
+            },
+        )
+    }
+
+    fn push_alias_inner(self, alias: &'static str, options: AliasOptions) -> anyhow::Result<Self> {
         let mut patched = PatchedSchema::new(self.schema);
-        patched.insert_alias(self.prefix.clone(), self.type_id, Pointer(alias))?;
+        patched.insert_alias(self.prefix.clone(), self.type_id, Pointer(alias), options)?;
         patched.commit();
         Ok(self)
     }
@@ -313,11 +335,11 @@ impl ConfigSchema {
         param: &'a ParamMetadata,
         config_data: &'a ConfigData,
     ) -> impl Iterator<Item = (&'a str, &'a str)> + 'a {
-        let local_names = iter::once(param.name).chain(param.aliases.iter().copied());
+        let local_names = iter::once(param.name).chain(param.aliases.iter().map(|&(name, _)| name));
         config_data
             .all_paths
             .iter()
-            .flat_map(move |alias| local_names.clone().map(move |name| (alias.as_ref(), name)))
+            .flat_map(move |(alias, _)| local_names.clone().map(move |name| (alias.as_ref(), name)))
     }
 }
 
@@ -355,7 +377,7 @@ impl<'a> PatchedSchema<'a> {
             ConfigData {
                 metadata,
                 is_top_level: true,
-                all_paths: vec![prefix.into()],
+                all_paths: vec![(prefix.into(), AliasOptions::new())],
             },
         )
     }
@@ -391,9 +413,14 @@ impl<'a> PatchedSchema<'a> {
         prefix: String,
         config_id: any::TypeId,
         alias: Pointer<'static>,
+        options: AliasOptions,
     ) -> anyhow::Result<()> {
         let config_data = &self.base.configs[prefix.as_str()].inner[&config_id];
-        if config_data.all_paths.contains(&Cow::Borrowed(alias.0)) {
+        if config_data
+            .all_paths
+            .iter()
+            .any(|(name, _)| name == alias.0)
+        {
             return Ok(()); // shortcut in the no-op case
         }
 
@@ -404,7 +431,7 @@ impl<'a> PatchedSchema<'a> {
             ConfigData {
                 metadata,
                 is_top_level: config_data.is_top_level,
-                all_paths: vec![alias.0.into()],
+                all_paths: vec![(alias.0.into(), options)],
             },
         )
     }
@@ -413,13 +440,17 @@ impl<'a> PatchedSchema<'a> {
         prefix: Pointer<'i>,
         data: &'i ConfigData,
     ) -> impl Iterator<Item = (String, ConfigData)> + 'i {
-        let all_prefixes = data.all_paths.iter().map(|alias| Pointer(alias));
+        let all_prefixes = data
+            .all_paths
+            .iter()
+            .map(|(alias, options)| (Pointer(alias), *options));
         data.metadata.nested_configs.iter().map(move |nested| {
-            let local_names = iter::once(nested.name).chain(nested.aliases.iter().copied());
-            let all_paths = all_prefixes.clone().flat_map(|prefix| {
-                local_names
-                    .clone()
-                    .map(move |name| prefix.join(name).into())
+            let local_names = iter::once((nested.name, AliasOptions::new()))
+                .chain(nested.aliases.iter().copied());
+            let all_paths = all_prefixes.clone().flat_map(|(prefix, prefix_options)| {
+                local_names.clone().map(move |(name, options)| {
+                    (prefix.join(name).into(), options.combine(prefix_options))
+                })
             });
 
             let config_data = ConfigData {
@@ -438,7 +469,7 @@ impl<'a> PatchedSchema<'a> {
         mut data: ConfigData,
     ) -> anyhow::Result<()> {
         let config_name = data.metadata.ty.name_in_code();
-        let config_paths = data.all_paths.iter().map(Cow::as_ref);
+        let config_paths = data.all_paths.iter().map(|(name, _)| name.as_ref());
         let config_paths = iter::once(prefix.as_ref()).chain(config_paths);
 
         for path in config_paths {

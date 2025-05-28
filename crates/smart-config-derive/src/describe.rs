@@ -105,7 +105,6 @@ impl ConfigField {
     ) -> proc_macro2::TokenStream {
         let name = &self.name;
         let name_span = self.name_span();
-        let aliases = self.attrs.aliases.iter();
         let help = &self.docs;
         let param_name = self.param_name();
 
@@ -134,6 +133,10 @@ impl ConfigField {
         let deserializer = self.deserializer(&cr);
         let tag_variant = wrap_in_option(variant_idx.map(|idx| quote!(&TAG_VARIANTS[#idx])));
 
+        let aliases = self.attrs.aliases.iter().map(
+            |alias| quote_spanned!(alias.span()=> (#alias, #cr::metadata::AliasOptions::new())),
+        );
+
         quote_spanned! {name_span=> {
             let deserializer = #deserializer;
 
@@ -160,7 +163,9 @@ impl ConfigField {
     ) -> proc_macro2::TokenStream {
         let cr = parent.cr(self.name_span());
         let name = &self.name;
-        let aliases = self.attrs.aliases.iter();
+        let aliases = self.attrs.aliases.iter().map(
+            |alias| quote_spanned!(alias.span()=> (#alias, #cr::metadata::AliasOptions::new())),
+        );
         let ty = Self::unwrap_option(&self.ty).unwrap_or(&self.ty);
         let config_name = if self.attrs.flatten {
             String::new()
