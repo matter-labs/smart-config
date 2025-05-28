@@ -2,6 +2,77 @@ use std::{cmp, fmt, str::FromStr};
 
 use serde::{Deserialize, Deserializer, de};
 
+#[derive(Debug, Clone, Copy)]
+struct DecimalStr<'a> {
+    input: &'a str,
+    mantissa: &'a str,
+    exponent: Option<&'a str>,
+}
+
+impl<'a> DecimalStr<'a> {
+    fn new(input: &'a str) -> (Self, &'a str) {
+        #[derive(Debug, Clone, Copy)]
+        enum DecimalPart {
+            Mantissa { has_dot: bool },
+            Exponent { is_empty: bool },
+        }
+
+        let mut part = DecimalPart::Mantissa { has_dot: false };
+        let mut mantissa_len = None;
+        let mut exponent_len = None;
+        for (i, ch) in input.char_indices() {
+            match part {
+                DecimalPart::Mantissa { has_dot } => {
+                    if ch.is_ascii_digit() || ch == '_' {
+                        // Integer continues...
+                    } else if ch == '.' && !has_dot {
+                        part = DecimalPart::Mantissa { has_dot: true };
+                    } else if ch == 'e' || ch == 'E' {
+                        mantissa_len = Some(i);
+                        part = DecimalPart::Exponent { is_empty: true };
+                    } else {
+                        mantissa_len = Some(i);
+                        break;
+                    }
+                }
+                DecimalPart::Exponent { is_empty } => {
+                    if ch.is_ascii_digit() || (is_empty && (ch == '+' || ch == '-')) {
+                        // Exponent continues...
+                    } else {
+                        exponent_len = Some(i);
+                        break;
+                    }
+                    part = DecimalPart::Exponent { is_empty: false };
+                }
+            }
+        }
+
+        let mantissa_len = mantissa_len.unwrap_or(input.len());
+        if matches!(part, DecimalPart::Exponent { .. }) && exponent_len.is_none() {
+            exponent_len = Some(input.len());
+        }
+
+        let exponent = exponent_len.and_then(|len| {
+            let exponent = &input[mantissa_len + 1..len];
+            if exponent.is_empty() {
+                exponent_len = None; // Reset for correctly computing `total_len` below
+                None
+            } else {
+                Some(exponent)
+            }
+        });
+
+        let total_len = exponent_len.unwrap_or(mantissa_len);
+        let (parsed, remainder) = input.split_at(total_len);
+        let this = Self {
+            input: parsed,
+            mantissa: &input[..mantissa_len],
+            exponent,
+        };
+        (this, remainder)
+    }
+}
+
 /// Ad-hoc non-negative decimal value with `u64` precision.
 ///
 /// # Why not use `f64`?
@@ -82,9 +153,83 @@ impl Decimal {
         exponent: 0,
     };
 
+    fn from_decimal_str(s: DecimalStr) -> Result<Self, serde_json::Error> {
+        if s.mantissa.is_empty() {
+            return Err(de::Error::invalid_value(
+                de::Unexpected::Str(s.input),
+                &Self::EXPECTING,
+            ));
+        }
+
+        let mut mantissa = 0_u64;
+        let mut pow10 = Some(1_u64);
+        let mut digit_count = 0;
+        let mut trailing_zeros_count = 0;
+        let mut has_significant_digits = false;
+        let mut digits_after_dot = None::<i16>;
+
+        for ch in s.mantissa.bytes().rev() {
+            match ch {
+                b'0'..=b'9' => {
+                    mantissa += if ch == b'0' {
+                        0
+                    } else {
+                        let pow10 = pow10.ok_or_else(|| de::Error::custom("too many digits"))?;
+                        u64::from(ch - b'0')
+                            .checked_mul(pow10)
+                            .ok_or_else(|| de::Error::custom("too many digits"))?
+                    };
+
+                    digit_count += 1;
+                    has_significant_digits = has_significant_digits || ch != b'0';
+                    if has_significant_digits {
+                        pow10 = pow10.and_then(|e| e.checked_mul(10));
+                    } else {
+                        trailing_zeros_count += 1;
+                    }
+                }
+                b'.' => {
+                    if digits_after_dot.is_some() {
+                        return Err(de::Error::invalid_value(
+                            de::Unexpected::Str(s.input),
+                            &Self::EXPECTING,
+                        ));
+                    }
+                    digits_after_dot = Some(digit_count);
+                }
+                b'_' => { /* skip spacing */ }
+                _ => {
+                    return Err(de::Error::invalid_value(
+                        de::Unexpected::Str(s.input),
+                        &Self::EXPECTING,
+                    ));
+                }
+            }
+        }
+
+        let mut exponent = if let Some(s) = s.exponent {
+            s.parse::<i16>()
+                .map_err(|err| de::Error::custom(format!("invalid exponent: {err}")))?
+        } else {
+            0
+        };
+        exponent += trailing_zeros_count;
+        if let Some(digits_after_dot) = digits_after_dot {
+            exponent -= digits_after_dot;
+        }
+
+        let this = Self { mantissa, exponent };
+        Ok(this.reduced())
+    }
+
     fn to_int(self) -> Option<u64> {
         let exp = u32::try_from(self.exponent).ok()?;
         self.mantissa.checked_mul(10_u64.checked_pow(exp)?)
+    }
+
+    pub(crate) fn parse_start(input: &str) -> Result<(Self, &str), serde_json::Error> {
+        let (dec, rem) = DecimalStr::new(input);
+        Ok((Self::from_decimal_str(dec)?, rem))
     }
 
     /// Multiplies this number by `10^scale` and returns the integer result.
@@ -203,75 +348,15 @@ impl FromStr for Decimal {
     type Err = serde_json::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (mantissa_str, exponent_str) = s
-            .split_once(['e', 'E'])
-            .map_or((s, None), |(mantissa, exponent)| (mantissa, Some(exponent)));
-        if mantissa_str.is_empty() {
+        let (dec, rem) = DecimalStr::new(s);
+        if !rem.is_empty() {
             return Err(de::Error::invalid_value(
                 de::Unexpected::Str(s),
                 &Self::EXPECTING,
             ));
         }
 
-        let mut mantissa = 0_u64;
-        let mut pow10 = Some(1_u64);
-        let mut digit_count = 0;
-        let mut trailing_zeros_count = 0;
-        let mut has_significant_digits = false;
-        let mut digits_after_dot = None::<i16>;
-
-        for ch in mantissa_str.bytes().rev() {
-            match ch {
-                b'0'..=b'9' => {
-                    mantissa += if ch == b'0' {
-                        0
-                    } else {
-                        let pow10 = pow10.ok_or_else(|| de::Error::custom("too many digits"))?;
-                        u64::from(ch - b'0')
-                            .checked_mul(pow10)
-                            .ok_or_else(|| de::Error::custom("too many digits"))?
-                    };
-
-                    digit_count += 1;
-                    has_significant_digits = has_significant_digits || ch != b'0';
-                    if has_significant_digits {
-                        pow10 = pow10.and_then(|e| e.checked_mul(10));
-                    } else {
-                        trailing_zeros_count += 1;
-                    }
-                }
-                b'.' => {
-                    if digits_after_dot.is_some() {
-                        return Err(de::Error::invalid_value(
-                            de::Unexpected::Str(s),
-                            &Self::EXPECTING,
-                        ));
-                    }
-                    digits_after_dot = Some(digit_count);
-                }
-                b'_' => { /* skip spacing */ }
-                _ => {
-                    return Err(de::Error::invalid_value(
-                        de::Unexpected::Str(s),
-                        &Self::EXPECTING,
-                    ));
-                }
-            }
-        }
-
-        let mut exponent = if let Some(s) = exponent_str {
-            s.parse::<i16>()
-                .map_err(|err| de::Error::custom(format!("invalid exponent: {err}")))?
-        } else {
-            0
-        };
-        exponent += trailing_zeros_count;
-        if let Some(digits_after_dot) = digits_after_dot {
-            exponent -= digits_after_dot;
-        }
-
-        let this = Self { mantissa, exponent };
-        Ok(this.reduced())
+        Self::from_decimal_str(dec)
     }
 }
 
@@ -306,6 +391,69 @@ impl<'de> Deserialize<'de> for Decimal {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parsing_decimal_str() {
+        let (dec, rem) = DecimalStr::new("1");
+        assert_eq!(dec.mantissa, "1");
+        assert_eq!(dec.exponent, None);
+        assert_eq!(rem, "");
+
+        let (dec, rem) = DecimalStr::new("1.");
+        assert_eq!(dec.mantissa, "1.");
+        assert_eq!(dec.exponent, None);
+        assert_eq!(rem, "");
+
+        let (dec, rem) = DecimalStr::new("1.03");
+        assert_eq!(dec.mantissa, "1.03");
+        assert_eq!(dec.exponent, None);
+        assert_eq!(rem, "");
+
+        let (dec, rem) = DecimalStr::new("1_030");
+        assert_eq!(dec.mantissa, "1_030");
+        assert_eq!(dec.exponent, None);
+        assert_eq!(rem, "");
+
+        let (dec, rem) = DecimalStr::new("1.030e5");
+        assert_eq!(dec.mantissa, "1.030");
+        assert_eq!(dec.exponent, Some("5"));
+        assert_eq!(rem, "");
+
+        let (dec, rem) = DecimalStr::new("1.030e+5");
+        assert_eq!(dec.mantissa, "1.030");
+        assert_eq!(dec.exponent, Some("+5"));
+        assert_eq!(rem, "");
+
+        let (dec, rem) = DecimalStr::new("1.030E-5");
+        assert_eq!(dec.mantissa, "1.030");
+        assert_eq!(dec.exponent, Some("-5"));
+        assert_eq!(rem, "");
+
+        let (dec, rem) = DecimalStr::new("1.030_22e-5eth");
+        assert_eq!(dec.mantissa, "1.030_22");
+        assert_eq!(dec.exponent, Some("-5"));
+        assert_eq!(rem, "eth");
+
+        let (dec, rem) = DecimalStr::new("1_030.0.3");
+        assert_eq!(dec.mantissa, "1_030.0");
+        assert_eq!(dec.exponent, None);
+        assert_eq!(rem, ".3");
+
+        let (dec, rem) = DecimalStr::new("1_030 ether");
+        assert_eq!(dec.mantissa, "1_030");
+        assert_eq!(dec.exponent, None);
+        assert_eq!(rem, " ether");
+
+        let (dec, rem) = DecimalStr::new("1_030ether");
+        assert_eq!(dec.mantissa, "1_030");
+        assert_eq!(dec.exponent, None);
+        assert_eq!(rem, "ether");
+
+        let (dec, rem) = DecimalStr::new("1_030.2eth");
+        assert_eq!(dec.mantissa, "1_030.2");
+        assert_eq!(dec.exponent, None);
+        assert_eq!(rem, "eth");
+    }
 
     #[test]
     fn parsing_decimals() {
