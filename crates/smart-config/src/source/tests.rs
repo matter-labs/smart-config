@@ -909,9 +909,9 @@ fn nesting_with_duration_param() {
     assert_eq!(config.long_dur, Duration::from_secs(3_600 * 4));
     test_config_roundtrip(&config);
 
-    let json = config!("array": [4, 5], "long_dur_in_hours": "4");
+    let json = config!("array": [4, 5], "long_dur_in_hours": 4.5);
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(3_600 * 4));
+    assert_eq!(config.long_dur, Duration::from_secs(3_600 * 9 / 2));
     test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur": "3min");
@@ -919,9 +919,39 @@ fn nesting_with_duration_param() {
     assert_eq!(config.long_dur, Duration::from_secs(60 * 3));
     test_config_roundtrip(&config);
 
+    let json = config!("array": [4, 5], "long_dur": "0.3 min");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(18));
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "long_dur": "0.03 min");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_millis(1_800));
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "long_dur": "3e-12s");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::ZERO);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "long_dur": "123.456789s");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_millis(123_457));
+    test_config_roundtrip(&config);
+
     let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", 1)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.long_dur, Duration::from_secs(86_400));
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", 0.4)]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(34_560));
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", "1.23e-2")]));
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_millis(1_062_720));
     test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur": HashMap::from([("in_days", 1)]));

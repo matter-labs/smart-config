@@ -151,7 +151,7 @@ impl Decimal {
         exponent: 0,
     };
 
-    pub(crate) fn new(mantissa: u64, exponent: i16) -> Self {
+    pub(crate) const fn new(mantissa: u64, exponent: i16) -> Self {
         Self { mantissa, exponent }.reduced()
     }
 
@@ -223,9 +223,28 @@ impl Decimal {
         Ok(Self::new(mantissa, exponent))
     }
 
-    fn to_int(self) -> Option<u64> {
-        let exp = u32::try_from(self.exponent).ok()?;
-        self.mantissa.checked_mul(10_u64.checked_pow(exp)?)
+    /// Converts to `u64` performing rounding if necessary.
+    #[allow(clippy::cast_sign_loss)] // Doesn't happen due to checks
+    pub(crate) fn to_int(self) -> Option<u64> {
+        if let Ok(exp) = u32::try_from(self.exponent) {
+            self.mantissa.checked_mul(10_u64.checked_pow(exp)?)
+        } else {
+            // `self.exponent` is negative.
+            let exp = -self.exponent as u32;
+            let Some(pow10) = 10_u64.checked_pow(exp) else {
+                return Some(0); // The value is too small
+            };
+
+            let mut value = self.mantissa / pow10;
+            let rem = self.mantissa % pow10;
+            match rem.cmp(&(pow10 / 2)) {
+                cmp::Ordering::Greater => value = value.checked_add(1)?,
+                cmp::Ordering::Equal if value % 2 == 1 => value = value.checked_add(1)?,
+                _ => { /* do nothing */ }
+            }
+
+            Some(value)
+        }
     }
 
     /// Multiplies this number by `10^scale` and returns the integer result.
@@ -376,7 +395,7 @@ impl Decimal {
     }
 
     #[must_use]
-    fn reduced(mut self) -> Self {
+    const fn reduced(mut self) -> Self {
         if self.mantissa == 0 {
             self.exponent = 0;
             return self;

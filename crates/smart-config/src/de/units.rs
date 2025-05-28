@@ -17,16 +17,29 @@ use crate::{
 };
 
 impl TimeUnit {
-    fn overflow_err(self, raw_val: u64) -> serde_json::Error {
+    fn overflow_err(self, raw_val: Decimal) -> serde_json::Error {
         let plural = self.plural();
         DeError::custom(format!(
             "{raw_val} {plural} does not fit into `u64` when converted to seconds"
         ))
     }
 
-    fn into_duration(self, raw_value: u64) -> Result<Duration, serde_json::Error> {
-        self.checked_mul(raw_value)
-            .ok_or_else(|| self.overflow_err(raw_value))
+    fn into_duration(self, raw_value: Decimal) -> Result<Duration, serde_json::Error> {
+        let millis_in_unit = match self {
+            Self::Millis => Decimal::from(1),
+            Self::Seconds => Decimal::new(1, 3),
+            Self::Minutes => Decimal::new(60, 3),
+            Self::Hours => Decimal::new(3_600, 3),
+            Self::Days => Decimal::new(86_400, 3),
+            Self::Weeks => Decimal::new(7 * 86_400, 3),
+        };
+        let millis = raw_value
+            .checked_mul(millis_in_unit)
+            .ok_or_else(|| self.overflow_err(raw_value))?;
+        let millis = millis
+            .to_int()
+            .ok_or_else(|| self.overflow_err(raw_value))?;
+        Ok(Duration::from_millis(millis))
     }
 }
 
@@ -65,7 +78,7 @@ impl DeserializeParam<Duration> for TimeUnit {
         param: &'static ParamMetadata,
     ) -> Result<Duration, ErrorWithOrigin> {
         let deserializer = ctx.current_value_deserializer(param.name)?;
-        let raw_value = u64::deserialize(deserializer)?;
+        let raw_value = Decimal::deserialize(deserializer)?;
         self.into_duration(raw_value)
             .map_err(|err| deserializer.enrich_err(err))
     }
@@ -322,12 +335,12 @@ impl<'v, T: EnumWithUnit> de::Visitor<'v> for EnumVisitor<Option<T>> {
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 enum RawDuration {
-    Millis(u64),
-    Seconds(u64),
-    Minutes(u64),
-    Hours(u64),
-    Days(u64),
-    Weeks(u64),
+    Millis(Decimal),
+    Seconds(Decimal),
+    Minutes(Decimal),
+    Hours(Decimal),
+    Days(Decimal),
+    Weeks(Decimal),
 }
 
 macro_rules! impl_enum_with_unit {
@@ -344,7 +357,7 @@ macro_rules! impl_enum_with_unit {
 }
 
 impl EnumWithUnit for RawDuration {
-    type Value = u64;
+    type Value = Decimal;
 
     const EXPECTING: &'static str = "value with unit, like '10 ms'";
 
@@ -678,27 +691,39 @@ mod tests {
     #[test]
     fn parsing_time_string() {
         let duration: RawDuration = "10ms".parse().unwrap();
-        assert_eq!(duration, RawDuration::Millis(10));
+        assert_eq!(duration, RawDuration::Millis(10.into()));
         let duration: RawDuration = "50    seconds".parse().unwrap();
-        assert_eq!(duration, RawDuration::Seconds(50));
+        assert_eq!(duration, RawDuration::Seconds(50.into()));
         let duration: RawDuration = "40s".parse().unwrap();
-        assert_eq!(duration, RawDuration::Seconds(40));
+        assert_eq!(duration, RawDuration::Seconds(40.into()));
         let duration: RawDuration = "10 min".parse().unwrap();
-        assert_eq!(duration, RawDuration::Minutes(10));
+        assert_eq!(duration, RawDuration::Minutes(10.into()));
         let duration: RawDuration = "10m".parse().unwrap();
-        assert_eq!(duration, RawDuration::Minutes(10));
+        assert_eq!(duration, RawDuration::Minutes(10.into()));
         let duration: RawDuration = "12 hours".parse().unwrap();
-        assert_eq!(duration, RawDuration::Hours(12));
+        assert_eq!(duration, RawDuration::Hours(12.into()));
         let duration: RawDuration = "12h".parse().unwrap();
-        assert_eq!(duration, RawDuration::Hours(12));
+        assert_eq!(duration, RawDuration::Hours(12.into()));
         let duration: RawDuration = "30d".parse().unwrap();
-        assert_eq!(duration, RawDuration::Days(30));
+        assert_eq!(duration, RawDuration::Days(30.into()));
         let duration: RawDuration = "1 day".parse().unwrap();
-        assert_eq!(duration, RawDuration::Days(1));
+        assert_eq!(duration, RawDuration::Days(1.into()));
         let duration: RawDuration = "2 weeks".parse().unwrap();
-        assert_eq!(duration, RawDuration::Weeks(2));
+        assert_eq!(duration, RawDuration::Weeks(2.into()));
         let duration: RawDuration = "3w".parse().unwrap();
-        assert_eq!(duration, RawDuration::Weeks(3));
+        assert_eq!(duration, RawDuration::Weeks(3.into()));
+    }
+
+    #[test]
+    fn parsing_fractional_time_string() {
+        let duration: RawDuration = "10.0ms".parse().unwrap();
+        assert_eq!(duration, RawDuration::Millis(10.into()));
+        let duration: RawDuration = "0.2s".parse().unwrap();
+        assert_eq!(duration, RawDuration::Seconds(Decimal::new(2, -1)));
+        let duration: RawDuration = "0.33 days".parse().unwrap();
+        assert_eq!(duration, RawDuration::Days(Decimal::new(33, -2)));
+        let duration: RawDuration = "1.7e+3 hours".parse().unwrap();
+        assert_eq!(duration, RawDuration::Hours(Decimal::new(17, 2)));
     }
 
     #[test]
@@ -716,7 +741,7 @@ mod tests {
             .parse::<RawDuration>()
             .unwrap_err()
             .to_string();
-        assert!(err.contains("too large"), "{err}");
+        assert!(err.contains("too many digits"), "{err}");
 
         let err = "10 months".parse::<RawDuration>().unwrap_err().to_string();
         assert!(err.starts_with("unknown variant"), "{err}");
