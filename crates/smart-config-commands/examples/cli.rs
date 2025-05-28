@@ -26,7 +26,7 @@ use smart_config_commands::{ParamRef, Printer};
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 pub struct TestConfig {
     /// Port to bind to.
-    #[config(example = 8080, alias = "bind_to")]
+    #[config(example = 8080, deprecated = "bind_to")]
     pub port: u16,
     /// Application name.
     #[config(default_t = "app".into(), validate(NotEmpty))]
@@ -51,7 +51,7 @@ pub struct TestConfig {
     pub cache_size: ByteSize,
     #[config(nest)]
     pub nested: NestedConfig,
-    #[config(nest, alias = "funds")]
+    #[config(nest, deprecated = "funds")]
     pub funding: Option<FundingConfig>,
     /// Required param.
     #[config(example = 42)]
