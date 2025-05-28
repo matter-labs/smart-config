@@ -172,11 +172,11 @@ impl SerializerOptions {
 ///
 /// - If the expected type is [`BasicTypes::INTEGER`], [`BasicTypes::FLOAT`], or [`BasicTypes::BOOL`],
 ///   the number / Boolean is [parsed](str::parse()) from the string. If parsing succeeds, the value is replaced.
-/// - If the expected type is [`BasicTypes::ARRAY`], [`BasicTypes::OBJECT`], or their union, then the original string
-///   is considered to be a JSON array / object. If JSON parsing succeeds, and the parsed value has the expected shape,
-///   then it replaces the original value.
 ///
 /// Coercion is not performed if the param deserializer doesn't specify an expected type.
+///
+/// For flat config sources, such as [`Environment`] vars, any parameter with a `__json` or `:json` suffix
+/// will be parsed as JSON, with the suffix being stripped.
 ///
 /// This means that it's possible to supply values for structured params from env vars without much hassle:
 ///
@@ -193,8 +193,8 @@ impl SerializerOptions {
 ///
 /// let env = Environment::from_iter("APP_", [
 ///     ("APP_FLAG", "true"),
-///     ("APP_INTS", "[2, 3, 5]"),
-///     ("APP_MAP", r#"{ "value": 5 }"#),
+///     ("APP_INTS__JSON", "[2, 3, 5]"),
+///     ("APP_MAP__JSON", r#"{ "value": 5 }"#),
 /// ]);
 /// // `testing` functions create a repository internally
 /// let config: CoercingConfig = testing::test(env)?;
@@ -1019,6 +1019,22 @@ impl WithOrigin {
         }
     }
 
+    fn try_coerce_json(raw: &WithOrigin<String>, key: &str) -> Option<Self> {
+        let val = match serde_json::from_str::<serde_json::Value>(&raw.inner) {
+            Ok(val) => val,
+            Err(err) => {
+                tracing::info!(key, "failed coercing value to JSON: {err}");
+                return None;
+            }
+        };
+
+        let root_origin = Arc::new(ValueOrigin::Synthetic {
+            source: raw.origin.clone(),
+            transform: "parsed JSON string".into(),
+        });
+        Some(Json::map_value(val, &root_origin, String::new()))
+    }
+
     /// Nests a flat key–value map into a structured object using the provided `schema`.
     ///
     /// Has complexity `O(kvs.len() * log(n_params))`, which seems about the best possible option if `kvs` is not presorted.
@@ -1030,7 +1046,16 @@ impl WithOrigin {
         };
 
         for (key, value) in kvs {
-            let value = Self::new(value.inner.into(), value.origin);
+            let stripped_key = key
+                .strip_suffix("__json")
+                .or_else(|| key.strip_suffix(":json"));
+            let coerced_value = stripped_key.and_then(|stripped_key| {
+                let json = Self::try_coerce_json(&value, &key)?;
+                tracing::trace!(key, stripped_key, "Coerced JSON");
+                Some((stripped_key, json))
+            });
+            let (key, value) = coerced_value
+                .unwrap_or_else(|| (&key, Self::new(value.inner.into(), value.origin)));
 
             // Get all params with full paths matching a prefix of `key` split on one of `_`s. E.g.,
             // for `key = "very_long_prefix_value"`, we'll try "very_long_prefix_value", "very_long_prefix", ..., "very".
@@ -1040,7 +1065,7 @@ impl WithOrigin {
             //
             // For prefixes, we only copy the value if the param supports objects; e.g. if `very_long.prefix` is a param,
             // then we'll copy the value to `very_long.prefix_value`.
-            let mut key_prefix = key.as_str();
+            let mut key_prefix = key;
             while !key_prefix.is_empty() {
                 for (param_path, expecting) in schema.params_with_kv_path(key_prefix) {
                     let should_copy = key_prefix == key || expecting.contains(BasicTypes::OBJECT);
@@ -1052,7 +1077,7 @@ impl WithOrigin {
                             key_prefix,
                             "copied key–value entry"
                         );
-                        dest.copy_kv_entry(source_origin, param_path, &key, value.clone());
+                        dest.copy_kv_entry(source_origin, param_path, key, value.clone());
                     }
                 }
 
@@ -1072,7 +1097,7 @@ impl WithOrigin {
             for (param_path, expecting) in schema.params_with_kv_path(key_prefix) {
                 if expecting.contains(BasicTypes::ARRAY) && !expecting.contains(BasicTypes::OBJECT)
                 {
-                    dest.copy_kv_entry(source_origin, param_path, &key, value.clone());
+                    dest.copy_kv_entry(source_origin, param_path, key, value.clone());
                 }
             }
         }

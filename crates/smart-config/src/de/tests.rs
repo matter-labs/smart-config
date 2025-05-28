@@ -731,7 +731,7 @@ fn multiple_errors_for_composed_deserializers() {
     let inner = err.inner().to_string();
     assert!(inner.contains("invalid digit"), "{inner}");
 
-    let json = config!("durations": r#"[5, "30us"]"#);
+    let json = config!("durations": serde_json::json!([5, "30us"]));
     let errors = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
     assert_eq!(errors.len(), 2);
     let err = errors
@@ -747,7 +747,7 @@ fn multiple_errors_for_composed_deserializers() {
     let inner = err.inner().to_string();
     assert!(inner.contains("unknown variant"), "{inner}");
 
-    let json = config!("map_of_ints": r#"{ "what": 120 }"#);
+    let json = config!("map_of_ints": serde_json::json!({ "what": 120 }));
     let errors = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();
     assert_eq!(errors.len(), 2);
     assert!(errors.iter().any(|err| {
