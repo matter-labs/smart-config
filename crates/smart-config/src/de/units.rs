@@ -4,7 +4,7 @@ use std::{fmt, marker::PhantomData, str::FromStr, time::Duration};
 
 use serde::{
     Deserialize, Deserializer,
-    de::{self, EnumAccess, Error as DeError, Unexpected, VariantAccess},
+    de::{self, EnumAccess, Error as DeError, VariantAccess},
 };
 
 use crate::{
@@ -12,7 +12,7 @@ use crate::{
     de::{CustomKnownOption, DeserializeContext, DeserializeParam, Optional, WellKnown},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
-    utils::Decimal,
+    utils::{Decimal, FromStrStart},
     value::Value,
 };
 
@@ -240,7 +240,7 @@ impl WithUnit {
 
 /// Helper trait allowing to unify enum parsing for durations and byte sizes.
 trait EnumWithUnit: FromStr<Err = serde_json::Error> {
-    type Value: FromStr<Err: fmt::Display> + de::DeserializeOwned;
+    type Value: FromStrStart + de::DeserializeOwned;
 
     const EXPECTING: &'static str;
     const VARIANTS: &'static [&'static str];
@@ -261,15 +261,18 @@ trait EnumWithUnit: FromStr<Err = serde_json::Error> {
     }
 
     fn from_unit_str(s: &str, lowercase_unit: bool) -> Result<Self, serde_json::Error> {
-        let unit_start = s
-            .find(|ch: char| !ch.is_ascii_digit() && ch != '_' && ch != '.')
-            .ok_or_else(|| DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING))?;
-        if unit_start == 0 {
-            return Err(DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING));
+        let (value, rem) = <Self::Value as FromStrStart>::from_str_start(s)?;
+        let value =
+            value.ok_or_else(|| DeError::invalid_type(de::Unexpected::Str(s), &Self::EXPECTING))?;
+
+        let mut unit = rem.trim();
+        if unit.is_empty() {
+            return Err(DeError::invalid_type(
+                de::Unexpected::Str(s),
+                &Self::EXPECTING,
+            ));
         }
 
-        let value: Self::Value = s[..unit_start].parse().map_err(DeError::custom)?;
-        let mut unit = s[unit_start..].trim();
         let lowercase_unit_string;
         if lowercase_unit {
             lowercase_unit_string = unit.to_lowercase();
@@ -731,6 +734,26 @@ mod tests {
         assert_eq!(size, RawByteSize::Megabytes(4));
         let size: RawByteSize = "1 GB".parse().unwrap();
         assert_eq!(size, RawByteSize::Gigabytes(1));
+    }
+
+    #[test]
+    fn parsing_ether_amount_string() {
+        let amount: RawEtherAmount = "1wei".parse().unwrap();
+        assert_eq!(amount, RawEtherAmount::Wei(1.into()));
+        let amount: RawEtherAmount = "1.5 gwei".parse().unwrap();
+        assert_eq!(amount, RawEtherAmount::Gwei(Decimal::new(15, -1)));
+
+        for input in [
+            "0.0015 ether",
+            "0.001_5ether",
+            "0.0015ether",
+            "1.5e-3 ether",
+            "15e-4ether",
+            ".015e-1 ether",
+        ] {
+            let amount: RawEtherAmount = input.parse().unwrap();
+            assert_eq!(amount, RawEtherAmount::Ether(Decimal::new(15, -4)));
+        }
     }
 
     #[test]

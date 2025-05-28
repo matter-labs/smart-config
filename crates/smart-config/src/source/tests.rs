@@ -1018,6 +1018,16 @@ fn nesting_with_ether_amount_param() {
     assert_eq!(config.fee, 10_000_000 * EtherUnit::Gwei);
     test_config_roundtrip(&config);
 
+    let json = config!("array": [4, 5], "fee_ether": "1.234_5e-3");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.fee, 1_234_500 * EtherUnit::Gwei);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "fee": "1.234_5e-3 ether");
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.fee, 1_234_500 * EtherUnit::Gwei);
+    test_config_roundtrip(&config);
+
     let json = config!("array": [4, 5], "fee": HashMap::from([("gwei", 250)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
     assert_eq!(config.fee, 250 * EtherUnit::Gwei);

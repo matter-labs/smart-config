@@ -2,6 +2,8 @@ use std::{cmp, fmt, str::FromStr};
 
 use serde::{Deserialize, Deserializer, de};
 
+use super::FromStrStart;
+
 #[derive(Debug, Clone, Copy)]
 struct DecimalStr<'a> {
     input: &'a str,
@@ -137,11 +139,7 @@ impl PartialEq for Decimal {
 
 impl From<u64> for Decimal {
     fn from(value: u64) -> Self {
-        Self {
-            mantissa: value,
-            exponent: 0,
-        }
-        .reduced()
+        Self::new(value, 0)
     }
 }
 
@@ -153,9 +151,13 @@ impl Decimal {
         exponent: 0,
     };
 
-    fn from_decimal_str(s: DecimalStr) -> Result<Self, serde_json::Error> {
+    pub(crate) fn new(mantissa: u64, exponent: i16) -> Self {
+        Self { mantissa, exponent }.reduced()
+    }
+
+    fn from_decimal_str<E: de::Error>(s: DecimalStr) -> Result<Self, E> {
         if s.mantissa.is_empty() {
-            return Err(de::Error::invalid_value(
+            return Err(E::invalid_value(
                 de::Unexpected::Str(s.input),
                 &Self::EXPECTING,
             ));
@@ -174,10 +176,10 @@ impl Decimal {
                     mantissa += if ch == b'0' {
                         0
                     } else {
-                        let pow10 = pow10.ok_or_else(|| de::Error::custom("too many digits"))?;
+                        let pow10 = pow10.ok_or_else(|| E::custom("too many digits"))?;
                         u64::from(ch - b'0')
                             .checked_mul(pow10)
-                            .ok_or_else(|| de::Error::custom("too many digits"))?
+                            .ok_or_else(|| E::custom("too many digits"))?
                     };
 
                     digit_count += 1;
@@ -190,7 +192,7 @@ impl Decimal {
                 }
                 b'.' => {
                     if digits_after_dot.is_some() {
-                        return Err(de::Error::invalid_value(
+                        return Err(E::invalid_value(
                             de::Unexpected::Str(s.input),
                             &Self::EXPECTING,
                         ));
@@ -199,7 +201,7 @@ impl Decimal {
                 }
                 b'_' => { /* skip spacing */ }
                 _ => {
-                    return Err(de::Error::invalid_value(
+                    return Err(E::invalid_value(
                         de::Unexpected::Str(s.input),
                         &Self::EXPECTING,
                     ));
@@ -209,7 +211,7 @@ impl Decimal {
 
         let mut exponent = if let Some(s) = s.exponent {
             s.parse::<i16>()
-                .map_err(|err| de::Error::custom(format!("invalid exponent: {err}")))?
+                .map_err(|err| E::custom(format!("invalid exponent: {err}")))?
         } else {
             0
         };
@@ -218,8 +220,7 @@ impl Decimal {
             exponent -= digits_after_dot;
         }
 
-        let this = Self { mantissa, exponent };
-        Ok(this.reduced())
+        Ok(Self::new(mantissa, exponent))
     }
 
     fn to_int(self) -> Option<u64> {
@@ -227,20 +228,14 @@ impl Decimal {
         self.mantissa.checked_mul(10_u64.checked_pow(exp)?)
     }
 
-    pub(crate) fn parse_start(input: &str) -> Result<(Self, &str), serde_json::Error> {
-        let (dec, rem) = DecimalStr::new(input);
-        Ok((Self::from_decimal_str(dec)?, rem))
-    }
-
     /// Multiplies this number by `10^scale` and returns the integer result.
     pub(crate) fn scale(self, scale: i16) -> Result<u64, serde_json::Error> {
-        let scaled = Self {
-            mantissa: self.mantissa,
-            exponent: self.exponent.checked_add(scale).ok_or_else(|| {
+        let scaled = Self::new(
+            self.mantissa,
+            self.exponent.checked_add(scale).ok_or_else(|| {
                 de::Error::custom(format!("exponent overflow multiplying {self} by 1e{scale}"))
             })?,
-        }
-        .reduced();
+        );
 
         if scaled.exponent < 0 {
             return Err(de::Error::custom(format!(
@@ -287,11 +282,7 @@ impl Decimal {
 
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         // ^ doesn't happen due to the checks above
-        let this = Self {
-            mantissa: mantissa as u64,
-            exponent,
-        };
-        Some(this.reduced())
+        Some(Self::new(mantissa as u64, exponent))
     }
 
     // We use a lookup table because `10.0_f64.powi(exp)` loses precision for `exp >= 33`, and
@@ -341,6 +332,18 @@ impl Decimal {
             self.mantissa /= 10;
         }
         self
+    }
+}
+
+impl FromStrStart for Decimal {
+    fn from_str_start<E: de::Error>(input: &str) -> Result<(Option<Self>, &str), E> {
+        let (dec, rem) = DecimalStr::new(input);
+        let dec = if dec.input.is_empty() {
+            None
+        } else {
+            Some(Self::from_decimal_str(dec)?)
+        };
+        Ok((dec, rem))
     }
 }
 

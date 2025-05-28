@@ -1,9 +1,11 @@
 #![allow(clippy::enum_variant_names)]
 
-mod decimal;
+use serde::de;
 
 pub(crate) use self::decimal::Decimal;
 use crate::metadata::ConfigMetadata;
+
+mod decimal;
 
 /// Sealed trait marker. Intentionally not re-exported publicly.
 pub trait Sealed {}
@@ -22,6 +24,24 @@ pub(crate) const fn const_eq(lhs: &[u8], rhs: &[u8]) -> bool {
         i += 1;
     }
     true
+}
+
+pub(crate) trait FromStrStart: Sized {
+    /// Parses a value from the start of the provided string. Returns the parsed value and the remainder of the string.
+    fn from_str_start<E: de::Error>(s: &str) -> Result<(Option<Self>, &str), E>;
+}
+
+impl FromStrStart for u64 {
+    fn from_str_start<E: de::Error>(s: &str) -> Result<(Option<Self>, &str), E> {
+        let split_pos = s.find(|ch: char| !ch.is_ascii_digit()).unwrap_or(s.len());
+        let (int_str, rem) = s.split_at(split_pos);
+        let value = if int_str.is_empty() {
+            None
+        } else {
+            Some(int_str.parse().map_err(E::custom)?)
+        };
+        Ok((value, rem))
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -478,7 +478,7 @@ fn parsing_complex_types() {
         }),
         "socket_addr": "127.0.0.1:8000",
         "with_custom_deserializer": "!",
-        "fee": "0.001 ether",
+        "fee": "1e-5 ether",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -498,7 +498,7 @@ fn parsing_complex_types() {
             ip_addr: Ipv4Addr::LOCALHOST.into(),
             socket_addr: ([127, 0, 0, 1], 8000).into(),
             with_custom_deserializer: 1,
-            fee: 1_000_000 * EtherUnit::Gwei,
+            fee: 10_000 * EtherUnit::Gwei,
         }
     );
 }
