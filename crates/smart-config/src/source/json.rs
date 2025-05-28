@@ -4,7 +4,7 @@ use super::ConfigSource;
 use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// JSON-based configuration source.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Json {
     origin: Arc<ValueOrigin>,
     inner: WithOrigin,
