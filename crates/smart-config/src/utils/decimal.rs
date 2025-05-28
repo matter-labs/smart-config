@@ -2,22 +2,42 @@ use std::{cmp, fmt, str::FromStr};
 
 use serde::{Deserialize, Deserializer, de};
 
-/// Ad-hoc decimal with `u64` precision.
-#[derive(Debug, Clone, Copy)]
+/// Ad-hoc non-negative decimal value with `u64` precision.
+///
+/// # Why not use `f64`?
+///
+/// - Additional precision when parsing from ints and strings; the latter supports `i16` decimal exponents (vs -308..=308 for `f64`).
+/// - Lossless conversion to integers; error on overflow and imprecise conversion.
+#[derive(Clone, Copy)]
 pub(crate) struct Decimal {
-    unscaled_value: u64,
-    scale: u16,
+    mantissa: u64,
+    exponent: i16,
+}
+
+impl fmt::Debug for Decimal {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, formatter)
+    }
 }
 
 impl fmt::Display for Decimal {
+    #[allow(clippy::cast_sign_loss)] // doesn't happen due to checks
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.scale == 0 {
-            fmt::Display::fmt(&self.unscaled_value, formatter)
+        // TODO: scientific format
+        if self.exponent >= 0 {
+            fmt::Display::fmt(&self.mantissa, formatter)?;
+            // Pad with trailing zeros
+            write!(
+                formatter,
+                "{:0>exponent$}",
+                "",
+                exponent = self.exponent as usize
+            )
         } else {
-            let value_str = self.unscaled_value.to_string();
-            let fraction_len = usize::from(self.scale);
+            let mantissa_str = self.mantissa.to_string();
+            let fraction_len = (-self.exponent) as usize;
             let (mut int, fraction) =
-                value_str.split_at(value_str.len().saturating_sub(fraction_len));
+                mantissa_str.split_at(mantissa_str.len().saturating_sub(fraction_len));
             if int.is_empty() {
                 int = "0";
             }
@@ -28,19 +48,29 @@ impl fmt::Display for Decimal {
 
 impl PartialEq for Decimal {
     fn eq(&self, other: &Self) -> bool {
-        if self.unscaled_value == 0 && other.unscaled_value == 0 {
+        if self.mantissa == 0 && other.mantissa == 0 {
             return true; // in this case we don't need to unify scales, which could lead to an overflow and a false negative
         }
 
-        let (lesser_scaled, greater_scaled) = match self.scale.cmp(&other.scale) {
+        let (lesser_scaled, greater_scaled) = match self.exponent.cmp(&other.exponent) {
             cmp::Ordering::Less | cmp::Ordering::Equal => (self, other),
             cmp::Ordering::Greater => (other, self),
         };
-        let scale_diff = greater_scaled.scale - lesser_scaled.scale;
-        let Some(multiplier) = 10_u64.checked_pow(scale_diff.into()) else {
+        let exp_diff = greater_scaled.exponent.abs_diff(lesser_scaled.exponent);
+        let Some(pow10) = 10_u64.checked_pow(exp_diff.into()) else {
             return false;
         };
-        lesser_scaled.unscaled_value.checked_mul(multiplier) == Some(greater_scaled.unscaled_value)
+        greater_scaled.mantissa.checked_mul(pow10) == Some(lesser_scaled.mantissa)
+    }
+}
+
+impl From<u64> for Decimal {
+    fn from(value: u64) -> Self {
+        Self {
+            mantissa: value,
+            exponent: 0,
+        }
+        .reduced()
     }
 }
 
@@ -48,22 +78,32 @@ impl Decimal {
     const EXPECTING: &'static str = "decimal fraction like 1.5";
 
     const ZERO: Self = Self {
-        unscaled_value: 0,
-        scale: 0,
+        mantissa: 0,
+        exponent: 0,
     };
 
-    pub(crate) fn scale(self, scale: u16) -> Result<u64, serde_json::Error> {
-        let scale_diff = scale.checked_sub(self.scale).ok_or_else(|| {
-            de::Error::custom(format!(
-                "{self} has greater precision ({}) than allowed ({scale})",
-                self.scale
-            ))
-        })?;
-        let multiplier = 10_u64.checked_pow(scale_diff.into()).ok_or_else(|| {
-            de::Error::custom(format!("overflow converting {self} to precision {scale}"))
-        })?;
-        self.unscaled_value.checked_mul(multiplier).ok_or_else(|| {
-            de::Error::custom(format!("overflow converting {self} to precision {scale}"))
+    fn to_int(self) -> Option<u64> {
+        let exp = u32::try_from(self.exponent).ok()?;
+        self.mantissa.checked_mul(10_u64.checked_pow(exp)?)
+    }
+
+    /// Multiplies this number by `10^scale` and returns the integer result.
+    pub(crate) fn scale(self, scale: i16) -> Result<u64, serde_json::Error> {
+        let scaled = Self {
+            mantissa: self.mantissa,
+            exponent: self.exponent.checked_add(scale).ok_or_else(|| {
+                de::Error::custom(format!("exponent overflow multiplying {self} by 1e{scale}"))
+            })?,
+        }
+        .reduced();
+
+        if scaled.exponent < 0 {
+            return Err(de::Error::custom(format!(
+                "{self} * 1e{scale} = {scaled} is not integer"
+            )));
+        }
+        scaled.to_int().ok_or_else(|| {
+            de::Error::custom(format!("{self} * 1e{scale} = {scaled} overflows u64"))
         })
     }
 
@@ -92,26 +132,26 @@ impl Decimal {
 
         #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
         // ^ doesn't happen; `f64::DIGITS` is small and `value.log10().floor()` is in [-308, 308].
-        let scale = f64::DIGITS as i32 - 1 - value.log10().floor() as i32;
-        let scale = u16::try_from(scale).ok()?;
+        let exponent = value.log10().floor() as i32 - f64::DIGITS as i32 + 1;
+        let exponent = i16::try_from(exponent).ok()?;
 
-        let unscaled_value = (value * Self::pow10(scale)?).round();
-        if unscaled_value > MAX_SAFE_INT {
+        let mantissa = (value * Self::pow10(-exponent)?).round();
+        if mantissa > MAX_SAFE_INT {
             return None;
         }
 
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         // ^ doesn't happen due to the checks above
         let this = Self {
-            unscaled_value: unscaled_value as u64,
-            scale,
+            mantissa: mantissa as u64,
+            exponent,
         };
         Some(this.reduced())
     }
 
     // We use a lookup table because `10.0_f64.powi(exp)` loses precision for `exp >= 33`, and
     // something like `format!("1e{exp}").parse().unwrap()` looks weird / slow.
-    fn pow10(exp: u16) -> Option<f64> {
+    fn pow10(exp: i16) -> Option<f64> {
         // `1e308` is the maximum representable power of 10 for `f64`.
         #[rustfmt::skip]
         const LOOKUP: &[f64] = &[
@@ -140,14 +180,20 @@ impl Decimal {
             1e301, 1e302, 1e303, 1e304, 1e305, 1e306, 1e307, 1e308,
         ];
 
-        LOOKUP.get(usize::from(exp)).copied()
+        let pow10 = LOOKUP.get(usize::from(exp.unsigned_abs())).copied()?;
+        Some(if exp < 0 { pow10.recip() } else { pow10 })
     }
 
     #[must_use]
     fn reduced(mut self) -> Self {
-        while self.scale > 0 && self.unscaled_value % 10 == 0 {
-            self.scale -= 1;
-            self.unscaled_value /= 10;
+        if self.mantissa == 0 {
+            self.exponent = 0;
+            return self;
+        }
+
+        while self.mantissa % 10 == 0 {
+            self.exponent += 1;
+            self.mantissa /= 10;
         }
         self
     }
@@ -157,30 +203,45 @@ impl FromStr for Decimal {
     type Err = serde_json::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut unscaled_value = 0;
-        let mut scale = None;
-        let mut exponent = Some(1_u64);
+        let (mantissa_str, exponent_str) = s
+            .split_once(['e', 'E'])
+            .map_or((s, None), |(mantissa, exponent)| (mantissa, Some(exponent)));
+
+        let mut mantissa = 0_u64;
+        let mut pow10 = Some(1_u64);
         let mut digit_count = 0;
-        for ch in s.bytes().rev() {
+        let mut trailing_zeros_count = 0;
+        let mut has_significant_digits = false;
+        let mut digits_after_dot = None::<i16>;
+
+        // FIXME: error on overly long inputs
+
+        for ch in mantissa_str.bytes().rev() {
             match ch {
                 b'0'..=b'9' => {
-                    unscaled_value += if ch == b'0' {
+                    mantissa += if ch == b'0' {
                         0
                     } else {
                         u64::from(ch - b'0')
-                            * exponent.ok_or_else(|| de::Error::custom("too many digits"))?
+                            * pow10.ok_or_else(|| de::Error::custom("too many digits"))?
                     };
+
                     digit_count += 1;
-                    exponent = exponent.and_then(|e| e.checked_mul(10));
+                    has_significant_digits = has_significant_digits || ch != b'0';
+                    if has_significant_digits {
+                        pow10 = pow10.and_then(|e| e.checked_mul(10));
+                    } else {
+                        trailing_zeros_count += 1;
+                    }
                 }
                 b'.' => {
-                    if scale.is_some() {
+                    if digits_after_dot.is_some() {
                         return Err(de::Error::invalid_value(
                             de::Unexpected::Str(s),
                             &Self::EXPECTING,
                         ));
                     }
-                    scale = Some(digit_count);
+                    digits_after_dot = Some(digit_count);
                 }
                 b'_' => { /* skip spacing */ }
                 _ => {
@@ -192,10 +253,18 @@ impl FromStr for Decimal {
             }
         }
 
-        let this = Self {
-            unscaled_value,
-            scale: scale.unwrap_or(0),
+        let mut exponent = if let Some(s) = exponent_str {
+            s.parse::<i16>()
+                .map_err(|err| de::Error::custom(format!("invalid exponent: {err}")))?
+        } else {
+            0
         };
+        exponent += trailing_zeros_count;
+        if let Some(digits_after_dot) = digits_after_dot {
+            exponent -= digits_after_dot;
+        }
+
+        let this = Self { mantissa, exponent };
         Ok(this.reduced())
     }
 }
@@ -212,10 +281,7 @@ impl<'de> Deserialize<'de> for Decimal {
             }
 
             fn visit_u64<E: de::Error>(self, val: u64) -> Result<Self::Value, E> {
-                Ok(Decimal {
-                    unscaled_value: val,
-                    scale: 0,
-                })
+                Ok(Decimal::from(val))
             }
 
             fn visit_f64<E: de::Error>(self, val: f64) -> Result<Self::Value, E> {
@@ -271,33 +337,62 @@ mod tests {
     }
 
     #[test]
-    fn small_decimal_from_f64() {
+    fn small_decimals() {
         let dec = Decimal::from_f64::<serde_json::Error>(1.3e-30).unwrap();
-        assert_eq!(dec.unscaled_value, 13);
-        assert_eq!(dec.scale, 31);
+        assert_eq!(dec.mantissa, 13);
+        assert_eq!(dec.exponent, -31);
+
+        let dec: Decimal = "1.3e-30".parse().unwrap();
+        assert_eq!(dec.mantissa, 13);
+        assert_eq!(dec.exponent, -31);
 
         let dec = Decimal::from_f64::<serde_json::Error>(98_372_729_502.263_3e-194).unwrap();
-        assert_eq!(dec.unscaled_value, 983_727_295_022_633);
-        assert_eq!(dec.scale, 198);
+        assert_eq!(dec.mantissa, 983_727_295_022_633);
+        assert_eq!(dec.exponent, -198);
+
+        let dec: Decimal = "98_372_729_502.263_3e-194".parse().unwrap();
+        assert_eq!(dec.mantissa, 983_727_295_022_633);
+        assert_eq!(dec.exponent, -198);
+    }
+
+    #[test]
+    fn large_decimals() {
+        let dec = Decimal::from_f64::<serde_json::Error>(1.3e30).unwrap();
+        assert_eq!(dec.mantissa, 13);
+        assert_eq!(dec.exponent, 29);
+
+        for input in ["1.3e30", "1.3e+30", "1.300e+30"] {
+            let dec: Decimal = input.parse().unwrap();
+            assert_eq!(dec.mantissa, 13);
+            assert_eq!(dec.exponent, 29);
+        }
+
+        let dec = Decimal::from_f64::<serde_json::Error>(98_372_729_502.263_3e194).unwrap();
+        assert_eq!(dec.mantissa, 983_727_295_022_633);
+        assert_eq!(dec.exponent, 190);
+
+        let dec: Decimal = "98_372_729_502.263_3e194".parse().unwrap();
+        assert_eq!(dec.mantissa, 983_727_295_022_633);
+        assert_eq!(dec.exponent, 190);
     }
 
     #[test]
     fn converting_decimals_from_f64() {
         let dec = Decimal::from_f64::<serde_json::Error>(0.0).unwrap();
-        assert_eq!(dec.unscaled_value, 0);
-        assert_eq!(dec.scale, 0);
+        assert_eq!(dec.mantissa, 0);
+        assert_eq!(dec.exponent, 0);
 
         let dec = Decimal::from_f64::<serde_json::Error>(123.0).unwrap();
-        assert_eq!(dec.unscaled_value, 123);
-        assert_eq!(dec.scale, 0);
+        assert_eq!(dec.mantissa, 123);
+        assert_eq!(dec.exponent, 0);
 
         let dec = Decimal::from_f64::<serde_json::Error>(1.23).unwrap();
-        assert_eq!(dec.unscaled_value, 123);
-        assert_eq!(dec.scale, 2);
+        assert_eq!(dec.mantissa, 123);
+        assert_eq!(dec.exponent, -2);
 
         let dec = Decimal::from_f64::<serde_json::Error>(1.123_456_789_123_45).unwrap();
-        assert_eq!(dec.unscaled_value, 112_345_678_912_345);
-        assert_eq!(dec.scale, 14);
+        assert_eq!(dec.mantissa, 112_345_678_912_345);
+        assert_eq!(dec.exponent, -14);
     }
 }
 
@@ -309,15 +404,16 @@ mod prop_tests {
 
     use super::*;
 
+    #[allow(clippy::cast_possible_wrap)] // doesn't happen
     fn f64_string(digit_count: u16) -> impl Strategy<Value = (String, Decimal)> {
         let digits = proptest::collection::vec(b'0'..=b'9', usize::from(digit_count));
         (digits, 0..=digit_count).prop_map(move |(s, scale)| {
             let mut s = String::from_utf8(s).unwrap();
-            let unscaled_value: u64 = s.parse().unwrap();
+            let mantissa: u64 = s.parse().unwrap();
             s.insert((digit_count - scale).into(), '.');
             let expected = Decimal {
-                unscaled_value,
-                scale,
+                mantissa,
+                exponent: -(scale as i16),
             };
             (s, expected)
         })
@@ -329,34 +425,38 @@ mod prop_tests {
     ) -> impl Strategy<Value = (String, Decimal)> {
         let first_digit = b'1'..=b'9';
         let other_digits = proptest::collection::vec(b'0'..=b'9', usize::from(digit_count - 1));
-        (first_digit, other_digits, 0..=max_exp).prop_map(move |(first_digit, mut digits, exp)| {
-            digits.insert(0, first_digit);
-            let mut s = String::from_utf8(digits).unwrap();
-            let unscaled_value: u64 = s.parse().unwrap();
-            s.insert(1, '.');
-            write!(&mut s, "e-{exp}").unwrap();
+        let max_exp = i16::try_from(max_exp).unwrap();
+        let digit_count = i16::try_from(digit_count).unwrap();
 
-            let expected = Decimal {
-                unscaled_value,
-                scale: exp + digit_count - 1,
-            };
-            (s, expected)
-        })
+        (first_digit, other_digits, -max_exp..=max_exp).prop_map(
+            move |(first_digit, mut digits, exp)| {
+                digits.insert(0, first_digit);
+                let mut s = String::from_utf8(digits).unwrap();
+                let mantissa: u64 = s.parse().unwrap();
+                s.insert(1, '.');
+                write!(&mut s, "e{exp}").unwrap();
+
+                let expected = Decimal {
+                    mantissa,
+                    exponent: exp - digit_count + 1,
+                };
+                (s, expected)
+            },
+        )
     }
 
     proptest! {
         #[test]
         fn decimal_from_int_yaml(x: u64) {
             let val: Decimal = serde_yaml::from_str(&format!("{x}")).unwrap();
-            prop_assert_eq!(val.scale, 0);
-            prop_assert_eq!(val.unscaled_value, x);
+            prop_assert_eq!(val, Decimal::from(x));
         }
 
         #[test]
         fn decimal_from_f64_yaml((s, expected) in f64_string(15)) {
             let val: Decimal = serde_yaml::from_str(&s).unwrap();
             prop_assert_eq!(val, expected);
-            prop_assert!(val.scale == 0 || val.unscaled_value % 10 != 0);
+            prop_assert!(val.exponent == 0 || val.mantissa % 10 != 0);
         }
 
         // 290 (max exponent) + 15 (digits) = 305 is roughly the `f64` precision limit
@@ -364,14 +464,14 @@ mod prop_tests {
         fn decimal_from_small_f64_yaml((s, expected) in f64_scientific_string(15, 290)) {
             let val: Decimal = serde_yaml::from_str(&s).unwrap();
             prop_assert_eq!(val, expected);
-            prop_assert!(val.scale == 0 || val.unscaled_value % 10 != 0);
+            prop_assert!(val.exponent == 0 || val.mantissa % 10 != 0);
         }
 
         #[test]
         fn decimal_from_string_yaml((s, expected) in f64_string(15)) {
             let val: Decimal = serde_yaml::from_str(&format!("{s:?}")).unwrap();
             prop_assert_eq!(val, expected);
-            prop_assert!(val.scale == 0 || val.unscaled_value % 10 != 0);
+            prop_assert!(val.exponent == 0 || val.mantissa % 10 != 0);
         }
 
         #[test]
