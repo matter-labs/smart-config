@@ -247,6 +247,61 @@ impl Decimal {
         })
     }
 
+    pub(crate) fn checked_mul(self, rhs: Self) -> Option<Self> {
+        const fn threshold(i: u32) -> (u128, u128) {
+            assert!(i > 0 && i <= 19);
+            let pow10 = 10_u128.pow(i);
+            // 1 is subtracted because the last digit of `u64::MAX` (5) is odd, so it'll be rounded up on a tie
+            (pow10, u64::MAX as u128 * pow10 + pow10 / 2 - 1)
+        }
+
+        #[rustfmt::skip]
+        const POW10_THRESHOLDS: &[(u128, u128)] = &[
+            threshold(1), threshold(2), threshold(3), threshold(4),
+            threshold(5), threshold(6), threshold(7), threshold(8), threshold(9),
+            threshold(10), threshold(11), threshold(12), threshold(13), threshold(14),
+            threshold(15), threshold(16), threshold(17), threshold(18), threshold(19),
+            (10_u128.pow(20), u128::MAX),
+        ];
+
+        // Do higher precision lossless computations first, then return `None` if they don't work out
+        let mut mantissa = u128::from(self.mantissa) * u128::from(rhs.mantissa);
+        let mut exp = i32::from(self.exponent) + i32::from(rhs.exponent);
+
+        // Reduce without precision loss if possible.
+        while mantissa > 0 && mantissa % 10 == 0 {
+            mantissa /= 10;
+            exp += 1;
+        }
+
+        if mantissa > u128::from(u64::MAX) {
+            let idx = POW10_THRESHOLDS
+                .binary_search_by_key(&mantissa, |(_, threshold)| *threshold)
+                .unwrap_or_else(|idx| idx);
+            let (pow10, _) = POW10_THRESHOLDS[idx];
+            let rem = mantissa % pow10;
+            mantissa /= pow10;
+
+            #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+            // doesn't happen since `idx` is small
+            {
+                exp += idx as i32 + 1;
+            }
+
+            // Round to nearest, ties to even. There can be no overflow adding 1 to `mantissa` due to the threshold checks above.
+            match rem.cmp(&(pow10 / 2)) {
+                cmp::Ordering::Greater => mantissa += 1,
+                cmp::Ordering::Equal if mantissa % 2 == 1 => mantissa += 1,
+                _ => { /* do nothing */ }
+            }
+        }
+
+        let exponent = i16::try_from(exp).ok()?;
+        #[allow(clippy::cast_possible_truncation)] // Doesn't happen due to checks above
+        let mantissa = mantissa as u64;
+        Some(Self { mantissa, exponent })
+    }
+
     fn from_f64<E: de::Error>(value: f64) -> Result<Self, E> {
         if value < 0.0 || value.is_infinite() || value.is_nan() || value.is_subnormal() {
             return Err(de::Error::invalid_value(
@@ -553,6 +608,58 @@ mod tests {
     }
 
     #[test]
+    fn multiplication_basics() {
+        assert_eq!(
+            Decimal::from(3).checked_mul(Decimal::from(5)),
+            Some(Decimal::from(15))
+        );
+        assert_eq!(
+            Decimal::from(3).checked_mul(Decimal::from(1)),
+            Some(Decimal::from(3))
+        );
+        assert_eq!(
+            Decimal::from(1).checked_mul(Decimal::from(3)),
+            Some(Decimal::from(3))
+        );
+        assert_eq!(
+            Decimal::from(0).checked_mul(Decimal::from(3)),
+            Some(Decimal::from(0))
+        );
+        assert_eq!(
+            Decimal::from(4).checked_mul(Decimal::from(0)),
+            Some(Decimal::from(0))
+        );
+
+        assert_eq!(
+            Decimal::new(3, -2).checked_mul(Decimal::from(5)),
+            Some(Decimal::new(15, -2))
+        );
+        assert_eq!(
+            Decimal::new(3, -2).checked_mul(Decimal::new(5, 4)),
+            Some(Decimal::new(15, 2))
+        );
+
+        let x = Decimal::from(10_217_720_902_603_540_321);
+        let y = Decimal::from(18_053_677_771_732_054_076);
+        let product = x.checked_mul(y).unwrap();
+        // The exact product is 184467440737095516153321225195018398396
+        assert_eq!(product.mantissa, u64::MAX);
+        assert_eq!(product.exponent, 19);
+
+        let x = Decimal::from(2_u64.pow(19));
+        let y = Decimal::from(5_u64.pow(19));
+        let product = x.checked_mul(y).unwrap();
+        assert_eq!(product.mantissa, 1);
+        assert_eq!(product.exponent, 19);
+
+        let x = Decimal::from(2_u64.pow(25));
+        let y = Decimal::from(5_u64.pow(26) * 11);
+        let product = x.checked_mul(y).unwrap();
+        assert_eq!(product.mantissa, 55);
+        assert_eq!(product.exponent, 25);
+    }
+
+    #[test]
     fn converting_decimals_from_f64() {
         let dec = Decimal::from_f64::<serde_json::Error>(0.0).unwrap();
         assert_eq!(dec.mantissa, 0);
@@ -654,6 +761,27 @@ mod prop_tests {
         fn decimal_to_string((_, x) in f64_string(15)) {
             let s = x.to_string();
             prop_assert_eq!(s.parse::<Decimal>()?, x);
+        }
+
+        #[test]
+        fn lossless_multiplication(x: u32, y: u32) {
+            let (x, y) = (u64::from(x), u64::from(y));
+            let x_dec = Decimal::from(x);
+            let y_dec = Decimal::from(y);
+            prop_assert_eq!(x_dec.checked_mul(y_dec), Some(Decimal::from(x * y)));
+        }
+
+        #[test]
+        fn u64_multiplication(x: u64, y: u64) {
+            let x_dec = Decimal::from(x);
+            let y_dec = Decimal::from(y);
+            let product = x_dec.checked_mul(y_dec).unwrap();
+            prop_assert!(product.exponent >= 0);
+
+            let pow10 = 10_u128.pow(product.exponent.try_into().unwrap());
+            let actual = u128::from(product.mantissa) * pow10;
+            let expected = u128::from(x) * u128::from(y);
+            prop_assert!(actual.abs_diff(expected) <= pow10 / 2, "{actual}, {expected}");
         }
     }
 }
