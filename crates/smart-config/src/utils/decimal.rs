@@ -206,6 +206,12 @@ impl FromStr for Decimal {
         let (mantissa_str, exponent_str) = s
             .split_once(['e', 'E'])
             .map_or((s, None), |(mantissa, exponent)| (mantissa, Some(exponent)));
+        if mantissa_str.is_empty() {
+            return Err(de::Error::invalid_value(
+                de::Unexpected::Str(s),
+                &Self::EXPECTING,
+            ));
+        }
 
         let mut mantissa = 0_u64;
         let mut pow10 = Some(1_u64);
@@ -214,16 +220,16 @@ impl FromStr for Decimal {
         let mut has_significant_digits = false;
         let mut digits_after_dot = None::<i16>;
 
-        // FIXME: error on overly long inputs
-
         for ch in mantissa_str.bytes().rev() {
             match ch {
                 b'0'..=b'9' => {
                     mantissa += if ch == b'0' {
                         0
                     } else {
+                        let pow10 = pow10.ok_or_else(|| de::Error::custom("too many digits"))?;
                         u64::from(ch - b'0')
-                            * pow10.ok_or_else(|| de::Error::custom("too many digits"))?
+                            .checked_mul(pow10)
+                            .ok_or_else(|| de::Error::custom("too many digits"))?
                     };
 
                     digit_count += 1;
@@ -334,6 +340,25 @@ mod tests {
         let dec: Decimal = "1_001.500_1".parse().unwrap();
         assert_eq!(dec.scale(4).unwrap(), 10_015_001);
         assert_eq!(dec.to_string(), "1001.5001");
+    }
+
+    #[test]
+    fn parsing_errors() {
+        // No mantissa
+        "e".parse::<Decimal>().unwrap_err();
+        // Empty exponent
+        "1e".parse::<Decimal>().unwrap_err();
+        // Invalid exponent
+        "1e?".parse::<Decimal>().unwrap_err();
+        // Too large exponent
+        "1e123456".parse::<Decimal>().unwrap_err();
+        "1e-123456".parse::<Decimal>().unwrap_err();
+        // Too many digits
+        "123456789012345678901".parse::<Decimal>().unwrap_err();
+        ".123456789012345678901".parse::<Decimal>().unwrap_err();
+        "0.123456789012345678901".parse::<Decimal>().unwrap_err();
+        "1.23456789012345678901e30".parse::<Decimal>().unwrap_err();
+        "1.23456789012345678901e-30".parse::<Decimal>().unwrap_err();
     }
 
     #[test]
