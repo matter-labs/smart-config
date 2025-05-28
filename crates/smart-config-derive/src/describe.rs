@@ -5,7 +5,7 @@ use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, DeriveInput, LitStr, Type};
 
 use crate::utils::{
-    wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
+    wrap_in_option, Alias, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
     DefaultValue, RenameRule, Validation,
 };
 
@@ -40,6 +40,14 @@ impl Validation {
         } else {
             quote!(#expr)
         }
+    }
+}
+
+impl Alias {
+    fn describe(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let lit = &self.lit;
+        let maybe_deprecated = self.is_deprecated.then(|| quote!(.deprecated()));
+        quote_spanned!(lit.span()=> (#lit, #cr::metadata::AliasOptions::new()#maybe_deprecated))
     }
 }
 
@@ -86,6 +94,7 @@ impl ConfigField {
 
         let aliases = self.attrs.aliases.iter();
         let aliases_validation = aliases.map(|alias| {
+            let alias = &alias.lit;
             let cr = parent.cr(alias.span());
             quote_spanned! {alias.span()=>
                 const _: () = #cr::metadata::_private::assert_param_name(#alias);
@@ -133,9 +142,7 @@ impl ConfigField {
         let deserializer = self.deserializer(&cr);
         let tag_variant = wrap_in_option(variant_idx.map(|idx| quote!(&TAG_VARIANTS[#idx])));
 
-        let aliases = self.attrs.aliases.iter().map(
-            |alias| quote_spanned!(alias.span()=> (#alias, #cr::metadata::AliasOptions::new())),
-        );
+        let aliases = self.attrs.aliases.iter().map(|alias| alias.describe(&cr));
 
         quote_spanned! {name_span=> {
             let deserializer = #deserializer;
@@ -163,9 +170,7 @@ impl ConfigField {
     ) -> proc_macro2::TokenStream {
         let cr = parent.cr(self.name_span());
         let name = &self.name;
-        let aliases = self.attrs.aliases.iter().map(
-            |alias| quote_spanned!(alias.span()=> (#alias, #cr::metadata::AliasOptions::new())),
-        );
+        let aliases = self.attrs.aliases.iter().map(|alias| alias.describe(&cr));
         let ty = Self::unwrap_option(&self.ty).unwrap_or(&self.ty);
         let config_name = if self.attrs.flatten {
             String::new()

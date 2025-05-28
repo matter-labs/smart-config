@@ -475,6 +475,25 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct AliasMap<'a> {
+    map: &'a Map,
+    prefix: Pointer<'a>,
+    origin: Option<&'a Arc<ValueOrigin>>,
+    options: AliasOptions,
+}
+
+impl<'a> AliasMap<'a> {
+    fn canonical(map: &'a Map, prefix: Pointer<'a>) -> Self {
+        Self {
+            map,
+            prefix,
+            origin: None,
+            options: AliasOptions::new(),
+        }
+    }
+}
+
 impl WithOrigin {
     fn preprocess_source(
         &mut self,
@@ -512,7 +531,12 @@ impl WithOrigin {
                 .aliases()
                 .filter_map(|(alias, options)| {
                     let val = self.get(Pointer(alias))?;
-                    Some((val.inner.as_object()?, &val.origin, options))
+                    Some(AliasMap {
+                        map: val.inner.as_object()?,
+                        prefix: Pointer(alias),
+                        origin: Some(&val.origin),
+                        options,
+                    })
                 })
                 .collect();
 
@@ -545,31 +569,32 @@ impl WithOrigin {
         config: &ConfigMetadata,
         prefix: Pointer<'_>,
         canonical_map: Option<&Map>,
-        alias_maps: &[(&Map, &Arc<ValueOrigin>, AliasOptions)],
+        alias_maps: &[AliasMap],
     ) -> (Map, Option<Arc<ValueOrigin>>) {
         let mut new_values = Map::new();
         let mut new_map_origin = None;
         for param in config.params {
             // Create a prioritized iterator of all candidates
             let local_candidates = canonical_map.into_iter().flat_map(|map| {
+                let map = AliasMap::canonical(map, prefix);
                 param
                     .aliases
                     .iter()
-                    .map(move |&(alias, options)| (map, alias, options, None))
+                    .map(move |&(alias, options)| (map, alias, options))
             });
             let all_names = iter::once((param.name, AliasOptions::default()))
                 .chain(param.aliases.iter().copied());
-            let alias_candidates = alias_maps.iter().flat_map(|&(map, origin, map_options)| {
-                all_names.clone().map(move |(name, options)| {
-                    (map, name, options.combine(map_options), Some(origin))
-                })
+            let alias_candidates = alias_maps.iter().flat_map(|&map| {
+                all_names
+                    .clone()
+                    .map(move |(name, options)| (map, name, options))
             });
             let all_candidates = local_candidates.chain(alias_candidates);
 
-            for (map, name, options, origin) in all_candidates {
+            for (map, name, options) in all_candidates {
                 // Copy all values in `map` that either match `name` exactly, or start with `{name}_`
                 // (the latter can be used for object or array nesting).
-                for (key, val) in map {
+                for (key, val) in map.map {
                     let canonical_key_string;
                     let canonical_key = if key == name {
                         param.name // Exact match
@@ -586,20 +611,30 @@ impl WithOrigin {
                     }
 
                     if !new_values.contains_key(canonical_key) {
-                        assert!(!options.is_deprecated); // FIXME
+                        let options = options.combine(map.options);
+                        if options.is_deprecated {
+                            tracing::warn!(
+                                path = map.prefix.join(name),
+                                config = ?config.ty,
+                                param = param.rust_field_name,
+                                canonical_prefix = prefix.0,
+                                canonical_key,
+                                "using deprecated alias"
+                            );
+                        }
 
                         tracing::trace!(
                             prefix = prefix.0,
                             config = ?config.ty,
                             param = param.rust_field_name,
                             name,
-                            ?origin,
+                            origin = ?map.origin,
                             canonical_key,
                             "copied aliased param"
                         );
                         new_values.insert(canonical_key.to_owned(), val.clone());
                         if new_map_origin.is_none() {
-                            new_map_origin = origin.cloned();
+                            new_map_origin = map.origin.cloned();
                         }
                     }
                 }
