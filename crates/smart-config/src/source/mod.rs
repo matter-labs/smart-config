@@ -28,35 +28,36 @@ mod json;
 mod tests;
 mod yaml;
 
-/// Contents of a [`ConfigSource`].
-#[derive(Debug, Clone)]
-#[non_exhaustive]
-pub enum ConfigContents {
-    /// Key–value / flat configuration.
-    KeyValue(Map<String>),
-    /// Hierarchical configuration.
-    Hierarchical(Map),
+/// Kind of a [`ConfigSource`].
+pub trait ConfigSourceKind: crate::utils::Sealed {
+    #[doc(hidden)] // implementation detail
+    const IS_FLAT: bool;
 }
 
-impl From<Map> for ConfigContents {
-    fn from(map: Map) -> Self {
-        Self::Hierarchical(map)
-    }
+/// Marker for hierarchical configuration sources (e.g. JSON or YAML files).
+#[derive(Debug)]
+pub struct Hierarchical(());
+
+impl crate::utils::Sealed for Hierarchical {}
+impl ConfigSourceKind for Hierarchical {
+    const IS_FLAT: bool = false;
 }
 
-impl From<Map<String>> for ConfigContents {
-    fn from(map: Map<String>) -> Self {
-        Self::KeyValue(map)
-    }
+/// Marker for key–value / flat configuration sources (e.g., env variables or command-line args).
+#[derive(Debug)]
+pub struct Flat(());
+
+impl crate::utils::Sealed for Flat {}
+impl ConfigSourceKind for Flat {
+    const IS_FLAT: bool = true;
 }
 
 /// Source of configuration parameters that can be added to a [`ConfigRepository`].
 pub trait ConfigSource {
-    /// Map of values produced by this source.
-    type Map: Into<ConfigContents>;
-
+    /// Kind of the source.
+    type Kind: ConfigSourceKind;
     /// Converts this source into config contents.
-    fn into_contents(self) -> WithOrigin<Self::Map>;
+    fn into_contents(self) -> WithOrigin<Map>;
 }
 
 /// Wraps a hierarchical source into a prefix.
@@ -66,7 +67,7 @@ pub struct Prefixed<T> {
     prefix: String,
 }
 
-impl<T: ConfigSource<Map = Map>> Prefixed<T> {
+impl<T: ConfigSource<Kind = Hierarchical>> Prefixed<T> {
     /// Wraps the provided source.
     pub fn new(inner: T, prefix: impl Into<String>) -> Self {
         Self {
@@ -76,10 +77,10 @@ impl<T: ConfigSource<Map = Map>> Prefixed<T> {
     }
 }
 
-impl<T: ConfigSource<Map = Map>> ConfigSource for Prefixed<T> {
-    type Map = Map;
+impl<T: ConfigSource<Kind = Hierarchical>> ConfigSource for Prefixed<T> {
+    type Kind = Hierarchical;
 
-    fn into_contents(self) -> WithOrigin<Self::Map> {
+    fn into_contents(self) -> WithOrigin<Map> {
         let contents = self.inner.into_contents();
 
         let origin = Arc::new(ValueOrigin::Synthetic {
@@ -105,13 +106,14 @@ impl<T: ConfigSource<Map = Map>> ConfigSource for Prefixed<T> {
 /// into a [`ConfigRepository`].
 #[derive(Debug, Clone, Default)]
 pub struct ConfigSources {
-    inner: Vec<WithOrigin<ConfigContents>>,
+    inner: Vec<(WithOrigin<Map>, bool)>,
 }
 
 impl ConfigSources {
     /// Pushes a configuration source at the end of the list.
-    pub fn push(&mut self, source: impl ConfigSource) {
-        self.inner.push(source.into_contents().map(Into::into));
+    pub fn push<S: ConfigSource>(&mut self, source: S) {
+        self.inner
+            .push((source.into_contents(), <S::Kind>::IS_FLAT));
     }
 }
 
@@ -175,9 +177,6 @@ impl SerializerOptions {
 ///
 /// Coercion is not performed if the param deserializer doesn't specify an expected type.
 ///
-/// For flat config sources, such as [`Environment`] vars, any parameter with a `__json` or `:json` suffix
-/// will be parsed as JSON, with the suffix being stripped.
-///
 /// This means that it's possible to supply values for structured params from env vars without much hassle:
 ///
 /// ```rust
@@ -191,11 +190,13 @@ impl SerializerOptions {
 ///     map: HashMap<String, u32>,
 /// }
 ///
-/// let env = Environment::from_iter("APP_", [
+/// let mut env = Environment::from_iter("APP_", [
 ///     ("APP_FLAG", "true"),
 ///     ("APP_INTS__JSON", "[2, 3, 5]"),
 ///     ("APP_MAP__JSON", r#"{ "value": 5 }"#),
 /// ]);
+/// // Coerce `__json`-suffixed env vars to JSON
+/// env.coerce_json()?;
 /// // `testing` functions create a repository internally
 /// let config: CoercingConfig = testing::test(env)?;
 /// assert!(config.flag);
@@ -260,7 +261,7 @@ impl<'a> ConfigRepository<'a> {
     /// Extends this environment with a new configuration source.
     #[must_use]
     pub fn with<S: ConfigSource>(mut self, source: S) -> Self {
-        self.insert_inner(source.into_contents().map(Into::into));
+        self.insert_inner(source.into_contents(), <S::Kind>::IS_FLAT);
         self
     }
 
@@ -269,13 +270,14 @@ impl<'a> ConfigRepository<'a> {
         name = "ConfigRepository::insert",
         skip(self, contents)
     )]
-    fn insert_inner(&mut self, contents: WithOrigin<ConfigContents>) {
-        let mut source_value = match contents.inner {
-            ConfigContents::KeyValue(kv) => WithOrigin::nest_kvs(kv, self.schema, &contents.origin),
-            ConfigContents::Hierarchical(map) => WithOrigin {
-                inner: Value::Object(map),
+    fn insert_inner(&mut self, contents: WithOrigin<Map>, is_flat: bool) {
+        let mut source_value = if is_flat {
+            WithOrigin::nest_kvs(contents.inner, self.schema, &contents.origin)
+        } else {
+            WithOrigin {
+                inner: Value::Object(contents.inner),
                 origin: contents.origin.clone(),
-            },
+            }
         };
 
         let param_count = source_value.preprocess_source(
@@ -295,8 +297,8 @@ impl<'a> ConfigRepository<'a> {
     ///  Extends this environment with a multiple configuration sources.
     #[must_use]
     pub fn with_all(mut self, sources: ConfigSources) -> Self {
-        for contents in sources.inner {
-            self.insert_inner(contents);
+        for (contents, is_flat) in sources.inner {
+            self.insert_inner(contents, is_flat);
         }
         self
     }
@@ -1019,44 +1021,17 @@ impl WithOrigin {
         }
     }
 
-    fn try_coerce_json(raw: &WithOrigin<String>, key: &str) -> Option<Self> {
-        let val = match serde_json::from_str::<serde_json::Value>(&raw.inner) {
-            Ok(val) => val,
-            Err(err) => {
-                tracing::info!(key, "failed coercing value to JSON: {err}");
-                return None;
-            }
-        };
-
-        let root_origin = Arc::new(ValueOrigin::Synthetic {
-            source: raw.origin.clone(),
-            transform: "parsed JSON string".into(),
-        });
-        Some(Json::map_value(val, &root_origin, String::new()))
-    }
-
     /// Nests a flat key–value map into a structured object using the provided `schema`.
     ///
     /// Has complexity `O(kvs.len() * log(n_params))`, which seems about the best possible option if `kvs` is not presorted.
     #[tracing::instrument(level = "debug", skip_all)]
-    fn nest_kvs(kvs: Map<String>, schema: &ConfigSchema, source_origin: &Arc<ValueOrigin>) -> Self {
+    fn nest_kvs(kvs: Map, schema: &ConfigSchema, source_origin: &Arc<ValueOrigin>) -> Self {
         let mut dest = Self {
             inner: Value::Object(Map::new()),
             origin: source_origin.clone(),
         };
 
         for (key, value) in kvs {
-            let stripped_key = key
-                .strip_suffix("__json")
-                .or_else(|| key.strip_suffix(":json"));
-            let coerced_value = stripped_key.and_then(|stripped_key| {
-                let json = Self::try_coerce_json(&value, &key)?;
-                tracing::trace!(key, stripped_key, "Coerced JSON");
-                Some((stripped_key, json))
-            });
-            let (key, value) = coerced_value
-                .unwrap_or_else(|| (&key, Self::new(value.inner.into(), value.origin)));
-
             // Get all params with full paths matching a prefix of `key` split on one of `_`s. E.g.,
             // for `key = "very_long_prefix_value"`, we'll try "very_long_prefix_value", "very_long_prefix", ..., "very".
             // If any of these prefixes corresponds to a param, we'll nest the value to align with the param.
@@ -1065,7 +1040,7 @@ impl WithOrigin {
             //
             // For prefixes, we only copy the value if the param supports objects; e.g. if `very_long.prefix` is a param,
             // then we'll copy the value to `very_long.prefix_value`.
-            let mut key_prefix = key;
+            let mut key_prefix = key.as_str();
             while !key_prefix.is_empty() {
                 for (param_path, expecting) in schema.params_with_kv_path(key_prefix) {
                     let should_copy = key_prefix == key || expecting.contains(BasicTypes::OBJECT);
@@ -1077,7 +1052,7 @@ impl WithOrigin {
                             key_prefix,
                             "copied key–value entry"
                         );
-                        dest.copy_kv_entry(source_origin, param_path, key, value.clone());
+                        dest.copy_kv_entry(source_origin, param_path, &key, value.clone());
                     }
                 }
 
@@ -1097,7 +1072,7 @@ impl WithOrigin {
             for (param_path, expecting) in schema.params_with_kv_path(key_prefix) {
                 if expecting.contains(BasicTypes::ARRAY) && !expecting.contains(BasicTypes::OBJECT)
                 {
-                    dest.copy_kv_entry(source_origin, param_path, key, value.clone());
+                    dest.copy_kv_entry(source_origin, param_path, &key, value.clone());
                 }
             }
         }

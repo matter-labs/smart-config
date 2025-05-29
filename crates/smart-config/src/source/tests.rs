@@ -671,7 +671,7 @@ fn parsing_complex_param() {
     assert!(!json_diff.contains_key("repeated"), "{json_diff:?}");
     assert_eq!(json_diff["param"], json["param"]);
 
-    let env = Environment::from_iter(
+    let mut env = Environment::from_iter(
         "",
         [
             (
@@ -681,6 +681,7 @@ fn parsing_complex_param() {
             ("SET__JSON", "[2, 3]"),
         ],
     );
+    env.coerce_json().unwrap();
     let config: ValueCoercingConfig = testing::test(env).unwrap();
     assert_eq!(config.param.int, 3);
     assert_eq!(config.param.string, "!!");
@@ -692,7 +693,8 @@ fn parsing_complex_param() {
 
 #[test]
 fn parsing_complex_param_errors() {
-    let env = Environment::from_iter("", [("PARAM__JSON", r#"{ "int": "???" }"#)]);
+    let mut env = Environment::from_iter("", [("PARAM__JSON", r#"{ "int": "???" }"#)]);
+    env.coerce_json().unwrap();
     let err = testing::test::<ValueCoercingConfig>(env).unwrap_err();
     assert_eq!(err.len(), 1);
     let err = err.first();
@@ -704,13 +706,14 @@ fn parsing_complex_param_errors() {
         "env variable 'PARAM__JSON' -> parsed JSON string -> path 'int'"
     );
 
-    let env = Environment::from_iter(
+    let mut env = Environment::from_iter(
         "APP_",
         [
             ("APP_PARAM__JSON", r#"{ "int": 42, "string": "!" }"#),
             ("APP_SET__JSON", "[1, false]"),
         ],
     );
+    env.coerce_json().unwrap();
     let err = testing::test::<ValueCoercingConfig>(env).unwrap_err();
     assert_eq!(err.len(), 1);
     let err = err.first();
@@ -846,7 +849,7 @@ fn nesting_for_object_param_with_structured_source() {
 #[test]
 fn nesting_for_array_param() {
     let schema = ConfigSchema::new(&ValueCoercingConfig::DESCRIPTION, "test");
-    let env = Environment::from_iter(
+    let mut env = Environment::from_iter(
         "",
         [
             ("TEST_PARAM_INT", "123"),
@@ -861,6 +864,7 @@ fn nesting_for_array_param() {
             ),
         ],
     );
+    env.coerce_json().unwrap();
     let repo = ConfigRepository::new(&schema).with(env);
 
     assert_matches!(
@@ -1143,7 +1147,7 @@ fn merging_duration_params_is_atomic() {
 
 #[test]
 fn nesting_with_composed_deserializers() {
-    let env = Environment::from_iter(
+    let mut env = Environment::from_iter(
         "",
         [
             ("arrays:json", "[[1, 2], [3, 4], [5, 6]]"),
@@ -1153,6 +1157,8 @@ fn nesting_with_composed_deserializers() {
             ("map_of_sizes_large", "5 MiB"),
         ],
     );
+    env.coerce_json().unwrap();
+
     let config: ComposedConfig = testing::test(env).unwrap();
     assert_eq!(config.arrays, HashSet::from([[1, 2], [3, 4], [5, 6]]));
     assert_eq!(
@@ -1179,7 +1185,8 @@ fn nesting_with_composed_deserializers() {
 
 #[test]
 fn nesting_with_composed_deserializers_errors() {
-    let env = Environment::from_iter("", [("arrays:json", "[[1, 2], [3, 4], [-5, 6]]")]);
+    let mut env = Environment::from_iter("", [("arrays:json", "[[1, 2], [3, 4], [-5, 6]]")]);
+    env.coerce_json().unwrap();
     let err = testing::test::<ComposedConfig>(env).unwrap_err();
     assert_eq!(err.len(), 1);
     let err = err.first();
@@ -1215,7 +1222,8 @@ fn nesting_with_composed_deserializers_errors() {
         "{inner}"
     );
 
-    let env = Environment::from_iter("", [("map_of_sizes:json", r#"{ "small": 3 }"#)]);
+    let mut env = Environment::from_iter("", [("map_of_sizes:json", r#"{ "small": 3 }"#)]);
+    env.coerce_json().unwrap();
     let err = testing::test::<ComposedConfig>(env).unwrap_err();
     assert_eq!(err.len(), 1);
     let err = err.first();

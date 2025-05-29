@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::ConfigSource;
+use super::{ConfigSource, Hierarchical};
 use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// JSON-based configuration source.
@@ -126,9 +126,9 @@ impl Json {
 }
 
 impl ConfigSource for Json {
-    type Map = Map;
+    type Kind = Hierarchical;
 
-    fn into_contents(self) -> WithOrigin<Self::Map> {
+    fn into_contents(self) -> WithOrigin<Map> {
         self.inner.map(|value| match value {
             Value::Object(map) => map,
             _ => Map::default(),

@@ -1,18 +1,19 @@
-use std::{env, sync::Arc};
+use std::{env, fmt, mem, sync::Arc};
 
 use anyhow::Context as _;
 
-use super::ConfigSource;
+use super::{ConfigSource, Flat};
 use crate::{
     testing::MOCK_ENV_VARS,
-    value::{FileFormat, Map, ValueOrigin, WithOrigin},
+    value::{FileFormat, Map, Value, ValueOrigin, WithOrigin},
+    Json,
 };
 
 /// Configuration sourced from environment variables.
 #[derive(Debug, Clone)]
 pub struct Environment {
     origin: Arc<ValueOrigin>,
-    map: Map<String>,
+    map: Map,
 }
 
 impl Default for Environment {
@@ -47,7 +48,7 @@ impl Environment {
             Some((
                 retained_name,
                 WithOrigin {
-                    inner: value.into(),
+                    inner: Value::from(value.into()),
                     origin: Arc::new(ValueOrigin::Path {
                         source: origin.clone(),
                         path: name.into(),
@@ -68,7 +69,7 @@ impl Environment {
             Some((
                 name.to_owned(),
                 WithOrigin {
-                    inner: value,
+                    inner: Value::from(value),
                     origin: Arc::new(ValueOrigin::Path {
                         source: origin.clone(),
                         path: name.to_owned(),
@@ -98,7 +99,7 @@ impl Environment {
             map.insert(
                 name.to_lowercase(),
                 WithOrigin {
-                    inner: variable_value.to_owned(),
+                    inner: Value::from(variable_value.to_owned()),
                     origin: Arc::new(ValueOrigin::Path {
                         source: origin.clone(),
                         path: name.into(),
@@ -122,12 +123,82 @@ impl Environment {
             map: filtered.collect(),
         }
     }
+
+    /// Coerces JSON values in env variables which names end with the `__json` / `:json` suffixes and strips this suffix.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any coercion fails; provides a list of all failed coercions. Successful coercions are still applied in this case.
+    pub fn coerce_json(&mut self) -> anyhow::Result<()> {
+        let mut coerced_values = vec![];
+        let mut errors = vec![];
+        for (key, value) in &self.map {
+            let stripped_key = key
+                .strip_suffix("__json")
+                .or_else(|| key.strip_suffix(":json"));
+            let Some(stripped_key) = stripped_key else {
+                continue;
+            };
+            let Some(value_str) = value.inner.as_plain_str() else {
+                // The value was already transformed, probably.
+                continue;
+            };
+
+            let val = match serde_json::from_str::<serde_json::Value>(value_str) {
+                Ok(val) => val,
+                Err(err) => {
+                    mem::take(&mut coerced_values);
+                    errors.push((value.origin.clone(), err));
+                    continue;
+                }
+            };
+            if !errors.is_empty() {
+                continue; // No need to record coerced values if there are coercion errors.
+            }
+
+            let root_origin = Arc::new(ValueOrigin::Synthetic {
+                source: value.origin.clone(),
+                transform: "parsed JSON string".into(),
+            });
+            let coerced_value = Json::map_value(val, &root_origin, String::new());
+            coerced_values.push((key.to_owned(), stripped_key.to_owned(), coerced_value));
+        }
+
+        for (key, stripped_key, coerced_value) in coerced_values {
+            self.map.remove(&key);
+            self.map.insert(stripped_key, coerced_value);
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(JsonCoercionErrors(errors).into())
+        }
+    }
 }
 
-impl ConfigSource for Environment {
-    type Map = Map<String>;
+#[derive(Debug)]
+struct JsonCoercionErrors(Vec<(Arc<ValueOrigin>, serde_json::Error)>);
 
-    fn into_contents(self) -> WithOrigin<Self::Map> {
+impl fmt::Display for JsonCoercionErrors {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            formatter,
+            "failed coercing flat configuration params to JSON:"
+        )?;
+        for (i, (key, err)) in self.0.iter().enumerate() {
+            writeln!(formatter, "{}. {key}: {err}", i + 1)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for JsonCoercionErrors {}
+
+impl ConfigSource for Environment {
+    type Kind = Flat;
+
+    fn into_contents(self) -> WithOrigin<Map> {
         WithOrigin::new(self.map, self.origin)
     }
 }
@@ -153,7 +224,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(env.map.len(), 2, "{:?}", env.map);
-        assert_eq!(env.map["app_test"].inner, "42");
+        assert_eq!(env.map["app_test"].inner.as_plain_str(), Some("42"));
         let origin = &env.map["app_test"].origin;
         let ValueOrigin::Path { path, source } = origin.as_ref() else {
             panic!("unexpected origin: {origin:?}");
@@ -163,12 +234,15 @@ mod tests {
             source.as_ref(),
             ValueOrigin::File { name, format: FileFormat::Dotenv } if name == "test.env"
         );
-        assert_eq!(env.map["app_other"].inner, "test string");
+        assert_eq!(
+            env.map["app_other"].inner.as_plain_str(),
+            Some("test string")
+        );
 
         let env = env.strip_prefix("app_");
         assert_eq!(env.map.len(), 2, "{:?}", env.map);
-        assert_eq!(env.map["test"].inner, "42");
+        assert_eq!(env.map["test"].inner.as_plain_str(), Some("42"));
         assert_matches!(env.map["test"].origin.as_ref(), ValueOrigin::Path { path, .. } if path == "APP_TEST");
-        assert_eq!(env.map["other"].inner, "test string");
+        assert_eq!(env.map["other"].inner.as_plain_str(), Some("test string"));
     }
 }
