@@ -83,7 +83,7 @@ fn write_config_help(writer: &mut impl io::Write, config: ConfigRef<'_>) -> io::
         };
         write!(writer, "{config_style}{alias}{config_style:#}")?;
         if options.is_deprecated {
-            writeln!(writer, " {DEPRECATED}[deprecated]{DEPRECATED:#}")?;
+            writeln!(writer, " {DEPRECATED}[deprecated alias]{DEPRECATED:#}")?;
         } else {
             writeln!(writer)?;
         }
@@ -176,7 +176,7 @@ impl ParamRef<'_> {
             )?;
 
             if options.is_deprecated {
-                writeln!(writer, " {DEPRECATED}[deprecated]{DEPRECATED:#}")?;
+                writeln!(writer, " {DEPRECATED}[deprecated alias]{DEPRECATED:#}")?;
             } else {
                 writeln!(writer)?;
             }

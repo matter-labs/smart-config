@@ -617,11 +617,11 @@ impl WithOrigin {
                         if options.is_deprecated {
                             tracing::warn!(
                                 path = map.prefix.join(name),
+                                origin = %val.origin,
                                 config = ?config.ty,
                                 param = param.rust_field_name,
-                                canonical_prefix = prefix.0,
-                                canonical_key,
-                                "using deprecated alias"
+                                canonical_path = prefix.join(canonical_key),
+                                "using deprecated alias; please use canonical_path instead"
                             );
                         }
 
