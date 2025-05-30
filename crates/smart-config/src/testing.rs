@@ -362,6 +362,14 @@ impl<C> Tester<'_, C> {
             .set_env(var_name.into(), value.into());
         self
     }
+
+    /// Creates an empty repository based on the tester schema and the deserialization options.
+    pub fn new_repository(&self) -> ConfigRepository<'_> {
+        let data = self.data.as_ref();
+        let mut repo = ConfigRepository::new(&data.schema);
+        *repo.deserializer_options() = data.de_options.clone();
+        repo
+    }
 }
 
 impl<C: DeserializeConfig + VisitConfig> Tester<'_, C> {
@@ -377,9 +385,7 @@ impl<C: DeserializeConfig + VisitConfig> Tester<'_, C> {
     /// See [`test()`] for the examples of usage.
     #[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible
     pub fn test(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
-        let data = self.data.as_ref();
-        let mut repo = ConfigRepository::new(&data.schema);
-        *repo.deserializer_options() = data.de_options.clone();
+        let repo = self.new_repository();
         repo.with(sample).single::<C>().unwrap().parse()
     }
 
@@ -399,10 +405,7 @@ impl<C: DeserializeConfig + VisitConfig> Tester<'_, C> {
     /// See [`test_complete()`] for the examples of usage.
     #[track_caller]
     pub fn test_complete(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
-        let data = self.data.as_ref();
-        let mut repo = ConfigRepository::new(&data.schema);
-        *repo.deserializer_options() = data.de_options.clone();
-        let repo = repo.with(sample);
+        let repo = self.new_repository().with(sample);
 
         let config_ref = repo.single::<C>().unwrap();
         let config_prefix = config_ref.config().prefix();

@@ -6,7 +6,7 @@ use super::{ConfigSource, Hierarchical};
 use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// YAML-based configuration source.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Yaml {
     origin: Arc<ValueOrigin>,
     inner: Map,

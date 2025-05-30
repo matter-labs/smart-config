@@ -110,6 +110,11 @@ impl Environment {
         Ok(Self { origin, map })
     }
 
+    /// Iterates over variables in this container.
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&str, &WithOrigin)> + '_ {
+        self.map.iter().map(|(name, value)| (name.as_str(), value))
+    }
+
     /// Strips a prefix from all contained vars and returns the filtered vars.
     #[must_use]
     pub fn strip_prefix(self, prefix: &str) -> Self {
