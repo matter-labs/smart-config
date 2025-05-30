@@ -268,4 +268,30 @@ mod tests {
         assert_matches!(env.map["test"].origin.as_ref(), ValueOrigin::Path { path, .. } if path == "APP_TEST");
         assert_eq!(env.map["other"].inner.as_plain_str(), Some("test string"));
     }
+
+    #[test]
+    fn converting_flat_params() {
+        let params = serde_json::json!({
+            "value": 23,
+            "flag": true,
+            "nested.option": null,
+            "nested.renamed": "first",
+            "nested.set": ["first", "second"],
+            "nested.map": { "call": 42 },
+        });
+        let params = params.as_object().unwrap();
+
+        let converted = Environment::convert_flat_params(params, "APP_");
+        assert_eq!(
+            serde_json::Value::from(converted),
+            serde_json::json!({
+                "APP_VALUE": 23,
+                "APP_FLAG": true,
+                "APP_NESTED_OPTION": null,
+                "APP_NESTED_RENAMED": "first",
+                "APP_NESTED_SET__JSON": r#"["first","second"]"#,
+                "APP_NESTED_MAP__JSON": r#"{"call":42}"#,
+            })
+        );
+    }
 }

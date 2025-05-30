@@ -147,7 +147,7 @@ mod tests {
     use super::*;
     use crate::{
         metadata::ConfigMetadata,
-        testonly::{DefaultingConfig, EnumConfig, NestedConfig},
+        testonly::{ConfigWithNesting, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum},
         DescribeConfig,
     };
 
@@ -238,6 +238,86 @@ mod tests {
                 ("flag", true.into()),
                 ("set", serde_json::json!([1]))
             ])
+        );
+    }
+
+    #[test]
+    fn serializing_config() {
+        let config = EnumConfig::WithFields {
+            string: Some("test".to_owned()),
+            flag: true,
+            set: [1].into(),
+        };
+        let json = SerializerOptions::default().serialize(&config);
+        assert_eq!(
+            serde_json::Value::from(json),
+            serde_json::json!({
+                "type": "WithFields",
+                "string": "test",
+                "flag": true,
+                "set": [1]
+            })
+        );
+    }
+
+    #[test]
+    fn serializing_nested_config() {
+        let config = ConfigWithNesting {
+            value: 23,
+            merged: String::new(),
+            nested: NestedConfig {
+                simple_enum: SimpleEnum::First,
+                other_int: 42,
+                map: HashMap::new(),
+            },
+        };
+
+        let json = SerializerOptions::default().serialize(&config);
+        assert_eq!(
+            serde_json::Value::from(json),
+            serde_json::json!({
+                "value": 23,
+                "merged": "",
+                "nested": {
+                    "renamed": "first",
+                    "other_int": 42,
+                    "map": {},
+                },
+            })
+        );
+
+        let json = SerializerOptions::diff_with_default().serialize(&config);
+        assert_eq!(
+            serde_json::Value::from(json),
+            serde_json::json!({
+                "value": 23,
+                "nested": {
+                    "renamed": "first",
+                },
+            })
+        );
+
+        let json = SerializerOptions::default().flat(true).serialize(&config);
+        assert_eq!(
+            serde_json::Value::from(json),
+            serde_json::json!({
+                "value": 23,
+                "merged": "",
+                "nested.renamed": "first",
+                "nested.other_int": 42,
+                "nested.map": {},
+            })
+        );
+
+        let json = SerializerOptions::diff_with_default()
+            .flat(true)
+            .serialize(&config);
+        assert_eq!(
+            serde_json::Value::from(json),
+            serde_json::json!({
+                "value": 23,
+                "nested.renamed": "first",
+            })
         );
     }
 }
