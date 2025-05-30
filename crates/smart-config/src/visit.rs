@@ -2,7 +2,7 @@
 
 use std::{any, any::Any, mem};
 
-use crate::{metadata::ConfigMetadata, utils::JsonObject, SerializerOptions};
+use crate::{metadata::ConfigMetadata, utils::JsonObject, value::Pointer, SerializerOptions};
 
 /// Visitor of configuration parameters in a particular configuration.
 #[doc(hidden)] // API is not stable yet
@@ -41,15 +41,22 @@ impl<C: VisitConfig> VisitConfig for Option<C> {
 #[derive(Debug)]
 pub(crate) struct Serializer {
     metadata: &'static ConfigMetadata,
+    // Only filled when serializing into a flat object.
+    current_prefix: Option<String>,
     json: JsonObject,
     options: SerializerOptions,
 }
 
 impl Serializer {
     /// Creates a serializer dynamically.
-    pub(crate) fn new(metadata: &'static ConfigMetadata, options: SerializerOptions) -> Self {
+    pub(crate) fn new(
+        metadata: &'static ConfigMetadata,
+        prefix: &str,
+        options: SerializerOptions,
+    ) -> Self {
         Self {
             metadata,
+            current_prefix: options.flat.then(|| prefix.to_owned()),
             json: serde_json::Map::new(),
             options,
         }
@@ -58,6 +65,15 @@ impl Serializer {
     /// Unwraps the contained JSON model.
     pub(crate) fn into_inner(self) -> JsonObject {
         self.json
+    }
+
+    fn insert(&mut self, param_name: &str, value: serde_json::Value) {
+        let key = if let Some(prefix) = &self.current_prefix {
+            Pointer(prefix).join(param_name)
+        } else {
+            param_name.to_owned()
+        };
+        self.json.insert(key, value);
     }
 }
 
@@ -71,8 +87,7 @@ impl ConfigVisitor for Serializer {
                 .default_variant
                 .is_some_and(|default_variant| default_variant.rust_name == tag_variant.rust_name);
         if should_insert {
-            self.json
-                .insert(tag.param.name.to_owned(), tag_variant.name.into());
+            self.insert(tag.param.name, tag_variant.name.into());
         }
     }
 
@@ -94,7 +109,7 @@ impl ConfigVisitor for Serializer {
             ) {
                 value = placeholder.clone().into();
             }
-            self.json.insert(param.name.to_owned(), value);
+            self.insert(param.name, value);
         }
     }
 
@@ -104,6 +119,11 @@ impl ConfigVisitor for Serializer {
 
         if nested_metadata.name.is_empty() {
             config.visit_config(self);
+        } else if let Some(prefix) = &mut self.current_prefix {
+            let new_prefix = Pointer(prefix).join(nested_metadata.name);
+            let prev_prefix = mem::replace(prefix, new_prefix);
+            config.visit_config(self);
+            self.current_prefix = Some(prev_prefix);
         } else {
             let mut prev_json = mem::take(&mut self.json);
             config.visit_config(self);

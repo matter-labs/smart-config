@@ -301,6 +301,7 @@ enum Cli {
 enum SerializationFormat {
     Json,
     Yaml,
+    Env,
 }
 
 const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
@@ -339,11 +340,13 @@ fn main() {
             diff,
             format,
         } => {
-            let options = if diff {
+            let mut options = if diff {
                 SerializerOptions::diff_with_default()
             } else {
                 SerializerOptions::default()
             };
+            options = options.flat(matches!(format, SerializationFormat::Env));
+
             let (json, original_config) = if example {
                 let example_config = TestConfig::example_config();
                 let json = options.serialize(&example_config);
@@ -377,6 +380,21 @@ fn main() {
                     let deserialized = serde_yaml::from_slice(&buffer).unwrap();
                     let source = Yaml::new("deserialized.yaml", deserialized).unwrap();
                     ConfigRepository::new(&schema).with(source)
+                }
+                SerializationFormat::Env => {
+                    let env =
+                        Environment::convert_flat_params(json.as_object().unwrap(), "APP_").into();
+                    Printer::stderr().print_yaml(&env).unwrap();
+                    let env = env.as_object().unwrap().iter().map(|(name, value)| {
+                        let value = match value {
+                            serde_json::Value::String(s) => s.clone(),
+                            _ => value.to_string(),
+                        };
+                        (name.as_str(), value)
+                    });
+                    let mut env = Environment::from_iter("APP_", env);
+                    env.coerce_json().unwrap();
+                    ConfigRepository::new(&schema).with(env)
                 }
             };
             let restored_config: TestConfig = restored_repo.single().unwrap().parse().unwrap();

@@ -15,7 +15,6 @@ use crate::{
     schema::{ConfigRef, ConfigSchema},
     utils::{merge_json, EnumVariant, JsonObject},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
-    visit,
     visit::Serializer,
     DescribeConfig, DeserializeConfig, DeserializeConfigError, ParseError, ParseErrors,
 };
@@ -132,6 +131,7 @@ pub struct SourceInfo {
 pub struct SerializerOptions {
     pub(crate) diff_with_default: bool,
     pub(crate) secret_placeholder: Option<String>,
+    pub(crate) flat: bool,
 }
 
 impl SerializerOptions {
@@ -140,7 +140,15 @@ impl SerializerOptions {
         Self {
             diff_with_default: true,
             secret_placeholder: None,
+            flat: false,
         }
+    }
+
+    /// FIXME
+    #[must_use]
+    pub fn flat(mut self, flat: bool) -> Self {
+        self.flat = flat;
+        self
     }
 
     /// Sets the placeholder string value for secret params. By default, secrets will be output as-is.
@@ -152,7 +160,7 @@ impl SerializerOptions {
 
     /// Serializes a config to JSON, recursively visiting its nested configs.
     pub fn serialize<C: DescribeConfig>(self, config: &C) -> JsonObject {
-        let mut visitor = Serializer::new(&C::DESCRIPTION, self);
+        let mut visitor = Serializer::new(&C::DESCRIPTION, "", self);
         config.visit_config(&mut visitor);
         visitor.into_inner()
     }
@@ -349,16 +357,18 @@ impl<'a> ConfigRepository<'a> {
                     return Err(err);
                 }
             };
+
             let metadata = config_parser.config().metadata();
-            let visitor_fn = metadata.visitor;
-            let mut visitor = visit::Serializer::new(metadata, options.clone());
-            visitor_fn(parsed.as_ref(), &mut visitor);
-            merge_json(
-                &mut json,
-                metadata,
-                config_parser.config().prefix(),
-                visitor.into_inner(),
-            );
+            let prefix = config_parser.config().prefix();
+            let mut visitor = Serializer::new(metadata, prefix, options.clone());
+            (metadata.visitor)(parsed.as_ref(), &mut visitor);
+            let serialized = visitor.into_inner();
+
+            if options.flat {
+                json.extend(serialized);
+            } else {
+                merge_json(&mut json, metadata, prefix, serialized);
+            }
         }
         Ok(json)
     }

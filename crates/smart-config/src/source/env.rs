@@ -5,6 +5,7 @@ use anyhow::Context as _;
 use super::{ConfigSource, Flat};
 use crate::{
     testing::MOCK_ENV_VARS,
+    utils::JsonObject,
     value::{FileFormat, Map, Value, ValueOrigin, WithOrigin},
     Json,
 };
@@ -179,6 +180,23 @@ impl Environment {
         } else {
             Err(JsonCoercionErrors(errors).into())
         }
+    }
+
+    #[doc(hidden)] // not stable yet
+    pub fn convert_flat_params(flat_params: &JsonObject, prefix: &str) -> JsonObject {
+        let vars = flat_params.iter().map(|(path, value)| {
+            let mut var_name = path.replace('.', "_").to_uppercase();
+            var_name.insert_str(0, prefix);
+            let value: serde_json::Value = match value {
+                serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                    var_name.push_str("__JSON");
+                    value.to_string().into()
+                }
+                simple => simple.clone(),
+            };
+            (var_name, value)
+        });
+        vars.collect()
     }
 }
 
