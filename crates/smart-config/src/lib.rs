@@ -210,6 +210,13 @@
 /// Have the same meaning as in `serde`; i.e. allow to rename / specify additional names for the param or a nested config.
 /// Names are [validated](#validations) in compile time.
 ///
+/// ## `deprecated`
+///
+/// **Type:** string
+///
+/// Similar to `alias`, with the difference that the alias is marked as deprecated in the schema docs,
+/// and its usages are logged on the `WARN` level.
+///
 /// ## `default`
 ///
 /// **Type:** path to function (optional)

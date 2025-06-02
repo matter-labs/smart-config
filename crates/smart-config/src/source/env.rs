@@ -182,7 +182,15 @@ impl Environment {
         }
     }
 
-    #[doc(hidden)] // not stable yet
+    /// Converts a [flat configuration object](crate::SerializerOptions::flat()) into a flat object
+    /// usable as the env var specification for Docker Compose etc. It uppercases and prefixes param names,
+    /// replacing `.`s with `_`s, and replaces object / JSON params with strings so that they can be parsed
+    /// via [JSON coercion](Self::coerce_json()).
+    ///
+    /// # Important
+    ///
+    /// Beware that additional transforms may be required depending on the use case. E.g., Docker Compose
+    /// requires to escape Boolean values and nulls to strings.
     pub fn convert_flat_params(flat_params: &JsonObject, prefix: &str) -> JsonObject {
         let vars = flat_params.iter().map(|(path, value)| {
             let mut var_name = path.replace('.', "_").to_uppercase();

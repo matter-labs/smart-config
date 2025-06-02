@@ -91,7 +91,7 @@ pub struct ConfigVariant {
     /// Canonical param name in the config sources. Not necessarily the Rust name!
     pub name: &'static str,
     /// Param aliases.
-    pub aliases: &'static [&'static str], // FIXME: also support deprecated?
+    pub aliases: &'static [&'static str],
     /// Name of the corresponding enum variant in Rust code.
     pub rust_name: &'static str,
     /// Human-readable param help parsed from the doc comment.

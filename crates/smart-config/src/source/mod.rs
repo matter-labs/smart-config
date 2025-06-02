@@ -144,7 +144,13 @@ impl SerializerOptions {
         }
     }
 
-    /// FIXME
+    /// Use flat config structure, as opposed to the default hierarchical one.
+    ///
+    /// In the flat structure, all params are placed in a single JSON object with full dot-separated param paths
+    /// (e.g., `api.http.port`) used as keys. Because param serializations can still be objects or arrays,
+    /// the produced object may not be completely flat.
+    ///
+    /// Use
     #[must_use]
     pub fn flat(mut self, flat: bool) -> Self {
         self.flat = flat;
