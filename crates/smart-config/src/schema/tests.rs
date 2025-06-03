@@ -5,7 +5,7 @@ use assert_matches::assert_matches;
 use super::*;
 use crate::{
     metadata::BasicTypes,
-    testonly::{AliasedConfig, NestedAliasedConfig},
+    testonly::{AliasedConfig, NestedAliasedConfig, NestedConfig},
     value::{StrValue, Value},
     ConfigRepository, DescribeConfig, DeserializeConfig, Environment,
 };
@@ -471,4 +471,26 @@ fn aliasing_does_not_change_config_depth() {
         schema.configs["test.nested"].by_depth,
         expected_nested_index_by_depth
     );
+}
+
+#[test]
+fn config_cannot_be_nested_to_path_alias() {
+    let mut schema = ConfigSchema::default();
+    schema.insert(&NestedConfig::DESCRIPTION, "test").unwrap();
+
+    let err = schema
+        .insert(&NestedConfig::DESCRIPTION, "test.experimental.enum")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Cannot mount config"), "{err}");
+    assert!(err.contains("at `test.experimental.enum`"), "{err}");
+    assert!(err.contains("parameter(s) are already mounted"), "{err}");
+
+    let err = schema
+        .insert(&NestedConfig::DESCRIPTION, "top.enum")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Cannot mount config"), "{err}");
+    assert!(err.contains("at `top.enum`"), "{err}");
+    assert!(err.contains("parameter(s) are already mounted"), "{err}");
 }

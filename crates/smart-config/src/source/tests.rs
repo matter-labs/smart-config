@@ -1737,3 +1737,43 @@ fn working_with_embedded_params() {
     assert_eq!(config.size, 10 * SizeUnit::MiB);
     assert_eq!(config.size_overrides, 20 * SizeUnit::MiB);
 }
+
+#[test]
+fn resolving_path_aliases() {
+    let mut schema = ConfigSchema::new(&NestedConfig::DESCRIPTION, "test");
+
+    let env = Environment::from_iter("", [("TEST_EXPERIMENTAL_ENUM", "first")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: NestedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.simple_enum, SimpleEnum::First);
+
+    let json = config!("test.experimental.enum": "second");
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: NestedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.simple_enum, SimpleEnum::Second);
+
+    let env = Environment::from_iter("", [("TOP_ENUM", "first")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: NestedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.simple_enum, SimpleEnum::First);
+
+    schema
+        .single_mut(&NestedConfig::DESCRIPTION)
+        .unwrap()
+        .push_alias("alias")
+        .unwrap()
+        .push_deprecated_alias("")
+        .unwrap();
+
+    for var_name in [
+        "ALIAS_RENAMED",
+        "ALIAS_ENUM",
+        "ALIAS_EXPERIMENTAL_ENUM",
+        "TOP_ENUM",
+    ] {
+        let env = Environment::from_iter("", [(var_name, "first")]);
+        let repo = ConfigRepository::new(&schema).with(env);
+        let config: NestedConfig = repo.single().unwrap().parse().unwrap();
+        assert_eq!(config.simple_enum, SimpleEnum::First);
+    }
+}
