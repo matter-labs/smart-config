@@ -9,7 +9,7 @@ use secrecy::ExposeSecret;
 
 use super::*;
 use crate::{
-    metadata::SizeUnit,
+    metadata::{AliasOptions, SizeUnit},
     testing,
     testing::MockEnvGuard,
     testonly::{
@@ -1776,4 +1776,58 @@ fn resolving_path_aliases() {
         let config: NestedConfig = repo.single().unwrap().parse().unwrap();
         assert_eq!(config.simple_enum, SimpleEnum::First);
     }
+}
+
+#[test]
+fn resolving_path_aliases_for_configs() {
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    struct ConfigWithPathAlias {
+        #[config(nest, alias = ".obsolete.nested", deprecated = "..nested")]
+        nested: NestedConfig,
+    }
+
+    let schema = ConfigSchema::new(&ConfigWithPathAlias::DESCRIPTION, "test");
+    let aliases: Vec<_> = schema
+        .single(&NestedConfig::DESCRIPTION)
+        .unwrap()
+        .aliases()
+        .collect();
+    assert_eq!(
+        aliases,
+        [
+            ("test.obsolete.nested", AliasOptions::new()),
+            ("nested", AliasOptions::new().deprecated()),
+        ]
+    );
+
+    let json = config!("test.obsolete.nested.enum": "first", "nested.other_int": 5);
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithPathAlias = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 5);
+
+    let mut env = Environment::from_iter(
+        "",
+        [
+            ("TEST_OBSOLETE_NESTED_RENAMED", "second"),
+            ("NESTED_MAP__JSON", r#"{"call": 10}"#),
+        ],
+    );
+    env.coerce_json().unwrap();
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: ConfigWithPathAlias = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
+    assert_eq!(config.nested.map, HashMap::from([("call".to_owned(), 10)]));
+
+    // Path aliases for configs and params should combine.
+    let json = config!("test.obsolete.top.enum": "first");
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithPathAlias = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+
+    let env = Environment::from_iter("", [("TEST_OBSOLETE_NESTED_EXPERIMENTAL_ENUM", "second")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: ConfigWithPathAlias = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
 }
