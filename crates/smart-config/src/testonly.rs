@@ -72,7 +72,8 @@ pub(crate) struct ValueCoercingConfig {
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(crate = crate)]
 pub(crate) struct NestedConfig {
-    #[config(rename = "renamed", alias = "enum", example = SimpleEnum::First)]
+    #[config(example = SimpleEnum::First)]
+    #[config(rename = "renamed", alias = "enum", deprecated = ".experimental.enum")]
     pub simple_enum: SimpleEnum,
     #[config(default_t = 42)]
     pub other_int: u32,
