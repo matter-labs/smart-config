@@ -552,7 +552,7 @@ impl WithOrigin {
 
         for param in config.metadata.params {
             // Create a prioritized iterator of all candidate paths
-            let all_paths = ConfigSchema::all_names(param, config);
+            let all_paths = config.all_paths_for_param(param);
 
             for (path, alias_options) in all_paths {
                 let (prefix, name) = Pointer(&path)
