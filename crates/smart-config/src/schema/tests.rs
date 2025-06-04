@@ -5,7 +5,7 @@ use assert_matches::assert_matches;
 use super::*;
 use crate::{
     metadata::BasicTypes,
-    testonly::{AliasedConfig, NestedAliasedConfig, NestedConfig},
+    testonly::{AliasedConfig, EnumConfig, NestedAliasedConfig, NestedConfig},
     value::{StrValue, Value},
     ConfigRepository, DescribeConfig, DeserializeConfig, Environment,
 };
@@ -493,4 +493,37 @@ fn config_cannot_be_nested_to_path_alias() {
     assert!(err.contains("Cannot mount config"), "{err}");
     assert!(err.contains("at `top.enum`"), "{err}");
     assert!(err.contains("parameter(s) are already mounted"), "{err}");
+}
+
+#[test]
+fn path_aliases_with_enum_coercion() {
+    let mut schema = ConfigSchema::default();
+    schema
+        .coerce_serde_enums(true)
+        .insert(&EnumConfig::DESCRIPTION, "")
+        .unwrap();
+
+    let config_ref = schema.single(&EnumConfig::DESCRIPTION).unwrap();
+    let str_param = EnumConfig::DESCRIPTION
+        .params
+        .iter()
+        .find(|param| param.name == "string")
+        .unwrap();
+    let str_paths: Vec<_> = config_ref
+        .all_paths_for_param(str_param)
+        .map(|(name, _)| name)
+        .collect();
+    assert_eq!(
+        str_paths,
+        [
+            "string",
+            "str",
+            "with_fields.string",
+            "with_fields.str",
+            "fields.string",
+            "fields.str",
+            "with.string",
+            "with.str"
+        ]
+    );
 }

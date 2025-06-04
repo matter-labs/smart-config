@@ -1925,3 +1925,57 @@ fn deserializing_optional_config() {
         .unwrap_err();
     assert_eq!(err.len(), 2);
 }
+
+#[test]
+fn coercing_enum_with_suffixes() {
+    #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate, tag = "version")]
+    enum TestConfig {
+        V1 {
+            timeout: Duration,
+        },
+        V2 {
+            size: ByteSize,
+            #[config(nest)]
+            nested: NestedConfig,
+        },
+    }
+
+    let mut schema = ConfigSchema::default();
+    schema
+        .coerce_serde_enums(true)
+        .insert(&TestConfig::DESCRIPTION, "test")
+        .unwrap();
+    let mut tester = testing::Tester::new(schema);
+    let tester = tester.for_config::<TestConfig>();
+
+    let env = Environment::from_iter("", [("TEST_V1_TIMEOUT_MS", "100")]);
+    let config = tester.test_complete(env).unwrap();
+    assert_eq!(
+        config,
+        TestConfig::V1 {
+            timeout: Duration::from_millis(100)
+        }
+    );
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_V2_SIZE_IN_MB", "128"),
+            ("TEST_V2_NESTED_RENAMED", "second"),
+            ("TEST_V2_NESTED_OTHER_INT", "23"),
+        ],
+    );
+    let config = tester.test(env).unwrap();
+    assert_eq!(
+        config,
+        TestConfig::V2 {
+            size: 128 * SizeUnit::MiB,
+            nested: NestedConfig {
+                simple_enum: SimpleEnum::Second,
+                other_int: 23,
+                map: HashMap::new(),
+            },
+        }
+    );
+}
