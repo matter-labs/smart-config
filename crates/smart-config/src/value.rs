@@ -272,13 +272,6 @@ impl Value {
             _ => None,
         }
     }
-
-    pub(crate) fn as_object_mut(&mut self) -> Option<&mut Map> {
-        match self {
-            Self::Object(map) => Some(map),
-            _ => None,
-        }
-    }
 }
 
 /// JSON object.

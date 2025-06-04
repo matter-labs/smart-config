@@ -11,7 +11,8 @@ use anyhow::Context;
 
 use self::mount::{MountingPoint, MountingPoints};
 use crate::{
-    metadata::{AliasOptions, BasicTypes, ConfigMetadata, ParamMetadata},
+    metadata::{AliasOptions, BasicTypes, ConfigMetadata, ConfigVariant, ParamMetadata},
+    utils::EnumVariant,
     value::Pointer,
 };
 
@@ -23,6 +24,7 @@ mod tests;
 pub(crate) struct ConfigData {
     pub(crate) metadata: &'static ConfigMetadata,
     pub(crate) is_top_level: bool,
+    pub(crate) coerce_serde_enums: bool,
     all_paths: Vec<(Cow<'static, str>, AliasOptions)>,
 }
 
@@ -42,15 +44,51 @@ impl ConfigData {
         &self,
         param: &'static ParamMetadata,
     ) -> impl Iterator<Item = (String, AliasOptions)> + '_ {
+        self.all_paths_for_child(param.name, param.aliases, param.tag_variant)
+    }
+
+    fn all_paths_for_child(
+        &self,
+        name: &'static str,
+        aliases: &'static [(&'static str, AliasOptions)],
+        tag_variant: Option<&'static ConfigVariant>,
+    ) -> impl Iterator<Item = (String, AliasOptions)> + '_ {
         let local_names =
-            iter::once((param.name, AliasOptions::default())).chain(param.aliases.iter().copied());
+            iter::once((name, AliasOptions::default())).chain(aliases.iter().copied());
+
+        let enum_names = if let (true, Some(variant)) = (self.coerce_serde_enums, tag_variant) {
+            let variant_names = iter::once(variant.name)
+                .chain(variant.aliases.iter().copied())
+                .filter_map(|name| Some(EnumVariant::new(name)?.to_snake_case()));
+            let local_names_ = local_names.clone();
+            let paths = variant_names.flat_map(move |variant_name| {
+                local_names_
+                    .clone()
+                    .filter_map(move |(name_or_path, options)| {
+                        if name_or_path.starts_with('.') {
+                            // Only consider simple aliases, not path ones.
+                            return None;
+                        }
+                        let full_path = Pointer(&variant_name).join(name_or_path);
+                        Some((Cow::Owned(full_path), options))
+                    })
+            });
+            Some(paths)
+        } else {
+            None
+        };
+        let enum_names = enum_names.into_iter().flatten();
+        let local_names = local_names
+            .map(|(name, options)| (Cow::Borrowed(name), options))
+            .chain(enum_names);
+
         self.all_paths
             .iter()
             .flat_map(move |(alias, config_options)| {
                 local_names
                     .clone()
                     .filter_map(move |(name_or_path, options)| {
-                        let full_path = Pointer(alias).join_path(Pointer(name_or_path))?;
+                        let full_path = Pointer(alias).join_path(Pointer(&name_or_path))?;
                         Some((full_path, options.combine(*config_options)))
                     })
             })
@@ -181,6 +219,7 @@ pub struct ConfigSchema {
     // sorted, and makes it easy to query prefix ranges, but these properties aren't used for now.
     configs: BTreeMap<Cow<'static, str>, ConfigsForPrefix>,
     mounting_points: MountingPoints,
+    coerce_serde_enums: bool,
 }
 
 impl ConfigSchema {
@@ -191,6 +230,12 @@ impl ConfigSchema {
         this.insert(metadata, prefix)
             .expect("internal error: failed inserting first config to the schema");
         this
+    }
+
+    /// Switches coercing for serde-like enums. This will add path aliases for all params in enum configs.
+    pub fn coerce_serde_enums(&mut self, coerce: bool) -> &mut Self {
+        self.coerce_serde_enums = coerce;
+        self
     }
 
     /// Iterates over all configs with their canonical prefixes.
@@ -353,8 +398,9 @@ impl ConfigSchema {
         metadata: &'static ConfigMetadata,
         prefix: &'static str,
     ) -> anyhow::Result<ConfigMut<'_>> {
+        let coerce_serde_enums = self.coerce_serde_enums;
         let mut patched = PatchedSchema::new(self);
-        patched.insert_config(prefix, metadata)?;
+        patched.insert_config(prefix, metadata, coerce_serde_enums)?;
         patched.commit();
         Ok(ConfigMut {
             schema: self,
@@ -391,6 +437,7 @@ impl<'a> PatchedSchema<'a> {
         &mut self,
         prefix: &'static str,
         metadata: &'static ConfigMetadata,
+        coerce_serde_enums: bool,
     ) -> anyhow::Result<()> {
         self.insert_recursively(
             prefix.into(),
@@ -398,6 +445,7 @@ impl<'a> PatchedSchema<'a> {
             ConfigData {
                 metadata,
                 is_top_level: true,
+                coerce_serde_enums,
                 all_paths: vec![(prefix.into(), AliasOptions::new())],
             },
         )
@@ -452,6 +500,7 @@ impl<'a> PatchedSchema<'a> {
             ConfigData {
                 metadata,
                 is_top_level: config_data.is_top_level,
+                coerce_serde_enums: config_data.coerce_serde_enums,
                 all_paths: vec![(alias.0.into(), options)],
             },
         )
@@ -461,26 +510,18 @@ impl<'a> PatchedSchema<'a> {
         prefix: Pointer<'i>,
         data: &'i ConfigData,
     ) -> impl Iterator<Item = (String, ConfigData)> + 'i {
-        let all_prefixes = data
-            .all_paths
-            .iter()
-            .map(|(alias, options)| (Pointer(alias), *options));
         data.metadata.nested_configs.iter().map(move |nested| {
-            let local_names = iter::once((nested.name, AliasOptions::new()))
-                .chain(nested.aliases.iter().copied());
-            let all_paths = all_prefixes.clone().flat_map(|(prefix, prefix_options)| {
-                local_names
-                    .clone()
-                    .filter_map(move |(name_or_path, options)| {
-                        let full_path = prefix.join_path(Pointer(name_or_path))?;
-                        Some((full_path.into(), options.combine(prefix_options)))
-                    })
-            });
+            let all_paths =
+                data.all_paths_for_child(nested.name, nested.aliases, nested.tag_variant);
+            let all_paths = all_paths
+                .map(|(path, options)| (Cow::Owned(path), options))
+                .collect();
 
             let config_data = ConfigData {
                 metadata: nested.meta,
                 is_top_level: false,
-                all_paths: all_paths.collect(),
+                coerce_serde_enums: data.coerce_serde_enums,
+                all_paths,
             };
             (prefix.join(nested.name), config_data)
         })

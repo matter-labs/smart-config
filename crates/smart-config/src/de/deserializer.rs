@@ -22,52 +22,6 @@ use crate::{
 pub struct DeserializerOptions {
     /// Enables coercion of variant names between cases, e.g. from `SHOUTING_CASE` to `shouting_case`.
     pub coerce_variant_names: bool,
-    /// Enables coercion of serde-like enums to canonical internally tagged representation.
-    ///
-    /// A serde-style enum is encoded as an object with a single field named after one of variants
-    /// (incl. aliases) converted to `snake_case`. Coercing is not performed if the tag param is present,
-    /// if there are multiple variant-named fields, or if the variant field value is not an object.
-    /// As a result of coercing, a tag param is added with the appropriate value, and fields in the variant field
-    /// are copied one level upper; they have lower priority than existing fields and never overwrite them.
-    ///
-    /// # Examples
-    ///
-    /// For example, consider an enum config
-    ///
-    /// ```
-    /// use smart_config::{DescribeConfig, DeserializeConfig};
-    /// #[derive(Debug, DescribeConfig, DeserializeConfig)]
-    /// #[config(tag = "type")]
-    /// pub enum TestConfig {
-    ///     String { str: String },
-    ///     IntValue { int: u64 },
-    /// }
-    /// ```
-    ///
-    /// ...mounted at `test`. Then, example serde-style serialization are:
-    ///
-    /// ```yaml
-    /// test:
-    ///   string:
-    ///     str: 'what?'
-    /// ---
-    /// test:
-    ///   int_value:
-    ///     int: 42
-    /// ```
-    ///
-    /// After coercion, these will be transformed to
-    ///
-    /// ```yaml
-    /// test:
-    ///   type: String
-    ///   str: 'what?'
-    /// ---
-    /// test:
-    ///   type: IntValue
-    ///   int: 42
-    /// ```
-    pub coerce_serde_enums: bool,
 }
 
 impl WithOrigin {

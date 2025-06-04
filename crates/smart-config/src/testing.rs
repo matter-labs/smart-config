@@ -423,12 +423,6 @@ impl<C> Tester<'_, C> {
         self
     }
 
-    /// Enables coercion of serde-style enums.
-    pub fn coerce_serde_enums(&mut self) -> &mut Self {
-        self.data.as_mut().de_options.coerce_serde_enums = true;
-        self
-    }
-
     /// Sets mock environment variables that will be recognized by [`Environment`](crate::Environment)
     /// and [`Env`](crate::fallback::Env) fallbacks.
     ///
