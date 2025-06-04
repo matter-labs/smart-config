@@ -1505,13 +1505,8 @@ fn config_canonicalization_with_nesting() {
 
 #[test]
 fn coercing_serde_enum() {
-    let mut schema = ConfigSchema::default();
-    schema
-        .coerce_serde_enums(true)
-        .insert(&EnumConfig::DESCRIPTION, "")
-        .unwrap();
-    let mut tester = testing::Tester::new(schema);
-    let tester = tester.for_config::<EnumConfig>();
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<EnumConfig>("");
 
     let json = config!("fields.string": "!", "fields.flag": false, "fields.set": [123]);
     let config = tester.test(json).unwrap();
@@ -1549,13 +1544,8 @@ fn coercing_serde_enum() {
 
 #[test]
 fn coercing_serde_enum_with_aliased_field() {
-    let mut schema = ConfigSchema::default();
-    schema
-        .coerce_serde_enums(true)
-        .insert(&EnumConfig::DESCRIPTION, "")
-        .unwrap();
-    let mut tester = testing::Tester::new(schema);
-    let tester = tester.for_config::<EnumConfig>();
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<EnumConfig>("");
 
     let json = config!("fields.str": "?", "fields.flag": false);
     let config: EnumConfig = tester.test(json).unwrap();
@@ -1598,13 +1588,8 @@ fn origins_for_coerced_serde_enum() {
 
 #[test]
 fn coercing_serde_enum_negative_cases() {
-    let mut schema = ConfigSchema::default();
-    schema
-        .coerce_serde_enums(true)
-        .insert(&EnumConfig::DESCRIPTION, "")
-        .unwrap();
-    let mut tester = testing::Tester::new(schema);
-    let tester = tester.for_config::<EnumConfig>();
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<EnumConfig>("");
 
     // Multiple variant fields present
     let json = config!("fields.string": "!", "nested.renamed": "first");
@@ -1627,13 +1612,8 @@ fn coercing_serde_enum_negative_cases() {
 
 #[test]
 fn coercing_nested_enum_config() {
-    let mut schema = ConfigSchema::default();
-    schema
-        .coerce_serde_enums(true)
-        .insert(&RenamedEnumConfig::DESCRIPTION, "")
-        .unwrap();
-    let mut tester = testing::Tester::new(schema);
-    let tester = tester.for_config::<RenamedEnumConfig>();
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<RenamedEnumConfig>("");
 
     let json = config!("next.nested.renamed": "second");
     let config = tester.test(json).unwrap();
@@ -1656,13 +1636,10 @@ fn coercing_aliased_enum_config() {
         val: EnumConfig,
     }
 
-    let mut schema = ConfigSchema::default();
-    schema
-        .coerce_serde_enums(true)
-        .insert(&ConfigWithNestedEnum::DESCRIPTION, "")
-        .unwrap();
-    let mut tester = testing::Tester::new(schema);
-    let tester = tester.for_config::<ConfigWithNestedEnum>();
+    let mut tester = testing::Tester::default();
+    let tester = tester
+        .coerce_serde_enums()
+        .insert::<ConfigWithNestedEnum>("");
 
     // Base case: no aliasing.
     let json = config!("val.with_fields.str": "what");
@@ -1941,13 +1918,8 @@ fn coercing_enum_with_suffixes() {
         },
     }
 
-    let mut schema = ConfigSchema::default();
-    schema
-        .coerce_serde_enums(true)
-        .insert(&TestConfig::DESCRIPTION, "test")
-        .unwrap();
-    let mut tester = testing::Tester::new(schema);
-    let tester = tester.for_config::<TestConfig>();
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<TestConfig>("test");
 
     let env = Environment::from_iter("", [("TEST_V1_TIMEOUT_MS", "100")]);
     let config = tester.test_complete(env).unwrap();
