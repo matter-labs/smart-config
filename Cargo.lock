@@ -752,6 +752,7 @@ version = "0.2.0-pre"
 dependencies = [
  "anstream",
  "anstyle",
+ "anyhow",
  "clap",
  "doc-comment",
  "primitive-types",
