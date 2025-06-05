@@ -365,9 +365,10 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
 /// There are the following was to avoid this issue:
 ///
 /// - [JSON coercion](crate::Environment::coerce_json()) can be used to pass unambiguous JSON values (incl. `null`).
-/// - FIXME: filtering
 /// - If the original deserializer doesn't expect string values, an empty string or `"null"` will be coerced
 ///   to a null.
+/// - [`filter` attribute](macro@crate::DescribeConfig#filter) can help filtering out empty strings etc. for types
+///   that do expect string values.
 #[derive(Debug)]
 pub struct Optional<De>(pub De);
 

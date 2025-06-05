@@ -1,10 +1,12 @@
-//! Parameter and config validation.
+//! Parameter and config validation and filtering.
 //!
 //! # Overview
 //!
 //! The core validation functionality is encapsulated in the [`Validate`] trait.
 //!
 //! # Examples
+//!
+//! ## Validation
 //!
 //! ```
 //! use secrecy::{ExposeSecret, SecretString};
@@ -49,6 +51,48 @@
 //!         Ok(())
 //!     }
 //! }
+//! ```
+//!
+//! ## Filtering
+//!
+//! Filtering reuses the `Validate` trait, but rather than failing, converts a value to `None`.
+//!
+//! ```
+//! use smart_config::validation;
+//! # use smart_config::{testing, DescribeConfig, DeserializeConfig, ErrorWithOrigin};
+//!
+//! #[derive(DescribeConfig, DeserializeConfig)]
+//! struct FilteringConfig {
+//!     /// Will convert `url: ''` to `None`.
+//!     #[config(filter(validation::NotEmpty))]
+//!     url: Option<String>,
+//!     /// Will convert either of `env: ''` or `env: 'unset'` to `None`.
+//!     #[config(filter(env_filter, "not empty or 'unset'"))]
+//!     env: Option<String>,
+//! }
+//!
+//! fn env_filter(s: &String) -> bool {
+//!     !s.is_empty() && s != "unset"
+//! }
+//!
+//! // Base case: no filtering.
+//! let env = smart_config::Environment::from_iter("", [
+//!     ("URL", "https://example.com"),
+//!     ("ENV", "prod"),
+//! ]);
+//! let config: FilteringConfig = testing::test_complete(env)?;
+//! assert_eq!(config.url.unwrap(), "https://example.com");
+//! assert_eq!(config.env.unwrap(), "prod");
+//!
+//! // Filtering applied to both params.
+//! let env = smart_config::Environment::from_iter("", [
+//!     ("URL", ""),
+//!     ("ENV", "unset"),
+//! ]);
+//! let config: FilteringConfig = testing::test_complete(env)?;
+//! assert_eq!(config.url, None);
+//! assert_eq!(config.env, None);
+//! # anyhow::Ok(())
 //! ```
 
 use std::{

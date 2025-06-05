@@ -22,7 +22,7 @@ pub trait ConfigVisitor {
 
 /// Configuration that can be visited (e.g., to inspect its parameters in a generic way).
 ///
-/// This is a supertrait for [`DescribeConfig`] that is automatically derived
+/// This is a supertrait for [`DescribeConfig`](trait@crate::DescribeConfig) that is automatically derived
 /// via [`derive(DescribeConfig)`](macro@crate::DescribeConfig).
 pub trait VisitConfig {
     /// Performs the visit.

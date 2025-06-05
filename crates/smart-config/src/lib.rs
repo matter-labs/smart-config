@@ -265,6 +265,14 @@
 ///
 /// Has same semantics as [config validations](#validate), but applies to a specific config parameter.
 ///
+/// ## `filter`
+///
+/// **Type:** same as [config validations](#validate)
+///
+/// Filters an `Option`al value. This is useful to coerce semantically invalid values (e.g., empty strings for URLs)
+/// to `None` in the case [automated null coercion](crate::de::Optional#encoding-nulls) doesn't apply.
+/// See the [`validation`] module for examples of usage.
+///
 /// # Validations
 ///
 /// The following validations are performed by the macro in compile time:
