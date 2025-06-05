@@ -50,7 +50,7 @@ Add this to your `Crate.toml`:
 
 ```toml
 [dependencies]
-smart-config = "0.1.0"
+smart-config = "0.1.0-pre"
 ```
 
 ### Declaring configurations
