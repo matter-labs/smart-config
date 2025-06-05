@@ -169,9 +169,9 @@ struct CompletenessChecker<'a> {
 }
 
 impl<'a> CompletenessChecker<'a> {
-    fn new(sample: &'a WithOrigin, config: &'static ConfigMetadata) -> Self {
+    fn new(sample: &'a WithOrigin, config: &'static ConfigMetadata, config_prefix: &str) -> Self {
         Self {
-            current_path: String::new(),
+            current_path: config_prefix.to_owned(),
             sample,
             config,
             missing_params: HashMap::new(),
@@ -216,36 +216,138 @@ impl ConfigVisitor for CompletenessChecker<'_> {
     }
 }
 
-/// Test case builder that allows configuring deserialization options etc.
 #[derive(Debug)]
-pub struct Tester<C> {
+struct TesterData {
     de_options: DeserializerOptions,
     schema: ConfigSchema,
     env_guard: MockEnvGuard,
+}
+
+#[derive(Debug)]
+enum TesterDataGoat<'a> {
+    Owned(TesterData),
+    Borrowed(&'a mut TesterData),
+}
+
+impl AsRef<TesterData> for TesterDataGoat<'_> {
+    fn as_ref(&self) -> &TesterData {
+        match self {
+            Self::Owned(data) => data,
+            Self::Borrowed(data) => data,
+        }
+    }
+}
+
+impl AsMut<TesterData> for TesterDataGoat<'_> {
+    fn as_mut(&mut self) -> &mut TesterData {
+        match self {
+            Self::Owned(data) => data,
+            Self::Borrowed(data) => data,
+        }
+    }
+}
+
+/// Test case builder that allows configuring deserialization options etc.
+///
+/// Compared to [`test()`] / [`test_complete()`] methods, `Tester` has more control over deserialization options.
+/// It also allows to test a [`ConfigSchema`] with multiple configs.
+///
+/// # Examples
+///
+/// ```
+/// use smart_config::{testing::Tester, ConfigSchema};
+/// # use smart_config::{DescribeConfig, DeserializeConfig};
+///
+/// // Assume the following configs and schema are defined.
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default, alias = "flag")]
+///     boolean: bool,
+/// }
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct OtherConfig {
+///     str: Option<String>,
+/// }
+///
+/// fn config_schema() -> ConfigSchema {
+///     let mut schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
+///     schema
+///         .insert(&OtherConfig::DESCRIPTION, "other")
+///         .unwrap();
+///     schema
+/// }
+///
+/// // Set the tester (can be shared across tests).
+/// let schema: ConfigSchema = config_schema();
+/// let mut tester = Tester::new(schema);
+/// // Set shared deserialization options...
+/// tester.coerce_serde_enums().coerce_variant_names();
+///
+/// let sample = smart_config::config!("test.flag": true, "other.str": "?");
+/// let config: TestConfig = tester.for_config().test_complete(sample.clone())?;
+/// assert!(config.boolean);
+/// let config: OtherConfig = tester.for_config().test_complete(sample)?;
+/// assert_eq!(config.str.unwrap(), "?");
+/// # anyhow::Ok(())
+/// ```
+#[derive(Debug)]
+pub struct Tester<'a, C> {
+    data: TesterDataGoat<'a>,
     _config: PhantomData<C>,
 }
 
-impl<C: DeserializeConfig> Default for Tester<C> {
+impl<C: DeserializeConfig + VisitConfig> Default for Tester<'static, C> {
     fn default() -> Self {
         Self {
-            de_options: DeserializerOptions::default(),
-            schema: ConfigSchema::new(&C::DESCRIPTION, ""),
-            env_guard: MockEnvGuard::default(),
+            data: TesterDataGoat::Owned(TesterData {
+                de_options: DeserializerOptions::default(),
+                schema: ConfigSchema::new(&C::DESCRIPTION, ""),
+                env_guard: MockEnvGuard::default(),
+            }),
             _config: PhantomData,
         }
     }
 }
 
-impl<C: DeserializeConfig + VisitConfig> Tester<C> {
+impl Tester<'_, ()> {
+    /// Creates a tester with the specified schema.
+    pub fn new(schema: ConfigSchema) -> Self {
+        Self {
+            data: TesterDataGoat::Owned(TesterData {
+                de_options: DeserializerOptions::default(),
+                schema,
+                env_guard: MockEnvGuard::default(),
+            }),
+            _config: PhantomData,
+        }
+    }
+
+    /// Specializes this tester for a config.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the config is not contained in the schema, or is contained at multiple locations.
+    pub fn for_config<C: DeserializeConfig + VisitConfig>(&mut self) -> Tester<'_, C> {
+        // Check that there's a single config of the specified type
+        self.data.as_ref().schema.single(&C::DESCRIPTION).unwrap();
+        Tester {
+            data: TesterDataGoat::Borrowed(self.data.as_mut()),
+            _config: PhantomData,
+        }
+    }
+}
+
+impl<C> Tester<'_, C> {
     /// Enables coercion of enum variant names.
     pub fn coerce_variant_names(&mut self) -> &mut Self {
-        self.de_options.coerce_variant_names = true;
+        self.data.as_mut().de_options.coerce_variant_names = true;
         self
     }
 
     /// Enables coercion of serde-style enums.
     pub fn coerce_serde_enums(&mut self) -> &mut Self {
-        self.de_options.coerce_serde_enums = true;
+        self.data.as_mut().de_options.coerce_serde_enums = true;
         self
     }
 
@@ -254,10 +356,23 @@ impl<C: DeserializeConfig + VisitConfig> Tester<C> {
     ///
     /// Beware that env variable overrides are thread-local; for this reason, `Tester` is not `Send` (cannot be sent to another thread).
     pub fn set_env(&mut self, var_name: impl Into<String>, value: impl Into<String>) -> &mut Self {
-        self.env_guard.set_env(var_name.into(), value.into());
+        self.data
+            .as_mut()
+            .env_guard
+            .set_env(var_name.into(), value.into());
         self
     }
 
+    /// Creates an empty repository based on the tester schema and the deserialization options.
+    pub fn new_repository(&self) -> ConfigRepository<'_> {
+        let data = self.data.as_ref();
+        let mut repo = ConfigRepository::new(&data.schema);
+        *repo.deserializer_options() = data.de_options.clone();
+        repo
+    }
+}
+
+impl<C: DeserializeConfig + VisitConfig> Tester<'_, C> {
     /// Tests config deserialization from the provided `sample`. Takes into account param aliases,
     /// performs `sample` preprocessing etc.
     ///
@@ -270,8 +385,7 @@ impl<C: DeserializeConfig + VisitConfig> Tester<C> {
     /// See [`test()`] for the examples of usage.
     #[allow(clippy::missing_panics_doc)] // can only panic if the config is recursively defined, which is impossible
     pub fn test(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
-        let mut repo = ConfigRepository::new(&self.schema);
-        *repo.deserializer_options() = self.de_options.clone();
+        let repo = self.new_repository();
         repo.with(sample).single::<C>().unwrap().parse()
     }
 
@@ -291,12 +405,12 @@ impl<C: DeserializeConfig + VisitConfig> Tester<C> {
     /// See [`test_complete()`] for the examples of usage.
     #[track_caller]
     pub fn test_complete(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
-        let mut repo = ConfigRepository::new(&self.schema);
-        *repo.deserializer_options() = self.de_options.clone();
-        let repo = repo.with(sample);
+        let repo = self.new_repository().with(sample);
 
-        let config: C = repo.single().unwrap().parse()?;
-        let mut visitor = CompletenessChecker::new(repo.merged(), &C::DESCRIPTION);
+        let config_ref = repo.single::<C>().unwrap();
+        let config_prefix = config_ref.config().prefix();
+        let config = config_ref.parse()?;
+        let mut visitor = CompletenessChecker::new(repo.merged(), &C::DESCRIPTION, config_prefix);
         config.visit_config(&mut visitor);
         let CompletenessChecker { missing_params, .. } = visitor;
 

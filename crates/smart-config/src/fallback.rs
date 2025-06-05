@@ -22,6 +22,7 @@
 use std::{collections::HashMap, env, fmt, sync::Arc};
 
 use crate::{
+    source::Hierarchical,
     testing::MOCK_ENV_VARS,
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     ConfigSchema, ConfigSource,
@@ -227,7 +228,7 @@ impl Fallbacks {
 }
 
 impl ConfigSource for Fallbacks {
-    type Map = Map;
+    type Kind = Hierarchical;
 
     fn into_contents(self) -> WithOrigin<Map> {
         let origin = self.origin;

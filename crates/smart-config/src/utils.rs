@@ -2,6 +2,9 @@
 
 use crate::metadata::ConfigMetadata;
 
+/// Sealed trait marker. Intentionally not re-exported publicly.
+pub trait Sealed {}
+
 /// Const-compatible array / string comparison.
 pub(crate) const fn const_eq(lhs: &[u8], rhs: &[u8]) -> bool {
     if lhs.len() != rhs.len() {

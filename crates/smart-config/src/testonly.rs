@@ -364,19 +364,8 @@ pub(crate) struct ConfigWithNestedValidations {
 }
 
 pub(crate) fn wrap_into_value(env: Environment) -> WithOrigin {
-    let map = env.into_contents().inner;
-    let map = map.into_iter().map(|(key, value)| {
-        (
-            key,
-            WithOrigin {
-                inner: value.inner.into(),
-                origin: value.origin,
-            },
-        )
-    });
-
     WithOrigin {
-        inner: Value::Object(map.collect()),
+        inner: Value::Object(env.into_contents().inner),
         origin: Arc::default(),
     }
 }

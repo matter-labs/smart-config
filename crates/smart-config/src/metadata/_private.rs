@@ -163,7 +163,7 @@ const fn assert_param_against_config(
         let param_name = if param_i == 0 {
             param.name
         } else {
-            param.aliases[param_i - 1]
+            param.aliases[param_i - 1].0
         };
 
         let mut config_i = 0;
@@ -171,7 +171,7 @@ const fn assert_param_against_config(
             let config_name = if config_i == 0 {
                 config.name
             } else {
-                config.aliases[config_i - 1]
+                config.aliases[config_i - 1].0
             };
 
             if const_eq(param_name.as_bytes(), config_name.as_bytes()) {
@@ -207,7 +207,7 @@ const fn assert_param_against_config(
 
     let mut alias_i = 0;
     while alias_i < param.aliases.len() {
-        let alias = param.aliases[alias_i];
+        let alias = param.aliases[alias_i].0;
         if const_eq(alias.as_bytes(), config.name.as_bytes()) {
             compile_panic!(
                 "Alias `", alias => clip(32, "…"), "` of param `",
