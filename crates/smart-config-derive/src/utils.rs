@@ -78,21 +78,6 @@ impl Validation {
 }
 
 #[derive(Debug)]
-pub(crate) struct Filter {
-    pub(crate) expr: Expr,
-    // FIXME: description?
-}
-
-impl Filter {
-    fn new(input: ParseStream<'_>) -> syn::Result<Self> {
-        let content;
-        syn::parenthesized!(content in input);
-        let expr = content.parse()?;
-        Ok(Self { expr })
-    }
-}
-
-#[derive(Debug)]
 pub(crate) struct ConfigVariantAttrs {
     pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
@@ -176,7 +161,7 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
     pub(crate) with: Option<Expr>,
-    pub(crate) filter: Option<Filter>,
+    pub(crate) filter: Option<Validation>,
     pub(crate) validations: Vec<Validation>,
 }
 
@@ -245,7 +230,7 @@ impl ConfigFieldAttrs {
                     validations.push(Validation::new(meta.input)?);
                     Ok(())
                 } else if meta.path.is_ident("filter") {
-                    filter = Some(Filter::new(meta.input)?);
+                    filter = Some(Validation::new(meta.input)?);
                     Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))

@@ -226,9 +226,9 @@ impl<T, De: DeserializeParam<Option<T>>> DeserializeParam<Option<T>> for Validat
     }
 }
 
-pub struct Filtered<T, De> {
+pub struct Filtered<T: 'static, De> {
     inner: De,
-    filter: fn(&T) -> bool,
+    filter: &'static dyn Validate<T>,
 }
 
 impl<T, De: fmt::Debug> fmt::Debug for Filtered<T, De> {
@@ -236,12 +236,13 @@ impl<T, De: fmt::Debug> fmt::Debug for Filtered<T, De> {
         formatter
             .debug_struct("Filtered")
             .field("inner", &self.inner)
+            .field("filter", &self.filter)
             .finish_non_exhaustive()
     }
 }
 
 impl<T, De: DeserializeParam<Option<T>>> Filtered<T, De> {
-    pub const fn new(inner: De, filter: fn(&T) -> bool) -> Self {
+    pub const fn new(inner: De, filter: &'static dyn Validate<T>) -> Self {
         Self { inner, filter }
     }
 }
@@ -264,7 +265,13 @@ where
         param: &'static ParamMetadata,
     ) -> Result<Option<T>, ErrorWithOrigin> {
         let value = self.inner.deserialize_param(ctx.borrow(), param)?;
-        Ok(value.filter(self.filter))
+        Ok(value.filter(|val| {
+            if let Err(err) = self.filter.validate(val) {
+                tracing::trace!(%err, filter = ?self.filter, "value filtered out");
+                return false;
+            }
+            true
+        }))
     }
 
     fn serialize_param(&self, param: &Option<T>) -> Value {

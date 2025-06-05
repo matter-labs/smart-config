@@ -103,6 +103,17 @@ impl<T: 'static + ?Sized> fmt::Display for dyn Validate<T> {
     }
 }
 
+/// Delegates via a reference. Useful for defining validation constants as `&'static dyn Validate<_>`.
+impl<T: ?Sized, V: Validate<T> + ?Sized> Validate<T> for &'static V {
+    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (**self).describe(formatter)
+    }
+
+    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
+        (**self).validate(target)
+    }
+}
+
 macro_rules! impl_validate_for_range {
     ($range:path) => {
         impl<T> Validate<T> for $range

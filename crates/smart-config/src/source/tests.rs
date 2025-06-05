@@ -1763,16 +1763,34 @@ fn parsing_nulls_from_env() {
             ..DefaultingConfig::default()
         }
     );
+}
 
-    // Check additional filtering.
-    let env = Environment::from_iter("", [("URL", "unset"), ("FLOAT", "null")]);
-    let config: DefaultingConfig = testing::test(env).unwrap();
-    assert_eq!(
-        config,
-        DefaultingConfig {
-            url: None,
-            float: None,
-            ..DefaultingConfig::default()
-        }
-    );
+#[test]
+fn parsing_with_custom_filter() {
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    struct FilteringConfig {
+        #[config(filter(|s: &String| !s.is_empty() && s != "unset", "not empty or 'unset'"))]
+        url: Option<String>,
+    }
+
+    let mut env = Environment::from_iter("", [("URL__JSON", "null")]);
+    env.coerce_json().unwrap();
+    let config: FilteringConfig = testing::test(env).unwrap();
+    assert_eq!(config.url, None);
+
+    let mut env = Environment::from_iter("", [("URL", "")]);
+    env.coerce_json().unwrap();
+    let config: FilteringConfig = testing::test(env).unwrap();
+    assert_eq!(config.url, None);
+
+    let mut env = Environment::from_iter("", [("URL", "unset")]);
+    env.coerce_json().unwrap();
+    let config: FilteringConfig = testing::test(env).unwrap();
+    assert_eq!(config.url, None);
+
+    let mut env = Environment::from_iter("", [("URL", "null")]);
+    env.coerce_json().unwrap();
+    let config: FilteringConfig = testing::test(env).unwrap();
+    assert_eq!(config.url.unwrap(), "null");
 }
