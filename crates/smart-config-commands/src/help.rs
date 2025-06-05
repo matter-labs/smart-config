@@ -8,7 +8,7 @@ use smart_config::{
 };
 
 use crate::{
-    utils::{write_json_value, STRING},
+    utils::{write_json_value, NULL, STRING},
     ParamRef, Printer, CONFIG_PATH,
 };
 
@@ -284,11 +284,20 @@ fn write_type_description(
         ""
     )?;
 
-    if !description.validations().is_empty() {
+    let validations = description.validations();
+    if !validations.is_empty() {
         writeln!(writer, "{:>indent$}{FIELD}Validations{FIELD:#}:", "")?;
-        for validation in description.validations() {
+        for validation in validations {
             writeln!(writer, "{:>indent$}- {validation}", "")?;
         }
+    }
+
+    if let Some(filter) = description.filter() {
+        writeln!(
+            writer,
+            "{:>indent$}{FIELD}Filtering{FIELD:#}: {filter}, otherwise set to {NULL}null{NULL:#}",
+            ""
+        )?;
     }
 
     if let Some((expecting, item)) = description.items() {

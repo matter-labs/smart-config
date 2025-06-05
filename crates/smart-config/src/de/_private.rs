@@ -256,7 +256,7 @@ where
 
     fn describe(&self, description: &mut TypeDescription) {
         self.inner.describe(description);
-        // FIXME: describe filter
+        description.set_filter(self.filter);
     }
 
     fn deserialize_param(

@@ -9,7 +9,7 @@ use smart_config::value::{StrValue, Value, WithOrigin};
 use crate::Printer;
 
 pub(crate) const STRING: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
-const NULL: Style = Style::new().bold();
+pub(crate) const NULL: Style = Style::new().bold();
 const BOOL: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
 const NUMBER: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
 const SECRET: Style = Style::new()

@@ -304,6 +304,7 @@ pub struct TypeDescription {
     unit: Option<UnitOfMeasurement>,
     pub(crate) is_secret: bool,
     validations: Vec<String>,
+    filter: Option<String>,
     items: Option<ChildDescription>,
     entries: Option<(ChildDescription, ChildDescription)>,
     fallback: Option<ChildDescription>,
@@ -328,6 +329,11 @@ impl TypeDescription {
     #[doc(hidden)] // exposes implementation details
     pub fn validations(&self) -> &[String] {
         &self.validations
+    }
+
+    #[doc(hidden)] // exposes implementation details
+    pub fn filter(&self) -> Option<&str> {
+        self.filter.as_deref()
     }
 
     /// Returns the description of array items, if one was provided.
@@ -392,6 +398,12 @@ impl TypeDescription {
     /// Sets validation for the type.
     pub fn set_validations<T>(&mut self, validations: &[&'static dyn Validate<T>]) -> &mut Self {
         self.validations = validations.iter().map(ToString::to_string).collect();
+        self
+    }
+
+    /// Sets a filter for the type.
+    pub fn set_filter<T>(&mut self, filter: &'static dyn Validate<T>) -> &mut Self {
+        self.filter = Some(filter.to_string());
         self
     }
 
