@@ -729,7 +729,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "smart-config"
-version = "0.1.0"
+version = "0.1.0-pre"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "smart-config-commands"
-version = "0.1.0"
+version = "0.1.0-pre"
 dependencies = [
  "anstream",
  "anstyle",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "smart-config-derive"
-version = "0.1.0"
+version = "0.1.0-pre"
 dependencies = [
  "proc-macro2",
  "quote",
