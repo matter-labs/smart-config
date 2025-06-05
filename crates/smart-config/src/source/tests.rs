@@ -1737,3 +1737,30 @@ fn working_with_embedded_params() {
     assert_eq!(config.size, 10 * SizeUnit::MiB);
     assert_eq!(config.size_overrides, 20 * SizeUnit::MiB);
 }
+
+#[test]
+fn parsing_nulls_from_env() {
+    // It's always possible to use JSON coercion.
+    let mut env = Environment::from_iter("", [("URL__JSON", "null"), ("FLOAT__JSON", "null")]);
+    env.coerce_json().unwrap();
+    let config: DefaultingConfig = testing::test(env).unwrap();
+    assert_eq!(
+        config,
+        DefaultingConfig {
+            url: None,
+            float: None,
+            ..DefaultingConfig::default()
+        }
+    );
+
+    let env = Environment::from_iter("", [("URL", ""), ("FLOAT", "null")]);
+    let config: DefaultingConfig = testing::test(env).unwrap();
+    assert_eq!(
+        config,
+        DefaultingConfig {
+            url: None,
+            float: None,
+            ..DefaultingConfig::default()
+        }
+    );
+}

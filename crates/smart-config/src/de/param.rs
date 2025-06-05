@@ -358,6 +358,16 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
 
 /// Deserializer decorator that wraps the output of the underlying decorator in `Some` and returns `None`
 /// if the input for the param is missing.
+///
+/// # Encoding nulls
+///
+/// For env variables, specifying null values can be tricky since natively, all env variable values are strings.
+/// There are the following was to avoid this issue:
+///
+/// - [JSON coercion](crate::Environment::coerce_json()) can be used to pass unambiguous JSON values (incl. `null`).
+/// - FIXME: filtering
+/// - If the original deserializer doesn't expect string values, an empty string or `"null"` will be coerced
+///   to a null.
 #[derive(Debug)]
 pub struct Optional<De>(pub De);
 
@@ -374,9 +384,23 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
         param: &'static ParamMetadata,
     ) -> Result<Option<T>, ErrorWithOrigin> {
         let current_value = ctx.current_value().map(|val| &val.inner);
-        if matches!(current_value, None | Some(Value::Null)) {
+        let Some(current_value) = current_value else {
+            return Ok(None);
+        };
+        if matches!(current_value, Value::Null) {
             return Ok(None);
         }
+
+        // Coerce string values representing `null`, provided that the original deserializer doesn't expect a string
+        // (if it does, there would be an ambiguity doing this).
+        if !De::EXPECTING.contains(BasicTypes::STRING) {
+            if let Some(s) = current_value.as_plain_str() {
+                if s.is_empty() || s == "null" {
+                    return Ok(None);
+                }
+            }
+        }
+
         self.0.deserialize_param(ctx, param).map(Some)
     }
 
