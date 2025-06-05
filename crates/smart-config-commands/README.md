@@ -18,7 +18,7 @@ Add this to your `Crate.toml`:
 
 ```toml
 [dependencies]
-smart-config-commands = "0.1.0"
+smart-config-commands = "0.1.0-pre"
 ```
 
 ### Printing help on config params
