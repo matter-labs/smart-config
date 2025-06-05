@@ -78,6 +78,21 @@ impl Validation {
 }
 
 #[derive(Debug)]
+pub(crate) struct Filter {
+    pub(crate) expr: Expr,
+    // FIXME: description?
+}
+
+impl Filter {
+    fn new(input: ParseStream<'_>) -> syn::Result<Self> {
+        let content;
+        syn::parenthesized!(content in input);
+        let expr = content.parse()?;
+        Ok(Self { expr })
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct ConfigVariantAttrs {
     pub(crate) rename: Option<LitStr>,
     pub(crate) aliases: Vec<LitStr>,
@@ -161,6 +176,7 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
     pub(crate) with: Option<Expr>,
+    pub(crate) filter: Option<Filter>,
     pub(crate) validations: Vec<Validation>,
 }
 
@@ -178,6 +194,7 @@ impl ConfigFieldAttrs {
         let mut flatten_span = None;
         let mut with = None;
         let mut secret_span = None;
+        let mut filter = None;
         let mut validations = vec![];
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
@@ -227,6 +244,9 @@ impl ConfigFieldAttrs {
                 } else if meta.path.is_ident("validate") {
                     validations.push(Validation::new(meta.input)?);
                     Ok(())
+                } else if meta.path.is_ident("filter") {
+                    filter = Some(Filter::new(meta.input)?);
+                    Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))
                 }
@@ -248,6 +268,15 @@ impl ConfigFieldAttrs {
         if let (Some(fallback), true) = (&fallback, nest) {
             let msg = "cannot specify `fallback` for a `nest`ed / `flatten`ed configuration";
             return Err(syn::Error::new(fallback.span(), msg));
+        }
+        if let (Some(filter), true) = (&filter, nest) {
+            let msg = "cannot specify `filter` for a `nest`ed / `flatten`ed configuration";
+            return Err(syn::Error::new(filter.expr.span(), msg));
+        }
+
+        if let (Some(filter), false) = (&filter, is_option) {
+            let msg = "`filter` can only be specified for `Option`s";
+            return Err(syn::Error::new(filter.expr.span(), msg));
         }
 
         if let (Some(flatten_span), Some(_)) = (flatten_span, &rename) {
@@ -276,6 +305,7 @@ impl ConfigFieldAttrs {
             flatten,
             nest,
             with,
+            filter,
             validations,
             is_secret: secret_span.is_some(),
         })

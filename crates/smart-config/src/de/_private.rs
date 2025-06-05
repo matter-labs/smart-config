@@ -225,3 +225,49 @@ impl<T, De: DeserializeParam<Option<T>>> DeserializeParam<Option<T>> for Validat
         self.inner.serialize_param(param)
     }
 }
+
+pub struct Filtered<T, De> {
+    inner: De,
+    filter: fn(&T) -> bool,
+}
+
+impl<T, De: fmt::Debug> fmt::Debug for Filtered<T, De> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Filtered")
+            .field("inner", &self.inner)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T, De: DeserializeParam<Option<T>>> Filtered<T, De> {
+    pub const fn new(inner: De, filter: fn(&T) -> bool) -> Self {
+        Self { inner, filter }
+    }
+}
+
+impl<T, De> DeserializeParam<Option<T>> for Filtered<T, De>
+where
+    T: 'static,
+    De: DeserializeParam<Option<T>>,
+{
+    const EXPECTING: BasicTypes = De::EXPECTING;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.inner.describe(description);
+        // FIXME: describe filter
+    }
+
+    fn deserialize_param(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Option<T>, ErrorWithOrigin> {
+        let value = self.inner.deserialize_param(ctx.borrow(), param)?;
+        Ok(value.filter(self.filter))
+    }
+
+    fn serialize_param(&self, param: &Option<T>) -> Value {
+        self.inner.serialize_param(param)
+    }
+}

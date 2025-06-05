@@ -66,6 +66,12 @@ impl ConfigField {
         if self.attrs.is_secret {
             deserializer = quote!(#cr::de::Secret(#deserializer));
         }
+        if let Some(filter) = &self.attrs.filter {
+            let ty = Self::unwrap_option(&self.ty).expect("checked during field parsing");
+            let filter_expr = &filter.expr;
+            deserializer =
+                quote!(#cr::de::_private::Filtered::<#ty, _>::new(#deserializer, #filter_expr));
+        }
         if let Some(default_fn) = &default_fn {
             deserializer = quote!(#cr::de::WithDefault::new(#deserializer, #default_fn));
         }

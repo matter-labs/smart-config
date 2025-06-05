@@ -1763,4 +1763,16 @@ fn parsing_nulls_from_env() {
             ..DefaultingConfig::default()
         }
     );
+
+    // Check additional filtering.
+    let env = Environment::from_iter("", [("URL", "unset"), ("FLOAT", "null")]);
+    let config: DefaultingConfig = testing::test(env).unwrap();
+    assert_eq!(
+        config,
+        DefaultingConfig {
+            url: None,
+            float: None,
+            ..DefaultingConfig::default()
+        }
+    );
 }
