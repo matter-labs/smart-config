@@ -283,16 +283,16 @@ impl<'a> DeserializeContext<'a> {
             .expect("Internal error: config deserializer output has wrong type"))
     }
 
-    pub(crate) fn deserialize_config_opt<C: 'static>(
+    pub(crate) fn deserialize_any_config_opt(
         mut self,
-    ) -> Result<Option<C>, DeserializeConfigError> {
+    ) -> Result<Option<Box<dyn any::Any>>, DeserializeConfigError> {
         if self.current_value().is_none() {
             return Ok(None);
         }
 
         let error_count = self.errors.len();
         self.borrow()
-            .deserialize_config::<C>()
+            .deserialize_any_config()
             .map(Some)
             .or_else(|err| {
                 let only_missing_field_errors = self
@@ -302,7 +302,7 @@ impl<'a> DeserializeContext<'a> {
                     .all(|err| matches!(err.category, ParseErrorCategory::MissingField));
                 if only_missing_field_errors {
                     tracing::trace!(
-                        "optional config misses required params; coercing it to `None`"
+                        "optional config misses required params and no other errors; coercing it to `None`"
                     );
                     self.errors.truncate(error_count);
                     Ok(None)
@@ -310,6 +310,17 @@ impl<'a> DeserializeContext<'a> {
                     Err(err)
                 }
             })
+    }
+
+    pub(crate) fn deserialize_config_opt<C: 'static>(
+        self,
+    ) -> Result<Option<C>, DeserializeConfigError> {
+        let config = self.deserialize_any_config_opt()?.map(|boxed| {
+            *boxed
+                .downcast::<C>()
+                .expect("Internal error: config deserializer output has wrong type")
+        });
+        Ok(config)
     }
 }
 

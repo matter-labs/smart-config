@@ -9,7 +9,6 @@ use std::{
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
-    error::ParseErrorCategory,
     fallback::Fallbacks,
     metadata::{AliasOptions, BasicTypes, ConfigMetadata, ConfigTag},
     schema::{ConfigRef, ConfigSchema},
@@ -346,22 +345,10 @@ impl<'a> ConfigRepository<'a> {
                 continue;
             }
 
-            let parsed = match config_parser.parse() {
-                Ok(config) => config,
-                Err(err) => {
-                    if err
-                        .iter()
-                        .all(|err| matches!(err.category, ParseErrorCategory::MissingField))
-                    {
-                        tracing::debug!(
-                            config = ?config_parser.config().metadata().ty,
-                            prefix = config_parser.config().prefix(),
-                            "Skipped config because of missing fields"
-                        );
-                        continue;
-                    }
-                    return Err(err);
-                }
+            let parsed = match config_parser.parse_opt() {
+                Ok(Some(config)) => config,
+                Ok(None) => continue,
+                Err(err) => return Err(err),
             };
 
             let metadata = config_parser.config().metadata();
@@ -432,6 +419,19 @@ impl ConfigParser<'_, ()> {
     #[allow(clippy::redundant_closure_for_method_calls)] // false positive because of lifetimes
     pub fn parse(&self) -> Result<Box<dyn any::Any>, ParseErrors> {
         self.with_context(|ctx| ctx.deserialize_any_config())
+    }
+
+    /// Attempts to parse an optional config from the repository input. Returns the boxed parsed config.
+    /// If there's no data for the config, returns `Ok(None)`. This includes the case when some required params are missing,
+    /// and this is the only type of errors encountered.
+    ///
+    /// # Errors
+    ///
+    /// Returns parsing errors if any.
+    #[doc(hidden)] // not stable yet
+    #[allow(clippy::redundant_closure_for_method_calls)] // false positive because of lifetimes
+    pub fn parse_opt(&self) -> Result<Option<Box<dyn any::Any>>, ParseErrors> {
+        self.with_context(|ctx| ctx.deserialize_any_config_opt())
     }
 }
 
