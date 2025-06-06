@@ -482,14 +482,9 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
     /// # Errors
     ///
     /// Returns errors encountered during parsing.
+    #[allow(clippy::redundant_closure_for_method_calls)] // doesn't work as an fn pointer because of the context lifetime
     pub fn parse_opt(self) -> Result<Option<C>, ParseErrors> {
-        self.with_context(|ctx| {
-            if ctx.current_value().is_none() {
-                Ok(None)
-            } else {
-                ctx.deserialize_config::<C>().map(Some)
-            }
-        })
+        self.with_context(|ctx| ctx.deserialize_config_opt::<C>())
     }
 }
 

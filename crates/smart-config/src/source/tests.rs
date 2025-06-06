@@ -1794,3 +1794,39 @@ fn parsing_with_custom_filter() {
     let config: FilteringConfig = testing::test(env).unwrap();
     assert_eq!(config.url.unwrap(), "null");
 }
+
+#[test]
+fn deserializing_optional_config() {
+    let json = config!(
+        "nested.renamed": "first",
+        "renamed": "second",
+        "nested_opt.other_int": 23,
+    );
+    let config: CompoundConfig = testing::test(json.clone()).unwrap();
+    // There's no required `nested_opt.renamed` param, but otherwise, the config is valid.
+    assert!(config.nested_opt.is_none(), "{config:?}");
+
+    // Same with a repo.
+    let schema = ConfigSchema::new(&CompoundConfig::DESCRIPTION, "");
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: Option<NestedConfig> = repo.get("nested_opt").unwrap().parse_opt().unwrap();
+    assert!(config.is_none());
+
+    let json = config!(
+        "nested.renamed": "first",
+        "renamed": "second",
+        "nested_opt.other_int": "??", // << invalid type
+    );
+    let err = testing::test::<CompoundConfig>(json.clone()).unwrap_err();
+    // Both missing param and the invalid type errors should be present
+    assert_eq!(err.len(), 2);
+
+    // Same with a repo.
+    let repo = repo.with(json);
+    let err = repo
+        .get::<NestedConfig>("nested_opt")
+        .unwrap()
+        .parse_opt()
+        .unwrap_err();
+    assert_eq!(err.len(), 2);
+}
