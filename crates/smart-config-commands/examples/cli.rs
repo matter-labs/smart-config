@@ -47,7 +47,7 @@ pub struct TestConfig {
     #[config(default_t = 1 * TimeUnit::Minutes, with = TimeUnit::Seconds)]
     pub timeout_sec: Duration,
     /// In-memory cache size.
-    #[config(default_t = 16 * SizeUnit::MiB)]
+    #[config(default_t = 16 * SizeUnit::MiB, deprecated = ".experimental.cache_size")]
     pub cache_size: ByteSize,
     #[config(nest)]
     pub nested: NestedConfig,
@@ -64,7 +64,7 @@ pub struct TestConfig {
 #[config(derive(Default))]
 pub struct NestedConfig {
     /// Whether to exit the application on error.
-    #[config(default_t = true)]
+    #[config(default_t = true, deprecated = "..experimental.exit_on_error")]
     pub exit_on_error: bool,
     /// Complex parameter deserialized from an object.
     #[config(default, example = ComplexParam::example())]
@@ -199,6 +199,8 @@ test:
   dir_paths:
     - /bin
     - /usr/bin
+  experimental:
+    exit_on_error: true
   nested:
     complex:
       array: [1, 2]
@@ -228,7 +230,7 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
     let mut env_vars = vec![
         ("APP_TEST_APP_NAME", "test"),
         ("APP_TEST_DIRS", "/usr/bin:/usr/local/bin"),
-        ("APP_TEST_CACHE_SIZE", "128 MiB"),
+        ("APP_TEST_EXPERIMENTAL_CACHE_SIZE", "128 MiB"),
         ("APP_TEST_FUNDS_API_KEY", "correct horse battery staple"),
         (
             "APP_TEST_FUNDS_SECRET_KEY",

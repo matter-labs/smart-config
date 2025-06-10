@@ -154,9 +154,10 @@ fn write_tag_help(
 
 impl ParamRef<'_> {
     fn write_locations(&self, writer: &mut impl io::Write) -> io::Result<()> {
-        let all_paths = self.all_paths_inner();
+        let all_paths = self.all_paths();
         let mut main_name = true;
-        for (prefix, name, options) in all_paths {
+        for (path, options) in all_paths {
+            let (prefix, name) = path.rsplit_once('.').unwrap_or(("", &path));
             let prefix_sep = if prefix.is_empty() || prefix.ends_with('.') {
                 ""
             } else {

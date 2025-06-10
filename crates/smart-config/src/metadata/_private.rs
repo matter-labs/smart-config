@@ -152,6 +152,33 @@ pub const fn assert_param_name(name: &str) {
 }
 
 #[track_caller]
+pub const fn assert_param_alias(name: &str) {
+    let mut path_start = None;
+    if !name.is_empty() {
+        let name_bytes = name.as_bytes();
+        let mut pos = 0;
+        while pos < name.len() && name_bytes[pos] == b'.' {
+            pos += 1;
+        }
+
+        if pos > 0 {
+            path_start = Some(pos);
+        }
+    }
+
+    if let Some(path_start) = path_start {
+        if let Err(err) = validate_path(name, path_start) {
+            compile_panic!(
+                "Param / config alias path `", name => clip(32, "…"), "` is invalid: ",
+                &err.fmt() => compile_fmt::fmt::<&ErrorArgs>()
+            );
+        }
+    } else {
+        assert_param_name(name);
+    }
+}
+
+#[track_caller]
 const fn assert_param_against_config(
     param_parent: &'static str,
     param: &ParamMetadata,
@@ -165,6 +192,10 @@ const fn assert_param_against_config(
         } else {
             param.aliases[param_i - 1].0
         };
+
+        if param_name.as_bytes()[0] == b'.' {
+            // Path-like alias; skip checks
+        }
 
         let mut config_i = 0;
         while config_i <= config.aliases.len() {
@@ -306,13 +337,13 @@ impl ConfigMetadata {
 
 // TODO: validate param types (non-empty intersection)
 
-const fn validate_path(name: &str) -> Result<(), ValidationError> {
+const fn validate_path(name: &str, start: usize) -> Result<(), ValidationError> {
     if name.is_empty() {
         return Err(ValidationError::Empty);
     }
 
     let name_bytes = name.as_bytes();
-    let mut pos = 0;
+    let mut pos = start;
     let mut is_segment_start = true;
     while pos < name.len() {
         if name_bytes[pos] > 127 {
@@ -365,7 +396,7 @@ pub const fn assert_paths(paths: &[&str]) {
     let mut i = 0;
     while i < paths.len() {
         let path = paths[i];
-        if let Err(err) = validate_path(path) {
+        if let Err(err) = validate_path(path, 0) {
             compile_panic!(
                 "Path #", i => compile_fmt::fmt::<usize>(), " `", path => clip(32, "…"), "` is invalid: ",
                 &err.fmt() => compile_fmt::fmt::<&ErrorArgs>()
@@ -406,19 +437,19 @@ mod tests {
 
     #[test]
     fn validating_paths() {
-        validate_path("test").unwrap();
-        validate_path("long.test_path._with_3_segments").unwrap();
+        validate_path("test", 0).unwrap();
+        validate_path("long.test_path._with_3_segments", 0).unwrap();
 
         assert_matches!(
-            validate_path("test.pa!th").unwrap_err(),
+            validate_path("test.pa!th", 0).unwrap_err(),
             ValidationError::DisallowedChar { .. }
         );
         assert_matches!(
-            validate_path("test.3").unwrap_err(),
+            validate_path("test.3", 0).unwrap_err(),
             ValidationError::DisallowedChar { .. }
         );
         assert_matches!(
-            validate_path("test..path").unwrap_err(),
+            validate_path("test..path", 0).unwrap_err(),
             ValidationError::DisallowedChar { .. }
         );
     }

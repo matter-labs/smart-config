@@ -1,0 +1,5 @@
+error[E0080]: evaluation of constant value failed
+ --> tests/ui/derives/bogus_deprecated_path.rs:5:27
+  |
+5 |     #[config(deprecated = "..what..")]
+  |                           ^^^^^^^^^^ evaluation panicked: Param / config alias path `..what..` is invalid: name contains a disallowed char '.' at position 7; allowed chars are [_a-z]

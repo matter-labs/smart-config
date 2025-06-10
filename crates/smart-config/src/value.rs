@@ -272,6 +272,13 @@ impl Value {
             _ => None,
         }
     }
+
+    pub(crate) fn as_object_mut(&mut self) -> Option<&mut Map> {
+        match self {
+            Self::Object(map) => Some(map),
+            _ => None,
+        }
+    }
 }
 
 /// JSON object.
@@ -456,6 +463,15 @@ impl<'a> Pointer<'a> {
             format!("{}.{suffix}", self.0)
         }
     }
+
+    /// Returns `None` if `self` doesn't contain a sufficient number of segments.
+    pub(crate) fn join_path(mut self, suffix: Pointer<'_>) -> Option<String> {
+        let prefix_dots = suffix.0.bytes().take_while(|&ch| ch == b'.').count();
+        for _ in 0..prefix_dots.saturating_sub(1) {
+            (self, _) = self.split_last()?;
+        }
+        Some(self.join(&suffix.0[prefix_dots..]))
+    }
 }
 
 #[cfg(test)]
@@ -499,5 +515,36 @@ mod tests {
         let pointer = Pointer("test");
         let joined = pointer.join("other");
         assert_eq!(joined, "test.other");
+    }
+
+    #[test]
+    fn joining_pointer_paths() {
+        let pointer = Pointer("");
+        let joined = pointer.join_path(Pointer("test")).unwrap();
+        assert_eq!(joined, "test");
+
+        let pointer = Pointer("");
+        let joined = pointer.join_path(Pointer(".test")).unwrap();
+        assert_eq!(joined, "test");
+
+        let pointer = Pointer("");
+        let joined = pointer.join_path(Pointer(".test.value")).unwrap();
+        assert_eq!(joined, "test.value");
+
+        let pointer = Pointer("map");
+        let joined = pointer.join_path(Pointer(".test.value")).unwrap();
+        assert_eq!(joined, "map.test.value");
+
+        let pointer = Pointer("map");
+        let joined = pointer.join_path(Pointer("..test.value")).unwrap();
+        assert_eq!(joined, "test.value");
+
+        let pointer = Pointer("map.key");
+        let joined = pointer.join_path(Pointer("..test.value")).unwrap();
+        assert_eq!(joined, "map.test.value");
+
+        let pointer = Pointer("map.key");
+        let joined = pointer.join_path(Pointer("...test.value")).unwrap();
+        assert_eq!(joined, "test.value");
     }
 }

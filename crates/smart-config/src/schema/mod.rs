@@ -27,11 +27,33 @@ pub(crate) struct ConfigData {
 }
 
 impl ConfigData {
+    pub(crate) fn prefix(&self) -> Pointer<'_> {
+        Pointer(self.all_paths[0].0.as_ref())
+    }
+
     pub(crate) fn aliases(&self) -> impl Iterator<Item = (&str, AliasOptions)> + '_ {
         self.all_paths
             .iter()
             .skip(1)
             .map(|(path, options)| (path.as_ref(), *options))
+    }
+
+    pub(crate) fn all_paths_for_param(
+        &self,
+        param: &'static ParamMetadata,
+    ) -> impl Iterator<Item = (String, AliasOptions)> + '_ {
+        let local_names =
+            iter::once((param.name, AliasOptions::default())).chain(param.aliases.iter().copied());
+        self.all_paths
+            .iter()
+            .flat_map(move |(alias, config_options)| {
+                local_names
+                    .clone()
+                    .filter_map(move |(name_or_path, options)| {
+                        let full_path = Pointer(alias).join_path(Pointer(name_or_path))?;
+                        Some((full_path, options.combine(*config_options)))
+                    })
+            })
     }
 }
 
@@ -61,6 +83,16 @@ impl<'a> ConfigRef<'a> {
     /// Iterates over all aliases for this config.
     pub fn aliases(&self) -> impl Iterator<Item = (&'a str, AliasOptions)> + '_ {
         self.data.aliases()
+    }
+
+    /// Returns a prioritized list of absolute paths to the specified param (higher-priority paths first).
+    /// For the result to make sense, the param must be a part of this config.
+    #[doc(hidden)] // too low-level
+    pub fn all_paths_for_param(
+        &self,
+        param: &'static ParamMetadata,
+    ) -> impl Iterator<Item = (String, AliasOptions)> + '_ {
+        self.data.all_paths_for_param(param)
     }
 }
 
@@ -330,17 +362,6 @@ impl ConfigSchema {
             prefix: prefix.to_owned(),
         })
     }
-
-    fn all_names<'a>(
-        param: &'a ParamMetadata,
-        config_data: &'a ConfigData,
-    ) -> impl Iterator<Item = (&'a str, &'a str)> + 'a {
-        let local_names = iter::once(param.name).chain(param.aliases.iter().map(|&(name, _)| name));
-        config_data
-            .all_paths
-            .iter()
-            .flat_map(move |(alias, _)| local_names.clone().map(move |name| (alias.as_ref(), name)))
-    }
 }
 
 /// [`ConfigSchema`] together with a patch that can be atomically committed.
@@ -448,9 +469,12 @@ impl<'a> PatchedSchema<'a> {
             let local_names = iter::once((nested.name, AliasOptions::new()))
                 .chain(nested.aliases.iter().copied());
             let all_paths = all_prefixes.clone().flat_map(|(prefix, prefix_options)| {
-                local_names.clone().map(move |(name, options)| {
-                    (prefix.join(name).into(), options.combine(prefix_options))
-                })
+                local_names
+                    .clone()
+                    .filter_map(move |(name_or_path, options)| {
+                        let full_path = prefix.join_path(Pointer(name_or_path))?;
+                        Some((full_path.into(), options.combine(prefix_options)))
+                    })
             });
 
             let config_data = ConfigData {
@@ -490,10 +514,9 @@ impl<'a> PatchedSchema<'a> {
         }
 
         for param in data.metadata.params {
-            let all_names = ConfigSchema::all_names(param, &data);
+            let all_paths = data.all_paths_for_param(param);
 
-            for (name_i, (prefix, name)) in all_names.enumerate() {
-                let full_name = Pointer(prefix).join(name);
+            for (name_i, (full_name, _)) in all_paths.enumerate() {
                 let mut was_canonical = false;
                 if let Some(mount) = self.mount(&full_name) {
                     let prev_expecting = match mount {
