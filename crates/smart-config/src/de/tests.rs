@@ -595,8 +595,13 @@ fn errors_parsing_named_entries() {
     assert_eq!(err.len(), 1);
     let err = err.first();
     assert_eq!(err.path(), "entry_map.0");
+    let origin = err.origin().to_string();
+    assert!(
+        origin.ends_with("-> path 'entry_map.0' -> missing entry value"),
+        "{origin}"
+    );
     let inner = err.inner().to_string();
-    assert!(inner.contains("missing field `timeout`"), "{inner}");
+    assert!(inner.contains("invalid type: null"), "{inner}");
 
     let json = config!("entry_map": serde_json::json!([{ "timeout": "30s" }]));
     let err = test_deserialize::<ComposedConfig>(json.inner()).unwrap_err();

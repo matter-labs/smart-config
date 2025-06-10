@@ -1,6 +1,6 @@
 //! Configuration metadata.
 
-use std::{any, borrow::Cow, fmt, ops, time::Duration};
+use std::{any, borrow::Cow, fmt, iter, ops, time::Duration};
 
 use self::_private::{BoxedDeserializer, BoxedVisitor};
 use crate::{
@@ -72,6 +72,17 @@ pub struct ConfigMetadata {
     pub visitor: BoxedVisitor,
     #[doc(hidden)] // implementation detail
     pub validations: &'static [&'static dyn Validate<dyn any::Any>],
+}
+
+impl ConfigMetadata {
+    pub(crate) fn all_child_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+        let param_names = self.params.iter().flat_map(ParamMetadata::all_names);
+        let config_names = self
+            .nested_configs
+            .iter()
+            .flat_map(NestedConfigMetadata::all_names);
+        param_names.chain(config_names)
+    }
 }
 
 /// Information about a config tag.
@@ -150,6 +161,14 @@ impl ParamMetadata {
         self.deserializer.describe(&mut description);
         description.rust_type = self.rust_type.name_in_code;
         description
+    }
+
+    fn all_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+        iter::once(self.name).chain(
+            self.aliases
+                .iter()
+                .filter_map(|&(alias, _)| (!alias.starts_with('.')).then_some(alias)),
+        )
     }
 }
 
@@ -463,6 +482,16 @@ pub struct NestedConfigMetadata {
     pub tag_variant: Option<&'static ConfigVariant>,
     /// Config metadata.
     pub meta: &'static ConfigMetadata,
+}
+
+impl NestedConfigMetadata {
+    fn all_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+        let name = (!self.name.is_empty()).then_some(self.name);
+        name.into_iter()
+            .chain(self.aliases.iter().filter_map(|&(alias, _)| {
+                (!alias.is_empty() && !alias.starts_with('.')).then_some(alias)
+            }))
+    }
 }
 
 /// Unit of time measurement.

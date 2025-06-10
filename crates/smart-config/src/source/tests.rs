@@ -9,6 +9,7 @@ use secrecy::ExposeSecret;
 
 use super::*;
 use crate::{
+    de,
     metadata::{AliasOptions, SizeUnit},
     testing,
     testing::MockEnvGuard,
@@ -1830,6 +1831,29 @@ fn resolving_path_aliases_for_configs() {
     let repo = ConfigRepository::new(&schema).with(env);
     let config: ConfigWithPathAlias = repo.single().unwrap().parse().unwrap();
     assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
+}
+
+#[test]
+fn parsing_named_entries_with_optional_values() {
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    struct TestConfig {
+        #[config(with = de::Entries::WELL_KNOWN.named("method", "value"))]
+        overrides: HashMap<String, Option<usize>>,
+    }
+
+    let json = config!(
+        "overrides": serde_json::json!([
+            { "method": "call" },
+            { "method": "submit", "value": null },
+            { "method": "revert", "value": 3 },
+        ]),
+    );
+    let config: TestConfig = testing::test_complete(json).unwrap();
+    assert_eq!(config.overrides.len(), 3);
+    assert_eq!(config.overrides["call"], None);
+    assert_eq!(config.overrides["submit"], None);
+    assert_eq!(config.overrides["revert"], Some(3));
 }
 
 #[test]
