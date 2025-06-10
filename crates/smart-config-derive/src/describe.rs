@@ -106,7 +106,7 @@ impl ConfigField {
             let alias = &alias.lit;
             let cr = parent.cr(alias.span());
             quote_spanned! {alias.span()=>
-                const _: () = #cr::metadata::_private::assert_param_name(#alias);
+                const _: () = #cr::metadata::_private::assert_param_alias(#alias);
             }
         });
 

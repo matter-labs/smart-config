@@ -50,7 +50,6 @@
 use std::{
     io,
     io::{StderrLock, StdoutLock},
-    iter,
 };
 
 use anstream::{stream::RawStream, AutoStream};
@@ -128,34 +127,9 @@ impl ParamRef<'_> {
         }
     }
 
-    pub(crate) fn all_paths_inner(&self) -> impl Iterator<Item = (&str, &str, AliasOptions)> + '_ {
-        let local_names = iter::once((self.param.name, AliasOptions::default()))
-            .chain(self.param.aliases.iter().copied());
-        let local_names_ = local_names.clone();
-        let global_aliases = self
-            .config
-            .aliases()
-            .flat_map(move |(alias, config_options)| {
-                local_names_
-                    .clone()
-                    .map(move |(name, options)| (alias, name, options.combine(config_options)))
-            });
-        let local_aliases = local_names
-            .clone()
-            .map(move |(name, options)| (self.config.prefix(), name, options));
-        local_aliases.chain(global_aliases)
-    }
-
     /// Iterates over all paths to the param.
     pub fn all_paths(&self) -> impl Iterator<Item = (String, AliasOptions)> + '_ {
-        self.all_paths_inner().map(|(prefix, name, options)| {
-            let path = if prefix.is_empty() {
-                name.to_owned()
-            } else {
-                format!("{prefix}.{name}")
-            };
-            (path, options)
-        })
+        self.config.all_paths_for_param(self.param)
     }
 }
 

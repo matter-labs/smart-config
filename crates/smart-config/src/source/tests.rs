@@ -9,7 +9,7 @@ use secrecy::ExposeSecret;
 
 use super::*;
 use crate::{
-    metadata::SizeUnit,
+    metadata::{AliasOptions, SizeUnit},
     testing,
     testing::MockEnvGuard,
     testonly::{
@@ -1736,6 +1736,100 @@ fn working_with_embedded_params() {
     let config: ConfigWithEmbeddedParams = testing::test_complete(json).unwrap();
     assert_eq!(config.size, 10 * SizeUnit::MiB);
     assert_eq!(config.size_overrides, 20 * SizeUnit::MiB);
+}
+
+#[test]
+fn resolving_path_aliases() {
+    let mut schema = ConfigSchema::new(&NestedConfig::DESCRIPTION, "test");
+
+    let env = Environment::from_iter("", [("TEST_EXPERIMENTAL_ENUM", "first")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: NestedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.simple_enum, SimpleEnum::First);
+
+    let json = config!("test.experimental.enum": "second");
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: NestedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.simple_enum, SimpleEnum::Second);
+
+    let env = Environment::from_iter("", [("TOP_ENUM", "first")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: NestedConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.simple_enum, SimpleEnum::First);
+
+    schema
+        .single_mut(&NestedConfig::DESCRIPTION)
+        .unwrap()
+        .push_alias("alias")
+        .unwrap()
+        .push_deprecated_alias("")
+        .unwrap();
+
+    for var_name in [
+        "ALIAS_RENAMED",
+        "ALIAS_ENUM",
+        "ALIAS_EXPERIMENTAL_ENUM",
+        "TOP_ENUM",
+    ] {
+        let env = Environment::from_iter("", [(var_name, "first")]);
+        let repo = ConfigRepository::new(&schema).with(env);
+        let config: NestedConfig = repo.single().unwrap().parse().unwrap();
+        assert_eq!(config.simple_enum, SimpleEnum::First);
+    }
+}
+
+#[test]
+fn resolving_path_aliases_for_configs() {
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    struct ConfigWithPathAlias {
+        #[config(nest, alias = ".obsolete.nested", deprecated = "..nested")]
+        nested: NestedConfig,
+    }
+
+    let schema = ConfigSchema::new(&ConfigWithPathAlias::DESCRIPTION, "test");
+    let aliases: Vec<_> = schema
+        .single(&NestedConfig::DESCRIPTION)
+        .unwrap()
+        .aliases()
+        .collect();
+    assert_eq!(
+        aliases,
+        [
+            ("test.obsolete.nested", AliasOptions::new()),
+            ("nested", AliasOptions::new().deprecated()),
+        ]
+    );
+
+    let json = config!("test.obsolete.nested.enum": "first", "nested.other_int": 5);
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithPathAlias = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+    assert_eq!(config.nested.other_int, 5);
+
+    let mut env = Environment::from_iter(
+        "",
+        [
+            ("TEST_OBSOLETE_NESTED_RENAMED", "second"),
+            ("NESTED_MAP__JSON", r#"{"call": 10}"#),
+        ],
+    );
+    env.coerce_json().unwrap();
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: ConfigWithPathAlias = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
+    assert_eq!(config.nested.map, HashMap::from([("call".to_owned(), 10)]));
+
+    // Path aliases for configs and params should combine.
+    let json = config!("test.obsolete.top.enum": "first");
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: ConfigWithPathAlias = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::First);
+
+    let env = Environment::from_iter("", [("TEST_OBSOLETE_NESTED_EXPERIMENTAL_ENUM", "second")]);
+    let repo = ConfigRepository::new(&schema).with(env);
+    let config: ConfigWithPathAlias = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
 }
 
 #[test]

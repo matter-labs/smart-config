@@ -10,8 +10,8 @@ pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
     fallback::Fallbacks,
-    metadata::{AliasOptions, BasicTypes, ConfigMetadata, ConfigTag},
-    schema::{ConfigRef, ConfigSchema},
+    metadata::{BasicTypes, ConfigTag},
+    schema::{ConfigData, ConfigRef, ConfigSchema},
     utils::{merge_json, EnumVariant, JsonObject},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     visit::Serializer,
@@ -488,25 +488,6 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct AliasMap<'a> {
-    map: &'a Map,
-    prefix: Pointer<'a>,
-    origin: Option<&'a Arc<ValueOrigin>>,
-    options: AliasOptions,
-}
-
-impl<'a> AliasMap<'a> {
-    fn canonical(map: &'a Map, prefix: Pointer<'a>) -> Self {
-        Self {
-            map,
-            prefix,
-            origin: None,
-            options: AliasOptions::new(),
-        }
-    }
-}
-
 impl WithOrigin {
     fn preprocess_source(
         &mut self,
@@ -527,39 +508,7 @@ impl WithOrigin {
     #[tracing::instrument(level = "debug", skip_all)]
     fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
-            let canonical_map = match self.get(prefix).map(|val| &val.inner) {
-                Some(Value::Object(map)) => Some(map),
-                Some(_) => {
-                    tracing::warn!(
-                        prefix = prefix.0,
-                        config = ?config_data.metadata.ty,
-                        "canonical config location contains a non-object"
-                    );
-                    continue;
-                }
-                None => None,
-            };
-
-            let alias_maps: Vec<_> = config_data
-                .aliases()
-                .filter_map(|(alias, options)| {
-                    let val = self.get(Pointer(alias))?;
-                    Some(AliasMap {
-                        map: val.inner.as_object()?,
-                        prefix: Pointer(alias),
-                        origin: Some(&val.origin),
-                        options,
-                    })
-                })
-                .collect();
-
-            let (new_values, new_map_origin) = Self::copy_aliases_for_config(
-                config_data.metadata,
-                prefix,
-                canonical_map,
-                &alias_maps,
-            );
-
+            let (new_values, new_map_origin) = self.copy_aliases_for_config(config_data);
             if new_values.is_empty() {
                 continue;
             }
@@ -578,36 +527,43 @@ impl WithOrigin {
     }
 
     #[must_use = "returned map should be inserted into the config"]
-    fn copy_aliases_for_config(
-        config: &ConfigMetadata,
-        prefix: Pointer<'_>,
-        canonical_map: Option<&Map>,
-        alias_maps: &[AliasMap],
-    ) -> (Map, Option<Arc<ValueOrigin>>) {
+    fn copy_aliases_for_config(&self, config: &ConfigData) -> (Map, Option<Arc<ValueOrigin>>) {
+        let prefix = config.prefix();
+        let canonical_map = match self.get(prefix).map(|val| &val.inner) {
+            Some(Value::Object(map)) => Some(map),
+            Some(_) => {
+                tracing::warn!(
+                    prefix = prefix.0,
+                    config = ?config.metadata.ty,
+                    "canonical config location contains a non-object"
+                );
+                return (Map::new(), None);
+            }
+            None => None,
+        };
+
         let mut new_values = Map::new();
         let mut new_map_origin = None;
-        for param in config.params {
-            // Create a prioritized iterator of all candidates
-            let local_candidates = canonical_map.into_iter().flat_map(|map| {
-                let map = AliasMap::canonical(map, prefix);
-                param
-                    .aliases
-                    .iter()
-                    .map(move |&(alias, options)| (map, alias, options))
-            });
-            let all_names = iter::once((param.name, AliasOptions::default()))
-                .chain(param.aliases.iter().copied());
-            let alias_candidates = alias_maps.iter().flat_map(|&map| {
-                all_names
-                    .clone()
-                    .map(move |(name, options)| (map, name, options))
-            });
-            let all_candidates = local_candidates.chain(alias_candidates);
 
-            for (map, name, options) in all_candidates {
+        for param in config.metadata.params {
+            // Create a prioritized iterator of all candidate paths
+            let all_paths = config.all_paths_for_param(param);
+
+            for (path, alias_options) in all_paths {
+                let (prefix, name) = Pointer(&path)
+                    .split_last()
+                    .expect("param paths are never empty");
+                let Some(map) = self.get(prefix) else {
+                    continue;
+                };
+                let map_origin = &map.origin;
+                let Some(map) = map.inner.as_object() else {
+                    continue;
+                };
+
                 // Copy all values in `map` that either match `name` exactly, or start with `{name}_`
                 // (the latter can be used for object or array nesting).
-                for (key, val) in map.map {
+                for (key, val) in map {
                     let canonical_key_string;
                     let canonical_key = if key == name {
                         param.name // Exact match
@@ -624,12 +580,11 @@ impl WithOrigin {
                     }
 
                     if !new_values.contains_key(canonical_key) {
-                        let options = options.combine(map.options);
-                        if options.is_deprecated {
+                        if alias_options.is_deprecated {
                             tracing::warn!(
-                                path = map.prefix.join(name),
+                                path,
                                 origin = %val.origin,
-                                config = ?config.ty,
+                                config = ?config.metadata.ty,
                                 param = param.rust_field_name,
                                 canonical_path = prefix.join(canonical_key),
                                 "using deprecated alias; please use canonical_path instead"
@@ -638,16 +593,16 @@ impl WithOrigin {
 
                         tracing::trace!(
                             prefix = prefix.0,
-                            config = ?config.ty,
+                            config = ?config.metadata.ty,
                             param = param.rust_field_name,
                             name,
-                            origin = ?map.origin,
+                            origin = ?map_origin,
                             canonical_key,
                             "copied aliased param"
                         );
                         new_values.insert(canonical_key.to_owned(), val.clone());
                         if new_map_origin.is_none() {
-                            new_map_origin = map.origin.cloned();
+                            new_map_origin = Some(map_origin.clone());
                         }
                     }
                 }
@@ -740,8 +695,9 @@ impl WithOrigin {
                 canonical_map.extend(new_values);
 
                 // Run local de-aliasing for the config again.
-                let (new_values, _) =
-                    Self::copy_aliases_for_config(config_meta, prefix, Some(canonical_map), &[]);
+                let (new_values, _) = self.copy_aliases_for_config(config_data.data);
+                // `unwrap()`s are safe: we've ensured the canonical map existence above.
+                let canonical_map = self.get_mut(prefix).unwrap().inner.as_object_mut().unwrap();
                 canonical_map.extend(new_values);
             }
         }

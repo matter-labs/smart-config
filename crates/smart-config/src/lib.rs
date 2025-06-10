@@ -210,6 +210,18 @@
 /// Have the same meaning as in `serde`; i.e. allow to rename / specify additional names for the param or a nested config.
 /// Names are [validated](#validations) in compile time.
 ///
+/// In addition to simple names, *path* aliases are supported as well. A path alias starts with `.` and consists of dot-separated segments,
+/// e.g. `.experimental.value` or `..value`. The paths are resolved relative to the config prefix. As in Python, more than one dot
+/// at the start of the path signals that the path is relative to the parent(s) of the config.
+///
+/// - `alias = ".experimental.value"` with config prefix `test` resolves to the absolute path `test.experimental.value`.
+/// - `alias = "..value"` with config prefix `test.experimental` resolves to the absolute path `test.value`.
+///
+/// If an alias requires more parents than is present in the config prefix, the alias is not applicable.
+/// (E.g., `alias = "...value"` with config prefix `test`.)
+///
+/// Path aliases are somewhat difficult to reason about, so avoid using them unless necessary.
+///
 /// ## `deprecated`
 ///
 /// **Type:** string
