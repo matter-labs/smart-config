@@ -1,6 +1,6 @@
 use std::{
     any, cmp,
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     iter,
     marker::PhantomData,
     sync::Arc,
@@ -846,20 +846,21 @@ impl WithOrigin {
                 .iter()
                 .filter_map(|nested| (!nested.name.is_empty()).then_some(nested.name));
 
-            let mut child_names: Vec<_> = object_params.chain(nested_configs.clone()).collect();
+            let mut canonical_child_names: Vec<_> =
+                object_params.chain(nested_configs.clone()).collect();
             // Sort all names in the reversed length order, so that if there are embedded names (e.g., `size` and `size_overrides`),
             // the longer one is always visited first.
-            child_names.sort_unstable_by_key(|name| cmp::Reverse(name.len()));
-            let mut matched_fields: HashSet<_> = config_data
-                .metadata
-                .params
+            canonical_child_names.sort_unstable_by_key(|name| cmp::Reverse(name.len()));
+
+            let all_child_names: HashSet<_> = config_data.metadata.all_child_names().collect();
+            // Only consider for nesting fields that are not recognized as param / config names or aliases.
+            let mut candidate_fields: HashMap<_, _> = config_object
                 .iter()
-                .map(|param| param.name)
-                .chain(nested_configs)
+                .filter(|(name, _)| !all_child_names.contains(name.as_str()))
                 .collect();
             let mut insertions = vec![];
 
-            for child_name in child_names {
+            for child_name in canonical_child_names {
                 let target_object = match config_object.get(child_name) {
                     None => None,
                     Some(WithOrigin {
@@ -870,14 +871,9 @@ impl WithOrigin {
                     Some(_) => continue,
                 };
 
-                let matching_fields: Vec<_> = config_object
+                let (matching_fields, fields_to_remove): (Vec<_>, Vec<&String>) = candidate_fields
                     .iter()
-                    .filter_map(|(name, field)| {
-                        if matched_fields.contains(name.as_str()) {
-                            // The field was already copied to a better fitting param / config, or matches a config / param.
-                            return None;
-                        }
-
+                    .filter_map(|(name, &field)| {
                         let stripped_name = Self::strip_prefix(name, child_name)?;
                         if let Some(param_object) = target_object {
                             if param_object.contains_key(stripped_name) {
@@ -885,12 +881,14 @@ impl WithOrigin {
                             }
                         }
 
-                        matched_fields.insert(name);
-                        Some((stripped_name.to_owned(), field.clone()))
+                        Some(((stripped_name.to_owned(), field.clone()), name))
                     })
-                    .collect();
+                    .unzip();
                 if matching_fields.is_empty() {
                     continue;
+                }
+                for field in fields_to_remove {
+                    candidate_fields.remove(field);
                 }
 
                 tracing::trace!(
