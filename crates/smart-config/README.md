@@ -73,13 +73,13 @@ enum CustomEnum {
 #[config(derive(Default))] // derive according to default values for params
 pub struct TestConfig {
     /// Port to bind to.
-    #[config(default_t = 8080)]
+    #[config(default_t = 8080, alias = "http_port")]
     pub port: u16,
-    #[config(default_t = "test".into())]
+    #[config(default_t = "test".into(), deprecated = "app_name")]
     pub name: String,
     #[config(default_t = "./test".into())]
     pub path: PathBuf,
-    
+
     // Basic collections are supported as well:
     #[config(default)]
     pub vec: Vec<u64>,
@@ -87,19 +87,19 @@ pub struct TestConfig {
     pub set: HashSet<String>,
     #[config(default)]
     pub map: HashMap<String, u64>,
-    
+
     // For custom types, you can specify a custom deserializer. The deserializer below
     // expects a string and works for all types implementing `serde::Deserialize`.
     #[config(with = Serde![str])]
     #[config(default_t = CustomEnum::First)]
     pub custom: CustomEnum,
-    
+
     // There is dedicated support for durations and byte sizes.
     #[config(default_t = Duration::from_millis(100))]
     pub short_dur: Duration,
     #[config(default_t = Some(128 * SizeUnit::MiB))]
     pub memory_size: Option<ByteSize>,
-  
+
     // Configuration nesting and flattening are supported:
     #[config(nest)]
     pub nested: NestedConfig,

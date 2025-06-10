@@ -26,7 +26,7 @@ use smart_config_commands::{ParamRef, Printer};
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 pub struct TestConfig {
     /// Port to bind to.
-    #[config(example = 8080, alias = "bind_to")]
+    #[config(example = 8080, deprecated = "bind_to")]
     pub port: u16,
     /// Application name.
     #[config(default_t = "app".into(), validate(NotEmpty))]
@@ -51,7 +51,7 @@ pub struct TestConfig {
     pub cache_size: ByteSize,
     #[config(nest)]
     pub nested: NestedConfig,
-    #[config(nest, alias = "funds")]
+    #[config(nest, deprecated = "funds")]
     pub funding: Option<FundingConfig>,
     /// Required param.
     #[config(example = 42)]
@@ -301,6 +301,7 @@ enum Cli {
 enum SerializationFormat {
     Json,
     Yaml,
+    Env,
 }
 
 const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
@@ -313,7 +314,7 @@ fn main() {
         Cli::Print { filter } => {
             let filter = |param_ref: ParamRef<'_>| {
                 filter.as_ref().map_or(true, |needle| {
-                    param_ref.all_paths().any(|path| path.contains(needle))
+                    param_ref.all_paths().any(|(path, _)| path.contains(needle))
                 })
             };
             Printer::stderr().print_help(&schema, filter).unwrap();
@@ -322,7 +323,7 @@ fn main() {
             let repo = create_mock_repo(&schema, bogus);
             let filter = |param_ref: ParamRef<'_>| {
                 filter.as_ref().map_or(true, |needle| {
-                    param_ref.all_paths().any(|path| path.contains(needle))
+                    param_ref.all_paths().any(|(path, _)| path.contains(needle))
                 })
             };
 
@@ -339,11 +340,13 @@ fn main() {
             diff,
             format,
         } => {
-            let options = if diff {
+            let mut options = if diff {
                 SerializerOptions::diff_with_default()
             } else {
                 SerializerOptions::default()
             };
+            options = options.flat(matches!(format, SerializationFormat::Env));
+
             let (json, original_config) = if example {
                 let example_config = TestConfig::example_config();
                 let json = options.serialize(&example_config);
@@ -377,6 +380,21 @@ fn main() {
                     let deserialized = serde_yaml::from_slice(&buffer).unwrap();
                     let source = Yaml::new("deserialized.yaml", deserialized).unwrap();
                     ConfigRepository::new(&schema).with(source)
+                }
+                SerializationFormat::Env => {
+                    let env =
+                        Environment::convert_flat_params(json.as_object().unwrap(), "APP_").into();
+                    Printer::stderr().print_yaml(&env).unwrap();
+                    let env = env.as_object().unwrap().iter().map(|(name, value)| {
+                        let value = match value {
+                            serde_json::Value::String(s) => s.clone(),
+                            _ => value.to_string(),
+                        };
+                        (name.as_str(), value)
+                    });
+                    let mut env = Environment::from_iter("APP_", env);
+                    env.coerce_json().unwrap();
+                    ConfigRepository::new(&schema).with(env)
                 }
             };
             let restored_config: TestConfig = restored_repo.single().unwrap().parse().unwrap();

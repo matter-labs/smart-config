@@ -49,7 +49,7 @@
 //! [`Duration`]: std::time::Duration
 //! [`ByteSize`]: crate::ByteSize
 
-use std::{any, sync::Arc};
+use std::any;
 
 use serde::de::Error as DeError;
 
@@ -66,7 +66,7 @@ use crate::{
     error::{ErrorWithOrigin, LocationInConfig, LowLevelError},
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
     value::{Pointer, StrValue, Value, ValueOrigin, WithOrigin},
-    DescribeConfig, DeserializeConfigError, Json, ParseError, ParseErrors,
+    DescribeConfig, DeserializeConfigError, ParseError, ParseErrors,
 };
 
 #[doc(hidden)]
@@ -367,8 +367,6 @@ impl DeserializeContext<'_> {
 impl WithOrigin {
     #[tracing::instrument(level = "trace", skip(self))]
     fn coerce_value_type(&self, expecting: BasicTypes) -> Option<Self> {
-        const STRUCTURED: BasicTypes = BasicTypes::ARRAY.or(BasicTypes::OBJECT);
-
         let Value::String(StrValue::Plain(str)) = &self.inner else {
             return None; // we only know how to coerce strings so far
         };
@@ -393,27 +391,6 @@ impl WithOrigin {
                     tracing::info!(%expecting, "failed coercing value: {err}");
                 }
             },
-
-            ty if STRUCTURED.contains(ty) => {
-                let val = match serde_json::from_str::<serde_json::Value>(str) {
-                    Ok(val) => val,
-                    Err(err) => {
-                        tracing::info!(%expecting, "failed coercing value to JSON: {err}");
-                        return None;
-                    }
-                };
-
-                let is_value_supported = (val.is_array() && ty.contains(BasicTypes::ARRAY))
-                    || (val.is_object() && ty.contains(BasicTypes::OBJECT));
-                if is_value_supported {
-                    let root_origin = Arc::new(ValueOrigin::Synthetic {
-                        source: self.origin.clone(),
-                        transform: "parsed JSON string".into(),
-                    });
-                    return Some(Json::map_value(val, &root_origin, String::new()));
-                }
-                tracing::info!(%expecting, "parsed JSON has unexpected shape");
-            }
             _ => { /* do nothing */ }
         }
         None

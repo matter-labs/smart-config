@@ -144,10 +144,16 @@ impl DefaultValue {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct Alias {
+    pub(crate) lit: LitStr,
+    pub(crate) is_deprecated: bool,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct ConfigFieldAttrs {
     pub(crate) rename: Option<LitStr>,
-    pub(crate) aliases: Vec<LitStr>,
+    pub(crate) aliases: Vec<Alias>,
     pub(crate) default: Option<DefaultValue>,
     pub(crate) example: Option<Expr>,
     pub(crate) fallback: Option<Expr>,
@@ -179,7 +185,16 @@ impl ConfigFieldAttrs {
                     rename = Some(meta.value()?.parse::<LitStr>()?);
                     Ok(())
                 } else if meta.path.is_ident("alias") {
-                    aliases.push(meta.value()?.parse()?);
+                    aliases.push(Alias {
+                        lit: meta.value()?.parse()?,
+                        is_deprecated: false,
+                    });
+                    Ok(())
+                } else if meta.path.is_ident("deprecated") {
+                    aliases.push(Alias {
+                        lit: meta.value()?.parse()?,
+                        is_deprecated: true,
+                    });
                     Ok(())
                 } else if meta.path.is_ident("default") {
                     default = Some(if meta.input.peek(syn::Token![=]) {

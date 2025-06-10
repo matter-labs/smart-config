@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use anyhow::Context;
 
-use super::ConfigSource;
+use super::{ConfigSource, Hierarchical};
 use crate::value::{FileFormat, Map, Pointer, Value, ValueOrigin, WithOrigin};
 
 /// YAML-based configuration source.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Yaml {
     origin: Arc<ValueOrigin>,
     inner: Map,
@@ -105,9 +105,9 @@ impl Yaml {
 }
 
 impl ConfigSource for Yaml {
-    type Map = Map;
+    type Kind = Hierarchical;
 
-    fn into_contents(self) -> WithOrigin<Self::Map> {
+    fn into_contents(self) -> WithOrigin<Map> {
         WithOrigin::new(self.inner, self.origin)
     }
 }
