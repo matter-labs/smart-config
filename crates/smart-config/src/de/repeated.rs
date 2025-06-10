@@ -199,7 +199,8 @@ where
 /// Deserializer from JSON objects.
 ///
 /// Supports deserializing to [`HashMap`] and [`BTreeMap`].
-pub struct Entries<K, V, DeK, DeV> {
+pub struct Entries<K, V, DeK = <K as WellKnown>::Deserializer, DeV = <V as WellKnown>::Deserializer>
+{
     keys: DeK,
     values: DeV,
     _kv: PhantomData<fn(K, V)>,
@@ -584,7 +585,12 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
 /// # );
 /// # anyhow::Ok(())
 /// ```
-pub struct NamedEntries<K, V, DeK, DeV> {
+pub struct NamedEntries<
+    K,
+    V,
+    DeK = <K as WellKnown>::Deserializer,
+    DeV = <V as WellKnown>::Deserializer,
+> {
     inner: Entries<K, V, DeK, DeV>,
     keys_name: &'static str,
     values_name: &'static str,
@@ -627,6 +633,17 @@ where
 
             let parsed_key =
                 parse_key_or_value::<K, _>(&mut ctx, param, &idx_str, &self.inner.keys, key);
+            let null_value;
+            let value = if let Some(value) = value {
+                value
+            } else {
+                let null_origin = ValueOrigin::Synthetic {
+                    source: entry.origin.clone(),
+                    transform: "missing entry value".to_owned(),
+                };
+                null_value = WithOrigin::new(Value::Null, Arc::new(null_origin));
+                &null_value
+            };
             let parsed_value =
                 parse_key_or_value::<V, _>(&mut ctx, param, &idx_str, &self.inner.values, value);
             has_errors |= parsed_key.is_none() || parsed_value.is_none();
@@ -645,7 +662,7 @@ where
     fn parse_entry<'a>(
         &self,
         entry: &'a WithOrigin,
-    ) -> Result<(&'a WithOrigin, &'a WithOrigin), ErrorWithOrigin> {
+    ) -> Result<(&'a WithOrigin, Option<&'a WithOrigin>), ErrorWithOrigin> {
         let Value::Object(obj) = &entry.inner else {
             let expected = format!(
                 "{{ {:?}: _, {:?}: _ }} tuple",
@@ -658,10 +675,7 @@ where
             let err = DeError::missing_field(self.keys_name);
             ErrorWithOrigin::json(err, entry.origin.clone())
         })?;
-        let value = obj.get(self.values_name).ok_or_else(|| {
-            let err = DeError::missing_field(self.values_name);
-            ErrorWithOrigin::json(err, entry.origin.clone())
-        })?;
+        let value = obj.get(self.values_name);
 
         if obj.len() > 2 {
             let expected = format!(
