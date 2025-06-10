@@ -1770,7 +1770,10 @@ fn parsing_with_custom_filter() {
     #[derive(Debug, DescribeConfig, DeserializeConfig)]
     #[config(crate = crate)]
     struct FilteringConfig {
-        #[config(filter(|s: &String| !s.is_empty() && s != "unset", "not empty or 'unset'"))]
+        #[config(deserialize_if(
+            |s: &String| !s.is_empty() && s != "unset",
+            "not empty or 'unset'"
+        ))]
         url: Option<String>,
     }
 

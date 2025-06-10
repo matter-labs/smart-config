@@ -64,14 +64,14 @@
 //! #[derive(DescribeConfig, DeserializeConfig)]
 //! struct FilteringConfig {
 //!     /// Will convert `url: ''` to `None`.
-//!     #[config(filter(validation::NotEmpty))]
+//!     #[config(deserialize_if(validation::NotEmpty))]
 //!     url: Option<String>,
 //!     /// Will convert either of `env: ''` or `env: 'unset'` to `None`.
-//!     #[config(filter(env_filter, "not empty or 'unset'"))]
+//!     #[config(deserialize_if(valid_env, "not empty or 'unset'"))]
 //!     env: Option<String>,
 //! }
 //!
-//! fn env_filter(s: &String) -> bool {
+//! fn valid_env(s: &String) -> bool {
 //!     !s.is_empty() && s != "unset"
 //! }
 //!

@@ -226,28 +226,28 @@ impl<T, De: DeserializeParam<Option<T>>> DeserializeParam<Option<T>> for Validat
     }
 }
 
-pub struct Filtered<T: 'static, De> {
+pub struct DeserializeIf<T: 'static, De> {
     inner: De,
-    filter: &'static dyn Validate<T>,
+    condition: &'static dyn Validate<T>,
 }
 
-impl<T, De: fmt::Debug> fmt::Debug for Filtered<T, De> {
+impl<T, De: fmt::Debug> fmt::Debug for DeserializeIf<T, De> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("Filtered")
             .field("inner", &self.inner)
-            .field("filter", &self.filter)
+            .field("condition", &self.condition)
             .finish_non_exhaustive()
     }
 }
 
-impl<T, De: DeserializeParam<Option<T>>> Filtered<T, De> {
-    pub const fn new(inner: De, filter: &'static dyn Validate<T>) -> Self {
-        Self { inner, filter }
+impl<T, De: DeserializeParam<Option<T>>> DeserializeIf<T, De> {
+    pub const fn new(inner: De, condition: &'static dyn Validate<T>) -> Self {
+        Self { inner, condition }
     }
 }
 
-impl<T, De> DeserializeParam<Option<T>> for Filtered<T, De>
+impl<T, De> DeserializeParam<Option<T>> for DeserializeIf<T, De>
 where
     T: 'static,
     De: DeserializeParam<Option<T>>,
@@ -256,7 +256,7 @@ where
 
     fn describe(&self, description: &mut TypeDescription) {
         self.inner.describe(description);
-        description.set_filter(self.filter);
+        description.set_deserialize_if(self.condition);
     }
 
     fn deserialize_param(
@@ -266,8 +266,8 @@ where
     ) -> Result<Option<T>, ErrorWithOrigin> {
         let value = self.inner.deserialize_param(ctx.borrow(), param)?;
         Ok(value.filter(|val| {
-            if let Err(err) = self.filter.validate(val) {
-                tracing::trace!(%err, filter = ?self.filter, "value filtered out");
+            if let Err(err) = self.condition.validate(val) {
+                tracing::trace!(%err, filter = ?self.condition, "value filtered out");
                 return false;
             }
             true

@@ -304,7 +304,7 @@ pub struct TypeDescription {
     unit: Option<UnitOfMeasurement>,
     pub(crate) is_secret: bool,
     validations: Vec<String>,
-    filter: Option<String>,
+    deserialize_if: Option<String>,
     items: Option<ChildDescription>,
     entries: Option<(ChildDescription, ChildDescription)>,
     fallback: Option<ChildDescription>,
@@ -332,8 +332,8 @@ impl TypeDescription {
     }
 
     #[doc(hidden)] // exposes implementation details
-    pub fn filter(&self) -> Option<&str> {
-        self.filter.as_deref()
+    pub fn deserialize_if(&self) -> Option<&str> {
+        self.deserialize_if.as_deref()
     }
 
     /// Returns the description of array items, if one was provided.
@@ -401,9 +401,9 @@ impl TypeDescription {
         self
     }
 
-    /// Sets a filter for the type.
-    pub fn set_filter<T>(&mut self, filter: &'static dyn Validate<T>) -> &mut Self {
-        self.filter = Some(filter.to_string());
+    /// Sets a "deserialize if" condition for the type.
+    pub fn set_deserialize_if<T>(&mut self, condition: &'static dyn Validate<T>) -> &mut Self {
+        self.deserialize_if = Some(condition.to_string());
         self
     }
 

@@ -292,10 +292,10 @@ fn write_type_description(
         }
     }
 
-    if let Some(filter) = description.filter() {
+    if let Some(condition) = description.deserialize_if() {
         writeln!(
             writer,
-            "{:>indent$}{FIELD}Filtering{FIELD:#}: {filter}, otherwise set to {NULL}null{NULL:#}",
+            "{:>indent$}{FIELD}Filtering{FIELD:#}: {condition}, otherwise set to {NULL}null{NULL:#}",
             ""
         )?;
     }

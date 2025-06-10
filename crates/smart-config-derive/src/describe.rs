@@ -66,13 +66,13 @@ impl ConfigField {
         if self.attrs.is_secret {
             deserializer = quote!(#cr::de::Secret(#deserializer));
         }
-        if let Some(filter) = &self.attrs.filter {
+        if let Some(deserialize_if) = &self.attrs.deserialize_if {
             let ty = Self::unwrap_option(&self.ty).expect("checked during field parsing");
-            let wrapped = filter.wrap(cr);
+            let wrapped = deserialize_if.wrap(cr);
             // A reference is required to convert to `&dyn Validate<_>`. `()`s are here to correctly handle some validation expressions
             // (e.g., `a..b` ranges; unless a range is parenthesized, `&` will be interpreted as a part of the range start).
-            deserializer = quote_spanned! {filter.expr.span()=>
-                #cr::de::_private::Filtered::<#ty, _>::new(#deserializer, &(#wrapped))
+            deserializer = quote_spanned! {deserialize_if.expr.span()=>
+                #cr::de::_private::DeserializeIf::<#ty, _>::new(#deserializer, &(#wrapped))
             };
         }
         if let Some(default_fn) = &default_fn {

@@ -265,7 +265,7 @@
 ///
 /// Has same semantics as [config validations](#validate), but applies to a specific config parameter.
 ///
-/// ## `filter`
+/// ## `deserialize_if`
 ///
 /// **Type:** same as [config validations](#validate)
 ///
