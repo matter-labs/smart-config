@@ -232,7 +232,14 @@ impl ConfigSchema {
         this
     }
 
-    /// Switches coercing for serde-like enums. This will add path aliases for all params in enum configs.
+    /// Switches coercing for serde-like enums. Coercion will add path aliases for all tagged params in enum configs
+    /// added to the schema afterward (or until `coerce_serde_enums(false)` is called). Coercion will apply
+    /// to nested enum configs as well.
+    ///
+    /// For example, if a config param named `param` corresponds to the tag `SomeTag`, then alias `.some_tag.param`
+    /// (snake_cased tag + param name) will be added for the param. Tag aliases and param aliases will result
+    /// in additional path aliases, as expected. For example, if `param` has alias `alias` and the tag has alias `AliasTag`,
+    /// then the param will have `.alias_tag.param`, `.alias_tag.alias` and `.some_tag.alias` aliases.
     pub fn coerce_serde_enums(&mut self, coerce: bool) -> &mut Self {
         self.coerce_serde_enums = coerce;
         self

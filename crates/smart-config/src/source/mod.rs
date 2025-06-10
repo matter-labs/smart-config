@@ -708,7 +708,7 @@ impl WithOrigin {
                 tracing::debug!(
                     variant = variant.name,
                     origin = %variant_content.origin,
-                    "copying variant contents"
+                    "adding detected tag variant"
                 );
                 let origin = ValueOrigin::Synthetic {
                     source: variant_content.origin.clone(),
