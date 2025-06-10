@@ -50,7 +50,7 @@ Add this to your `Crate.toml`:
 
 ```toml
 [dependencies]
-smart-config = "0.1.0"
+smart-config = "0.1.0-pre"
 ```
 
 ### Declaring configurations
@@ -175,6 +175,13 @@ anyhow::Ok(())
 ```
 
 See crate docs for more examples.
+
+## Alternatives and similar tools
+
+- [`config`](https://crates.io/crates/config) and [`figment`](https://crates.io/crates/figment) are multi-layered configuration libraries.
+  They provide a similar scope of functionality, missing some features (e.g., auto-generated docs, smart handling of env vars,
+  extended error reporting, smart coercions etc.).
+- [`envy`](https://crates.io/crates/envy) provides `serde`-based parsing from env vars.
 
 ## License
 
