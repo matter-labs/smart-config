@@ -10,7 +10,7 @@ use serde::{
 use crate::{
     de::{DeserializeContext, DeserializeParam, WellKnown},
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription},
+    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
     value::Value,
     ByteSize,
 };
@@ -303,6 +303,7 @@ impl DeserializeParam<Duration> for WithUnit {
 
     fn describe(&self, description: &mut TypeDescription) {
         description.set_details("duration with unit, or object with single unit key");
+        description.suffixes = Some(TypeSuffixes::DurationUnits);
     }
 
     fn deserialize_param(
@@ -421,6 +422,7 @@ impl DeserializeParam<ByteSize> for WithUnit {
 
     fn describe(&self, description: &mut TypeDescription) {
         description.set_details("size with unit, or object with single unit key");
+        description.suffixes = Some(TypeSuffixes::SizeUnits);
     }
 
     fn deserialize_param(
@@ -447,6 +449,22 @@ impl DeserializeParam<ByteSize> for WithUnit {
 impl WellKnown for ByteSize {
     type Deserializer = WithUnit;
     const DE: Self::Deserializer = WithUnit;
+}
+
+impl TypeSuffixes {
+    pub(crate) fn contains(self, suffix: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::DurationUnits => {
+                let suffix = suffix.strip_prefix("in_").unwrap_or(suffix);
+                RawDuration::VARIANTS.contains(&suffix)
+            }
+            Self::SizeUnits => {
+                let suffix = suffix.strip_prefix("in_").unwrap_or(suffix);
+                RawByteSize::VARIANTS.contains(&suffix)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
