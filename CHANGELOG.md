@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/matter-labs/smart-config/compare/v0.1.0...v0.2.0) (2025-06-11)
+
+
+### Features
+
+* Allow path aliases for params / configs ([#33](https://github.com/matter-labs/smart-config/issues/33)) ([53de6d1](https://github.com/matter-labs/smart-config/commit/53de6d1faa8709d8ef970bf9be0f5d61c62c63f2))
+* Better handling of optional configs / params ([#32](https://github.com/matter-labs/smart-config/issues/32)) ([70f62fd](https://github.com/matter-labs/smart-config/commit/70f62fddbb9f17157f115309e3aab6586b5d2926))
+* Support env-based configuration for Era EN ([#24](https://github.com/matter-labs/smart-config/issues/24)) ([828f3ce](https://github.com/matter-labs/smart-config/commit/828f3cef26c72a63aec01351112596a041086a53))
+
+
+### Bug Fixes
+
+* Reduce object nesting scope ([#35](https://github.com/matter-labs/smart-config/issues/35)) ([b6cb048](https://github.com/matter-labs/smart-config/commit/b6cb0480e872508c498a11f585112ce10673d55e))
+* Support optional values in `NamedEntries`; fix object nesting ([#34](https://github.com/matter-labs/smart-config/issues/34)) ([992f72e](https://github.com/matter-labs/smart-config/commit/992f72e6540a116bf91bdc03151bf0067834dff0))
+
 ## 0.1.0 (2025-06-05)
 
 
