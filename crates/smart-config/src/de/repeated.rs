@@ -168,11 +168,13 @@ where
 
 impl<T: WellKnown> WellKnown for Vec<T> {
     type Deserializer = Repeated<T::Deserializer>;
+    type Optional = ();
     const DE: Self::Deserializer = Repeated(T::DE);
 }
 
 impl<T: WellKnown, const N: usize> WellKnown for [T; N] {
     type Deserializer = Repeated<T::Deserializer>;
+    type Optional = ();
     const DE: Self::Deserializer = Repeated(T::DE);
 }
 
@@ -185,6 +187,7 @@ where
     S: 'static + Default + BuildHasher,
 {
     type Deserializer = Repeated<T::Deserializer>;
+    type Optional = ();
     const DE: Self::Deserializer = Repeated(T::DE);
 }
 
@@ -193,6 +196,7 @@ where
     T: Eq + Ord + WellKnown,
 {
     type Deserializer = Repeated<T::Deserializer>;
+    type Optional = ();
     const DE: Self::Deserializer = Repeated(T::DE);
 }
 
@@ -407,6 +411,7 @@ where
     S: 'static + Default + BuildHasher,
 {
     type Deserializer = Entries<K, V, K::Deserializer, V::Deserializer>;
+    type Optional = ();
     const DE: Self::Deserializer = Entries::new(K::DE, V::DE);
 }
 
@@ -416,6 +421,7 @@ where
     V: 'static + WellKnown,
 {
     type Deserializer = Entries<K, V, K::Deserializer, V::Deserializer>;
+    type Optional = ();
     const DE: Self::Deserializer = Entries::new(K::DE, V::DE);
 }
 

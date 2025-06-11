@@ -57,6 +57,7 @@ impl<T: From<SecretString> + ExposeSecret<str>> DeserializeParam<T> for FromSecr
 
 impl WellKnown for SecretString {
     type Deserializer = FromSecretString;
+    type Optional = ();
     const DE: Self::Deserializer = FromSecretString;
 }
 

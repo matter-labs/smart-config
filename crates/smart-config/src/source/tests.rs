@@ -990,6 +990,24 @@ fn nesting_with_byte_size_param() {
 }
 
 #[test]
+fn nesting_with_null_value() {
+    let json = config!("array": [4, 5], "disk_size_mb": None::<()>);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size, None);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "disk_size_in_kib": None::<()>);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size, None);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "disk_size": None::<()>);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size, None);
+    test_config_roundtrip(&config);
+}
+
+#[test]
 fn nesting_with_duration_param_errors() {
     fn assert_error(err: &ParseErrors) -> &ParseError {
         assert_eq!(err.len(), 1);

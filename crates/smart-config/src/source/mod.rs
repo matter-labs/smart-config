@@ -862,6 +862,8 @@ impl WithOrigin {
                 });
             let mut insertions = vec![];
 
+            // ms: $value -> $value // suffix: 'ms'
+
             for (child_name, suffixes) in params_with_suffixes.chain(nested_configs) {
                 let target_object = match config_object.get(child_name) {
                     None => None,

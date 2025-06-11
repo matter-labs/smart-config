@@ -17,6 +17,7 @@ macro_rules! impl_well_known_hash {
         #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
         impl WellKnown for primitive_types::$ty {
             type Deserializer = Qualified<Serde![str]>;
+            type Optional = ();
             const DE: Self::Deserializer = HASH_DE;
         }
         )+
@@ -65,6 +66,7 @@ macro_rules! impl_well_known_uint {
         #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
         impl WellKnown for primitive_types::$ty {
             type Deserializer = HexUintDeserializer;
+            type Optional = ();
             const DE: Self::Deserializer = HexUintDeserializer;
         }
         )+
