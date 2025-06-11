@@ -11,7 +11,7 @@ use std::{
 use serde::de::{DeserializeOwned, Error as DeError};
 
 use crate::{
-    de::{DeserializeContext, DeserializeParam, WellKnown},
+    de::{DeserializeContext, DeserializeParam, WellKnown, WellKnownOption},
     error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
     utils::const_eq,
@@ -168,15 +168,17 @@ where
 
 impl<T: WellKnown> WellKnown for Vec<T> {
     type Deserializer = Repeated<T::Deserializer>;
-    type Optional = ();
     const DE: Self::Deserializer = Repeated(T::DE);
 }
 
+impl<T: WellKnown> WellKnownOption for Vec<T> {}
+
 impl<T: WellKnown, const N: usize> WellKnown for [T; N] {
     type Deserializer = Repeated<T::Deserializer>;
-    type Optional = ();
     const DE: Self::Deserializer = Repeated(T::DE);
 }
+
+impl<T: WellKnown, const N: usize> WellKnownOption for [T; N] {}
 
 // Heterogeneous tuples don't look like a good idea to mark as well-known because they wouldn't look well-structured
 // (it'd be better to define either multiple params or a struct param).
@@ -187,8 +189,14 @@ where
     S: 'static + Default + BuildHasher,
 {
     type Deserializer = Repeated<T::Deserializer>;
-    type Optional = ();
     const DE: Self::Deserializer = Repeated(T::DE);
+}
+
+impl<T, S> WellKnownOption for HashSet<T, S>
+where
+    T: Eq + Hash + WellKnown,
+    S: 'static + Default + BuildHasher,
+{
 }
 
 impl<T> WellKnown for BTreeSet<T>
@@ -196,9 +204,10 @@ where
     T: Eq + Ord + WellKnown,
 {
     type Deserializer = Repeated<T::Deserializer>;
-    type Optional = ();
     const DE: Self::Deserializer = Repeated(T::DE);
 }
+
+impl<T> WellKnownOption for BTreeSet<T> where T: Eq + Ord + WellKnown {}
 
 /// Deserializer from JSON objects.
 ///
@@ -411,8 +420,15 @@ where
     S: 'static + Default + BuildHasher,
 {
     type Deserializer = Entries<K, V, K::Deserializer, V::Deserializer>;
-    type Optional = ();
     const DE: Self::Deserializer = Entries::new(K::DE, V::DE);
+}
+
+impl<K, V, S> WellKnownOption for HashMap<K, V, S>
+where
+    K: 'static + Eq + Hash + WellKnown,
+    V: 'static + WellKnown,
+    S: 'static + Default + BuildHasher,
+{
 }
 
 impl<K, V> WellKnown for BTreeMap<K, V>
@@ -421,8 +437,14 @@ where
     V: 'static + WellKnown,
 {
     type Deserializer = Entries<K, V, K::Deserializer, V::Deserializer>;
-    type Optional = ();
     const DE: Self::Deserializer = Entries::new(K::DE, V::DE);
+}
+
+impl<K, V> WellKnownOption for BTreeMap<K, V>
+where
+    K: 'static + Eq + Ord + WellKnown,
+    V: 'static + WellKnown,
+{
 }
 
 /// Deserializer that supports either an array of values, or a string in which values are delimited

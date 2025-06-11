@@ -100,7 +100,6 @@ impl ComplexParam {
 
 impl de::WellKnown for ComplexParam {
     type Deserializer = de::Serde![object];
-    type Optional = ();
     const DE: Self::Deserializer = de::Serde![object];
 }
 

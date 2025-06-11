@@ -38,7 +38,6 @@ pub(crate) enum SimpleEnum {
 
 impl WellKnown for SimpleEnum {
     type Deserializer = Serde![str];
-    type Optional = ();
     const DE: Self::Deserializer = Serde![str];
 }
 
@@ -57,7 +56,6 @@ pub(crate) struct TestParam {
 
 impl WellKnown for TestParam {
     type Deserializer = Serde![object];
-    type Optional = ();
     const DE: Self::Deserializer = Serde![object];
 }
 
@@ -195,7 +193,6 @@ pub(crate) struct MapOrString(pub HashMap<String, u64>);
 
 impl WellKnown for MapOrString {
     type Deserializer = Serde![str];
-    type Optional = ();
     const DE: Self::Deserializer = Serde![str];
 }
 

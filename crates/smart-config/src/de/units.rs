@@ -1,6 +1,6 @@
 //! Param deserializers based on units of measurement.
 
-use std::{convert::Infallible, fmt, marker::PhantomData, str::FromStr, time::Duration};
+use std::{fmt, marker::PhantomData, str::FromStr, time::Duration};
 
 use serde::{
     de::{self, EnumAccess, Error as DeError, Unexpected, VariantAccess},
@@ -407,9 +407,36 @@ impl DeserializeParam<Duration> for WithUnit {
     }
 }
 
+impl DeserializeParam<Option<Duration>> for WithUnit {
+    const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        <Self as DeserializeParam<Duration>>::describe(self, description);
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Option<Duration>, ErrorWithOrigin> {
+        Self::deserialize_opt::<RawDuration, _>(&ctx, param)
+    }
+
+    fn serialize_param(&self, param: &Option<Duration>) -> serde_json::Value {
+        match param {
+            Some(val) => self.serialize_param(val),
+            None => serde_json::Value::Null,
+        }
+    }
+}
+
 impl WellKnown for Duration {
     type Deserializer = WithUnit;
-    type Optional = Infallible;
+    const DE: Self::Deserializer = WithUnit;
+}
+
+impl WellKnown for Option<Duration> {
+    type Deserializer = WithUnit;
     const DE: Self::Deserializer = WithUnit;
 }
 
@@ -527,13 +554,11 @@ impl DeserializeParam<Option<ByteSize>> for WithUnit {
 
 impl WellKnown for ByteSize {
     type Deserializer = WithUnit;
-    type Optional = Infallible;
     const DE: Self::Deserializer = WithUnit;
 }
 
 impl WellKnown for Option<ByteSize> {
     type Deserializer = WithUnit;
-    type Optional = Infallible;
     const DE: Self::Deserializer = WithUnit;
 }
 

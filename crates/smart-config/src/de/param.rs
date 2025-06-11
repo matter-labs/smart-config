@@ -1,9 +1,7 @@
 //! Parameter deserializers.
 
 use std::{
-    any,
-    convert::Infallible,
-    fmt,
+    any, fmt,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
@@ -106,11 +104,12 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
 pub trait WellKnown: 'static + Sized {
     /// Type of the deserializer used for this type.
     type Deserializer: DeserializeParam<Self>;
-    /// FIXME
-    type Optional;
     /// Deserializer instance.
     const DE: Self::Deserializer;
 }
+
+/// FIXME
+pub trait WellKnownOption: WellKnown {}
 
 impl<T: WellKnown> DeserializeParam<T> for () {
     const EXPECTING: BasicTypes = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
@@ -179,78 +178,90 @@ impl<T: Serialize + DeserializeOwned, const EXPECTING: u8> DeserializeParam<T>
 
 impl WellKnown for bool {
     type Deserializer = super::Serde![bool];
-    type Optional = ();
     const DE: Self::Deserializer = super::Serde![bool];
 }
 
+impl WellKnownOption for bool {}
+
 impl WellKnown for String {
     type Deserializer = super::Serde![str];
-    type Optional = ();
     const DE: Self::Deserializer = super::Serde![str];
 }
 
+impl WellKnownOption for String {}
+
 impl WellKnown for PathBuf {
     type Deserializer = Qualified<super::Serde![str]>;
-    type Optional = ();
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "filesystem path");
 }
 
+impl WellKnownOption for PathBuf {}
+
 impl WellKnown for IpAddr {
     type Deserializer = Qualified<super::Serde![str]>;
-    type Optional = ();
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IP address");
 }
 
+impl WellKnownOption for IpAddr {}
+
 impl WellKnown for Ipv4Addr {
     type Deserializer = Qualified<super::Serde![str]>;
-    type Optional = ();
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IPv4 address");
 }
 
+impl WellKnownOption for Ipv4Addr {}
+
 impl WellKnown for Ipv6Addr {
     type Deserializer = Qualified<super::Serde![str]>;
-    type Optional = ();
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IPv6 address");
 }
 
+impl WellKnownOption for Ipv6Addr {}
+
 impl WellKnown for SocketAddr {
     type Deserializer = Qualified<super::Serde![str]>;
-    type Optional = ();
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "socket address");
 }
 
+impl WellKnownOption for SocketAddr {}
+
 impl WellKnown for SocketAddrV4 {
     type Deserializer = Qualified<super::Serde![str]>;
-    type Optional = ();
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "v4 socket address");
 }
 
+impl WellKnownOption for SocketAddrV4 {}
+
 impl WellKnown for SocketAddrV6 {
     type Deserializer = Qualified<super::Serde![str]>;
-    type Optional = ();
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "v6 socket address");
 }
 
+impl WellKnownOption for SocketAddrV6 {}
+
 impl WellKnown for f32 {
     type Deserializer = super::Serde![float];
-    type Optional = ();
     const DE: Self::Deserializer = super::Serde![float];
 }
 
+impl WellKnownOption for f32 {}
+
 impl WellKnown for f64 {
     type Deserializer = super::Serde![float];
-    type Optional = ();
     const DE: Self::Deserializer = super::Serde![float];
 }
+
+impl WellKnownOption for f64 {}
 
 macro_rules! impl_well_known_int {
     ($($int:ty),+) => {
         $(
         impl WellKnown for $int {
             type Deserializer = super::Serde![int];
-            type Optional = ();
             const DE: Self::Deserializer = super::Serde![int];
         }
+
+        impl WellKnownOption for $int {}
         )+
     };
 }
@@ -262,9 +273,10 @@ macro_rules! impl_well_known_non_zero_int {
         $(
         impl WellKnown for $int {
             type Deserializer = Qualified<super::Serde![int]>;
-            type Optional = ();
             const DE: Self::Deserializer = Qualified::new(super::Serde![int], "non-zero");
         }
+
+        impl WellKnownOption for $int {}
         )+
     };
 }
@@ -282,9 +294,8 @@ impl_well_known_non_zero_int!(
     NonZeroIsize
 );
 
-impl<T: WellKnown<Optional = ()>> WellKnown for Option<T> {
+impl<T: WellKnownOption> WellKnown for Option<T> {
     type Deserializer = Optional<T::Deserializer>;
-    type Optional = Infallible;
     const DE: Self::Deserializer = Optional(T::DE);
 }
 
