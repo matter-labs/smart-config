@@ -58,7 +58,7 @@ pub use self::{
     deserializer::DeserializerOptions,
     macros::Serde,
     param::{
-        DeserializeParam, KnownOptionTransform, Optional, OrString, Qualified, Serde, WellKnown,
+        CustomKnownOption, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown,
         WellKnownOption, WithDefault,
     },
     repeated::{Delimited, Entries, NamedEntries, Repeated, ToEntries},
@@ -83,7 +83,6 @@ mod repeated;
 mod secret;
 #[cfg(test)]
 mod tests;
-pub mod transform;
 mod units;
 
 /// Context for deserializing a configuration.

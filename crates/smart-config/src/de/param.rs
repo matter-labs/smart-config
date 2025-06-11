@@ -2,7 +2,6 @@
 
 use std::{
     any, fmt,
-    marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
@@ -18,7 +17,7 @@ use serde::{
 };
 
 use crate::{
-    de::{deserializer::ValueDeserializer, transform, DeserializeContext},
+    de::{deserializer::ValueDeserializer, DeserializeContext},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
     value::{Value, WithOrigin},
@@ -111,18 +110,31 @@ pub trait WellKnown: 'static + Sized {
 
 /// Marker trait for types that use a conventional [`Optional`] deserializer for `Option<Self>`.
 ///
-/// It's usually sound to implement this trait for custom types, unless the type needs custom null coercion logic
-/// (e.g., coercing some structured values to null).
+/// It's usually sound to implement this trait for custom types together with [`WellKnown`], unless:
+///
+/// - The type needs custom null coercion logic (e.g., coercing some structured values to null).
+///   In this case, implement [`KnownOptionTransform`] instead. Note that `WellKnownOption` is tied to it
+///   via a blanket implementation.
+/// - It doesn't make sense to have optional type params.
 pub trait WellKnownOption: WellKnown {}
 
 /// Customizes the well-known deserializer for `Option<Self>`.
-pub trait KnownOptionTransform: WellKnown {
-    /// Transform applied to the [`Optional`] deserializer.
-    type Transform: transform::OptionalTransform;
+///
+/// # Examples
+///
+/// Can be used to filter out some values on the deserializer level:
+///
+/// FIXME
+pub trait CustomKnownOption: 'static + Send + Sized {
+    /// FIXME
+    type OptDeserializer: DeserializeParam<Option<Self>>;
+    /// FIXME
+    const OPT_DE: Self::OptDeserializer;
 }
 
-impl<T: WellKnownOption> KnownOptionTransform for T {
-    type Transform = transform::Map;
+impl<T: WellKnownOption + Send> CustomKnownOption for T {
+    type OptDeserializer = Optional<T::Deserializer>;
+    const OPT_DE: Self::OptDeserializer = Optional(Self::DE);
 }
 
 impl<T: WellKnown> DeserializeParam<T> for () {
@@ -308,12 +320,9 @@ impl_well_known_non_zero_int!(
     NonZeroIsize
 );
 
-impl<T: KnownOptionTransform> WellKnown for Option<T>
-where
-    Optional<T::Deserializer, T::Transform>: DeserializeParam<Option<T>>,
-{
-    type Deserializer = Optional<T::Deserializer, T::Transform>;
-    const DE: Self::Deserializer = Optional::<_, T::Transform>(T::DE, PhantomData);
+impl<T: CustomKnownOption> WellKnown for Option<T> {
+    type Deserializer = T::OptDeserializer;
+    const DE: Self::Deserializer = T::OPT_DE;
 }
 
 /// [Deserializer](DeserializeParam) decorator that provides additional [details](TypeDescription)
@@ -418,27 +427,26 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
 ///
 /// # Transforms
 ///
-/// The second type param is the *transform* determining how the wrapped deserializer is delegated to.
+/// The second generic param is the *transform* determining how the wrapped deserializer is delegated to.
 /// Regardless of the transform, missing and `null` values always result in `None`; any other value, will be passed
 /// to the wrapped deserializer.
 ///
-/// - The default [`Map`] transform is similar to [`map`](Option::map()). It requires the underlying deserializer to return a non-optional value.
-/// - [`AndThen`] is similar to [`and_then`](Option::and_then()). It expects the underlying deserializer to return an `Option`.
-///   As such, it makes sense to use (e.g. via [`KnownOptionTransform`]) if some non-`null` values result in deserialized `None`.
+/// - The default transform (`AND_THEN == false`) is similar to [`map`](Option::map()). It requires the underlying deserializer to return a non-optional value.
+/// - `AND_THEN == true` is similar to [`and_then`](Option::and_then()). It expects the underlying deserializer to return an `Option`.
 #[derive(Debug)]
-pub struct Optional<De, Tr = transform::Map>(De, PhantomData<Tr>);
+pub struct Optional<De, const AND_THEN: bool = false>(pub De);
 
 impl<De> Optional<De> {
     /// Wraps a deserializer returning a non-optional value, similarly to [`Option::map()`].
     pub const fn map(deserializer: De) -> Self {
-        Self(deserializer, PhantomData)
+        Self(deserializer)
     }
 }
 
-impl<De> Optional<De, transform::AndThen> {
+impl<De> Optional<De, true> {
     /// Wraps a deserializer returning an optional value, similarly to [`Option::and_then()`].
     pub const fn and_then(deserializer: De) -> Self {
-        Self(deserializer, PhantomData)
+        Self(deserializer)
     }
 }
 
@@ -474,7 +482,7 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
     }
 }
 
-impl<T, De> DeserializeParam<Option<T>> for Optional<De, transform::AndThen>
+impl<T, De> DeserializeParam<Option<T>> for Optional<De, true>
 where
     De: DeserializeParam<Option<T>>,
 {

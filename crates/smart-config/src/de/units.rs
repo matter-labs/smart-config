@@ -8,7 +8,7 @@ use serde::{
 };
 
 use crate::{
-    de::{transform, DeserializeContext, DeserializeParam, KnownOptionTransform, WellKnown},
+    de::{CustomKnownOption, DeserializeContext, DeserializeParam, Optional, WellKnown},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
     value::Value,
@@ -433,8 +433,9 @@ impl WellKnown for Duration {
     const DE: Self::Deserializer = WithUnit;
 }
 
-impl KnownOptionTransform for Duration {
-    type Transform = transform::AndThen;
+impl CustomKnownOption for Duration {
+    type OptDeserializer = Optional<WithUnit, true>;
+    const OPT_DE: Self::OptDeserializer = Optional(WithUnit);
 }
 
 #[derive(Debug)]
@@ -554,8 +555,9 @@ impl WellKnown for ByteSize {
     const DE: Self::Deserializer = WithUnit;
 }
 
-impl KnownOptionTransform for ByteSize {
-    type Transform = transform::AndThen;
+impl CustomKnownOption for ByteSize {
+    type OptDeserializer = Optional<WithUnit, true>;
+    const OPT_DE: Self::OptDeserializer = Optional(WithUnit);
 }
 
 impl TypeSuffixes {
