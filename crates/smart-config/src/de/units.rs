@@ -303,7 +303,7 @@ impl DeserializeParam<Duration> for WithUnit {
 
     fn describe(&self, description: &mut TypeDescription) {
         description.set_details("duration with unit, or object with single unit key");
-        description.suffixes = Some(TypeSuffixes::DurationUnits);
+        description.set_suffixes(TypeSuffixes::DurationUnits);
     }
 
     fn deserialize_param(
@@ -422,7 +422,7 @@ impl DeserializeParam<ByteSize> for WithUnit {
 
     fn describe(&self, description: &mut TypeDescription) {
         description.set_details("size with unit, or object with single unit key");
-        description.suffixes = Some(TypeSuffixes::SizeUnits);
+        description.set_suffixes(TypeSuffixes::SizeUnits);
     }
 
     fn deserialize_param(

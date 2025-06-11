@@ -1,10 +1,12 @@
 use std::collections::HashSet;
 
+use assert_matches::assert_matches;
+
 use super::*;
 use crate::{
     config,
     de::{DeserializeContext, DeserializerOptions},
-    testonly::{ConfigWithComplexTypes, DefaultingEnumConfig, EnumConfig},
+    testonly::{ComposedConfig, ConfigWithComplexTypes, DefaultingEnumConfig, EnumConfig},
     DescribeConfig, ParseErrors,
 };
 
@@ -137,4 +139,32 @@ fn describing_complex_types() {
         .find(|param| param.name == "with_custom_deserializer")
         .unwrap();
     assert_eq!(custom_de_param.expecting, BasicTypes::STRING);
+}
+
+#[test]
+fn suffixes_for_composed_params() {
+    let metadata = &ConfigWithComplexTypes::DESCRIPTION;
+    let size_param = metadata
+        .params
+        .iter()
+        .find(|param| param.name == "disk_size")
+        .unwrap();
+    let ty = size_param.type_description();
+    assert_matches!(ty.suffixes, Some(TypeSuffixes::SizeUnits));
+    let size_param = metadata
+        .params
+        .iter()
+        .find(|param| param.name == "memory_size_mb")
+        .unwrap();
+    let ty = size_param.type_description();
+    assert_matches!(ty.suffixes, None);
+
+    let metadata = &ComposedConfig::DESCRIPTION;
+    let dur_param = metadata
+        .params
+        .iter()
+        .find(|param| param.name == "durations")
+        .unwrap();
+    let ty = dur_param.type_description();
+    assert_matches!(ty.suffixes, None);
 }

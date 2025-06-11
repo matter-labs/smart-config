@@ -293,10 +293,17 @@ impl ChildDescription {
     }
 }
 
+/// Recognized suffixes for a param type used during object nesting when preprocessing config sources.
+/// Only these suffixes will be recognized as belonging to the param and activate its object nesting.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum TypeSuffixes {
+#[non_exhaustive]
+#[doc(hidden)] // not stable yet
+pub enum TypeSuffixes {
+    /// All possible suffixes.
     All,
+    /// Duration units like `_sec` or `_millis`. May be prepended with `_in`, e.g. `_in_secs`.
     DurationUnits,
+    /// Byte size units like `_mb` or `_bytes`. May be prepended with `_in`, e.g. `_in_mb`.
     SizeUnits,
 }
 
@@ -309,7 +316,7 @@ pub struct TypeDescription {
     rust_type: &'static str,
     details: Option<Cow<'static, str>>,
     unit: Option<UnitOfMeasurement>,
-    pub(crate) suffixes: Option<TypeSuffixes>,
+    suffixes: Option<TypeSuffixes>,
     pub(crate) is_secret: bool,
     validations: Vec<String>,
     deserialize_if: Option<String>,
@@ -332,6 +339,11 @@ impl TypeDescription {
     /// Gets the unit of measurement.
     pub fn unit(&self) -> Option<UnitOfMeasurement> {
         self.unit
+    }
+
+    #[doc(hidden)] // not stable yet
+    pub fn suffixes(&self) -> Option<TypeSuffixes> {
+        self.suffixes
     }
 
     #[doc(hidden)] // exposes implementation details
@@ -400,6 +412,11 @@ impl TypeDescription {
     /// Adds a unit of measurement.
     pub fn set_unit(&mut self, unit: UnitOfMeasurement) -> &mut Self {
         self.unit = Some(unit);
+        self
+    }
+
+    pub(crate) fn set_suffixes(&mut self, suffixes: TypeSuffixes) -> &mut Self {
+        self.suffixes = Some(suffixes);
         self
     }
 

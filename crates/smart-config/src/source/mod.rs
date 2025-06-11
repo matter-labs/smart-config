@@ -563,7 +563,7 @@ impl WithOrigin {
 
                 // Find all values in `map` that either match `name` exactly, or have the `{name}_{type_suffix}` form.
                 let matching_values: Vec<_> =
-                    if let Some(suffixes) = param.type_description().suffixes {
+                    if let Some(suffixes) = param.type_description().suffixes() {
                         let matching_values = map.iter().filter_map(|(key, val)| {
                             let suffix = if key == name {
                                 None // Exact match
@@ -850,7 +850,7 @@ impl WithOrigin {
             };
 
             let params_with_suffixes = config_data.metadata.params.iter().filter_map(|param| {
-                let suffixes = param.type_description().suffixes?;
+                let suffixes = param.type_description().suffixes()?;
                 Some((param.name, suffixes))
             });
             let nested_configs = config_data
