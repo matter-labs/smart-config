@@ -1,7 +1,7 @@
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    de::{DeserializeContext, DeserializeParam, Qualified, Serde, WellKnown},
+    de::{DeserializeContext, DeserializeParam, Qualified, Serde, WellKnown, WellKnownOption},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
     value::Value,
@@ -19,6 +19,9 @@ macro_rules! impl_well_known_hash {
             type Deserializer = Qualified<Serde![str]>;
             const DE: Self::Deserializer = HASH_DE;
         }
+
+        #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
+        impl WellKnownOption for primitive_types::$ty {}
         )+
     };
 }
@@ -67,6 +70,9 @@ macro_rules! impl_well_known_uint {
             type Deserializer = HexUintDeserializer;
             const DE: Self::Deserializer = HexUintDeserializer;
         }
+
+        #[cfg_attr(docsrs, doc(cfg(feature = "primitive-types")))]
+        impl WellKnownOption for primitive_types::$ty {}
         )+
     };
 }

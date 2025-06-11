@@ -57,7 +57,10 @@ use self::deserializer::ValueDeserializer;
 pub use self::{
     deserializer::DeserializerOptions,
     macros::Serde,
-    param::{DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WithDefault},
+    param::{
+        DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WellKnownOption,
+        WithDefault,
+    },
     repeated::{Delimited, Entries, NamedEntries, Repeated, ToEntries},
     secret::{FromSecretString, Secret},
     units::WithUnit,

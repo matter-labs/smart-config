@@ -3,7 +3,7 @@ use std::{io, io::Write as _};
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
-    metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeDescription},
+    metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeDescription, TypeSuffixes},
     ConfigRef, ConfigSchema,
 };
 
@@ -188,7 +188,7 @@ impl ParamRef<'_> {
     fn write_help(&self, writer: &mut impl io::Write) -> io::Result<()> {
         self.write_locations(writer)?;
         let description = self.param.type_description();
-        write_type_description(writer, "Type", 2, self.param.expecting, &description)?;
+        write_type_description(writer, None, 2, self.param.expecting, &description)?;
 
         if let Some(tag_variant) = self.param.tag_variant {
             self.write_tag_variant(tag_variant, writer)?;
@@ -251,7 +251,7 @@ impl ParamRef<'_> {
 
 fn write_type_description(
     writer: &mut impl io::Write,
-    relation_to_parent: &str,
+    relation_to_parent: Option<&str>,
     indent: usize,
     expecting: BasicTypes,
     description: &TypeDescription,
@@ -279,11 +279,33 @@ fn write_type_description(
     } else {
         String::new()
     };
+
+    let field_name = relation_to_parent.unwrap_or("Type");
     writeln!(
         writer,
-        "{:>indent$}{FIELD}{relation_to_parent}{FIELD:#}: {ty}{details}{unit}",
+        "{:>indent$}{FIELD}{field_name}{FIELD:#}: {ty}{details}{unit}",
         ""
     )?;
+
+    // Suffixes are only active for top-level types, not for array items etc.
+    if let (None, Some(suffixes)) = (relation_to_parent, description.suffixes()) {
+        let suffixes = match suffixes {
+            TypeSuffixes::DurationUnits => {
+                Some(format!("duration units from millis to weeks, e.g. {STRING}_ms{STRING:#} or {STRING}_in_sec{STRING:#}"))
+            }
+            TypeSuffixes::SizeUnits => {
+                Some(format!("byte suze units up to gigabytes, e.g. {STRING}_mb{STRING:#} or {STRING}_in_kib{STRING:#}"))
+            }
+            _ => None,
+        };
+        if let Some(suffixes) = &suffixes {
+            writeln!(
+                writer,
+                "{:>indent$}{FIELD}Name suffixes{FIELD:#}: {suffixes}",
+                ""
+            )?;
+        }
+    }
 
     let validations = description.validations();
     if !validations.is_empty() {
@@ -302,16 +324,16 @@ fn write_type_description(
     }
 
     if let Some((expecting, item)) = description.items() {
-        write_type_description(writer, "Array items", indent + 2, expecting, item)?;
+        write_type_description(writer, Some("Array items"), indent + 2, expecting, item)?;
     }
     if let Some((expecting, key)) = description.keys() {
-        write_type_description(writer, "Map keys", indent + 2, expecting, key)?;
+        write_type_description(writer, Some("Map keys"), indent + 2, expecting, key)?;
     }
     if let Some((expecting, value)) = description.values() {
-        write_type_description(writer, "Map values", indent + 2, expecting, value)?;
+        write_type_description(writer, Some("Map values"), indent + 2, expecting, value)?;
     }
     if let Some((expecting, fallback)) = description.fallback() {
-        write_type_description(writer, "Fallback", indent + 2, expecting, fallback)?;
+        write_type_description(writer, Some("Fallback"), indent + 2, expecting, fallback)?;
     }
 
     Ok(())

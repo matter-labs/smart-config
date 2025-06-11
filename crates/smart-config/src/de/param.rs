@@ -108,6 +108,13 @@ pub trait WellKnown: 'static + Sized {
     const DE: Self::Deserializer;
 }
 
+/// Marker trait for types that use a conventional [`Optional`] deserializer for `Option<Self>`.
+///
+/// It's usually sound to implement this trait for custom types, unless the type needs custom null coercion logic
+/// (e.g., coercing some structured values to null).
+// TODO: this definition makes it impossible to define custom `WellKnown for Option<_>` in other crates because of orphaning rules.
+pub trait WellKnownOption: WellKnown {}
+
 impl<T: WellKnown> DeserializeParam<T> for () {
     const EXPECTING: BasicTypes = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
 
@@ -178,55 +185,77 @@ impl WellKnown for bool {
     const DE: Self::Deserializer = super::Serde![bool];
 }
 
+impl WellKnownOption for bool {}
+
 impl WellKnown for String {
     type Deserializer = super::Serde![str];
     const DE: Self::Deserializer = super::Serde![str];
 }
+
+impl WellKnownOption for String {}
 
 impl WellKnown for PathBuf {
     type Deserializer = Qualified<super::Serde![str]>;
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "filesystem path");
 }
 
+impl WellKnownOption for PathBuf {}
+
 impl WellKnown for IpAddr {
     type Deserializer = Qualified<super::Serde![str]>;
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IP address");
 }
+
+impl WellKnownOption for IpAddr {}
 
 impl WellKnown for Ipv4Addr {
     type Deserializer = Qualified<super::Serde![str]>;
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IPv4 address");
 }
 
+impl WellKnownOption for Ipv4Addr {}
+
 impl WellKnown for Ipv6Addr {
     type Deserializer = Qualified<super::Serde![str]>;
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "IPv6 address");
 }
+
+impl WellKnownOption for Ipv6Addr {}
 
 impl WellKnown for SocketAddr {
     type Deserializer = Qualified<super::Serde![str]>;
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "socket address");
 }
 
+impl WellKnownOption for SocketAddr {}
+
 impl WellKnown for SocketAddrV4 {
     type Deserializer = Qualified<super::Serde![str]>;
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "v4 socket address");
 }
+
+impl WellKnownOption for SocketAddrV4 {}
 
 impl WellKnown for SocketAddrV6 {
     type Deserializer = Qualified<super::Serde![str]>;
     const DE: Self::Deserializer = Qualified::new(super::Serde![str], "v6 socket address");
 }
 
+impl WellKnownOption for SocketAddrV6 {}
+
 impl WellKnown for f32 {
     type Deserializer = super::Serde![float];
     const DE: Self::Deserializer = super::Serde![float];
 }
 
+impl WellKnownOption for f32 {}
+
 impl WellKnown for f64 {
     type Deserializer = super::Serde![float];
     const DE: Self::Deserializer = super::Serde![float];
 }
+
+impl WellKnownOption for f64 {}
 
 macro_rules! impl_well_known_int {
     ($($int:ty),+) => {
@@ -235,6 +264,8 @@ macro_rules! impl_well_known_int {
             type Deserializer = super::Serde![int];
             const DE: Self::Deserializer = super::Serde![int];
         }
+
+        impl WellKnownOption for $int {}
         )+
     };
 }
@@ -248,6 +279,8 @@ macro_rules! impl_well_known_non_zero_int {
             type Deserializer = Qualified<super::Serde![int]>;
             const DE: Self::Deserializer = Qualified::new(super::Serde![int], "non-zero");
         }
+
+        impl WellKnownOption for $int {}
         )+
     };
 }
@@ -265,7 +298,7 @@ impl_well_known_non_zero_int!(
     NonZeroIsize
 );
 
-impl<T: WellKnown> WellKnown for Option<T> {
+impl<T: WellKnownOption> WellKnown for Option<T> {
     type Deserializer = Optional<T::Deserializer>;
     const DE: Self::Deserializer = Optional(T::DE);
 }
@@ -372,6 +405,29 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
 #[derive(Debug)]
 pub struct Optional<De>(pub De);
 
+impl Optional<()> {
+    pub(super) fn detect_null(ctx: &DeserializeContext<'_>, expecting: BasicTypes) -> bool {
+        let current_value = ctx.current_value().map(|val| &val.inner);
+        let Some(current_value) = current_value else {
+            return true;
+        };
+        if matches!(current_value, Value::Null) {
+            return true;
+        }
+
+        // Coerce string values representing `null`, provided that the original deserializer doesn't expect a string
+        // (if it does, there would be an ambiguity doing this).
+        if !expecting.contains(BasicTypes::STRING) {
+            if let Some(s) = current_value.as_plain_str() {
+                if s.is_empty() || s == "null" {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
 impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
     const EXPECTING: BasicTypes = De::EXPECTING;
 
@@ -384,24 +440,9 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<Option<T>, ErrorWithOrigin> {
-        let current_value = ctx.current_value().map(|val| &val.inner);
-        let Some(current_value) = current_value else {
-            return Ok(None);
-        };
-        if matches!(current_value, Value::Null) {
+        if Optional::detect_null(&ctx, De::EXPECTING) {
             return Ok(None);
         }
-
-        // Coerce string values representing `null`, provided that the original deserializer doesn't expect a string
-        // (if it does, there would be an ambiguity doing this).
-        if !De::EXPECTING.contains(BasicTypes::STRING) {
-            if let Some(s) = current_value.as_plain_str() {
-                if s.is_empty() || s == "null" {
-                    return Ok(None);
-                }
-            }
-        }
-
         self.0.deserialize_param(ctx, param).map(Some)
     }
 

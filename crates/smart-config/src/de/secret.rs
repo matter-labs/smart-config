@@ -1,6 +1,6 @@
 use secrecy::{ExposeSecret, SecretString};
 
-use super::{DeserializeContext, DeserializeParam, WellKnown};
+use super::{DeserializeContext, DeserializeParam, WellKnown, WellKnownOption};
 use crate::{
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
@@ -59,6 +59,8 @@ impl WellKnown for SecretString {
     type Deserializer = FromSecretString;
     const DE: Self::Deserializer = FromSecretString;
 }
+
+impl WellKnownOption for SecretString {}
 
 /// Deserializer for arbitrary secret params. Will set the corresponding flag for [`ParamMetadata`],
 /// making raw param value hidden in the debug output etc.

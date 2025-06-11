@@ -8,9 +8,9 @@ use serde::{
 };
 
 use crate::{
-    de::{DeserializeContext, DeserializeParam, WellKnown},
+    de::{DeserializeContext, DeserializeParam, Optional, WellKnown},
     error::ErrorWithOrigin,
-    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription},
+    metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
     value::Value,
     ByteSize,
 };
@@ -184,8 +184,65 @@ impl DeserializeParam<ByteSize> for SizeUnit {
 #[derive(Debug, Clone, Copy)]
 pub struct WithUnit;
 
+impl WithUnit {
+    const EXPECTED_TYPES: BasicTypes = BasicTypes::STRING.or(BasicTypes::OBJECT);
+
+    fn deserialize<Raw, T>(
+        ctx: &DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<T, ErrorWithOrigin>
+    where
+        Raw: EnumWithUnit + TryInto<T, Error = serde_json::Error>,
+    {
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let raw = if let Value::String(s) = deserializer.value() {
+            s.expose()
+                .parse::<Raw>()
+                .map_err(|err| deserializer.enrich_err(err))?
+        } else {
+            deserializer.deserialize_enum("Raw", Raw::VARIANTS, EnumVisitor(PhantomData::<Raw>))?
+        };
+        raw.try_into().map_err(|err| deserializer.enrich_err(err))
+    }
+
+    // We need special handling for `{ "suffix": null }` values (incl. ones produced by suffixed param names like `param_ms: null`).
+    // Without it, we'd error when parsing `null` value as `u64`.
+    fn deserialize_opt<Raw, T>(
+        ctx: &DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Option<T>, ErrorWithOrigin>
+    where
+        Raw: EnumWithUnit + TryInto<T, Error = serde_json::Error>,
+    {
+        if Optional::detect_null(ctx, Self::EXPECTED_TYPES) {
+            return Ok(None);
+        }
+
+        let deserializer = ctx.current_value_deserializer(param.name)?;
+        let raw = if let Value::String(s) = deserializer.value() {
+            Some(
+                s.expose()
+                    .parse::<Raw>()
+                    .map_err(|err| deserializer.enrich_err(err))?,
+            )
+        } else {
+            deserializer.deserialize_enum(
+                "Raw",
+                Raw::VARIANTS,
+                EnumVisitor(PhantomData::<Option<Raw>>),
+            )?
+        };
+        let Some(raw) = raw else {
+            return Ok(None);
+        };
+        raw.try_into()
+            .map(Some)
+            .map_err(|err| deserializer.enrich_err(err))
+    }
+}
+
 /// Helper trait allowing to unify enum parsing for durations and byte sizes.
-trait EnumWithUnit: Sized {
+trait EnumWithUnit: FromStr<Err = serde_json::Error> {
     const VARIANTS: &'static [&'static str];
 
     fn extract_variant(unit: &str) -> Option<fn(u64) -> Self>;
@@ -194,6 +251,13 @@ trait EnumWithUnit: Sized {
         let variant_mapper = Self::extract_variant(unit)
             .ok_or_else(|| DeError::unknown_variant(unit, Self::VARIANTS))?;
         Ok(variant_mapper(value))
+    }
+
+    fn parse_opt<E: de::Error>(unit: &str, value: Option<u64>) -> Result<Option<Self>, E> {
+        let variant_mapper = Self::extract_variant(unit)
+            .ok_or_else(|| DeError::unknown_variant(unit, Self::VARIANTS))?;
+        // We want to check the variant first, and only then return `Ok(None)`.
+        Ok(value.map(variant_mapper))
     }
 }
 
@@ -204,18 +268,29 @@ impl<'v, T: EnumWithUnit> de::Visitor<'v> for EnumVisitor<T> {
     type Value = T;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "enum with one of {:?} variants",
-            RawDuration::VARIANTS
-        )
+        write!(formatter, "enum with one of {:?} variants", T::VARIANTS)
     }
 
     fn visit_enum<A: EnumAccess<'v>>(self, data: A) -> Result<Self::Value, A::Error> {
         let (tag, payload) = data.variant::<String>()?;
-        let value = payload.newtype_variant::<u64>()?;
+        let value = payload.newtype_variant()?;
         let unit = tag.strip_prefix("in_").unwrap_or(&tag);
         T::parse(unit, value)
+    }
+}
+
+impl<'v, T: EnumWithUnit> de::Visitor<'v> for EnumVisitor<Option<T>> {
+    type Value = Option<T>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "enum with one of {:?} variants", T::VARIANTS)
+    }
+
+    fn visit_enum<A: EnumAccess<'v>>(self, data: A) -> Result<Self::Value, A::Error> {
+        let (tag, payload) = data.variant::<String>()?;
+        let value = payload.newtype_variant()?;
+        let unit = tag.strip_prefix("in_").unwrap_or(&tag);
+        T::parse_opt(unit, value)
     }
 }
 
@@ -253,12 +328,6 @@ impl EnumWithUnit for RawDuration {
         "days" | "day" | "d" => Self::Days,
         "weeks" | "week" | "w" => Self::Weeks,
     );
-}
-
-impl<'de> Deserialize<'de> for RawDuration {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_enum("RawDuration", Self::VARIANTS, EnumVisitor(PhantomData))
-    }
 }
 
 impl RawDuration {
@@ -299,10 +368,11 @@ impl TryFrom<RawDuration> for Duration {
 }
 
 impl DeserializeParam<Duration> for WithUnit {
-    const EXPECTING: BasicTypes = BasicTypes::STRING.or(BasicTypes::OBJECT);
+    const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
 
     fn describe(&self, description: &mut TypeDescription) {
         description.set_details("duration with unit, or object with single unit key");
+        description.set_suffixes(TypeSuffixes::DurationUnits);
     }
 
     fn deserialize_param(
@@ -310,15 +380,7 @@ impl DeserializeParam<Duration> for WithUnit {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<Duration, ErrorWithOrigin> {
-        let deserializer = ctx.current_value_deserializer(param.name)?;
-        let raw = if let Value::String(s) = deserializer.value() {
-            s.expose()
-                .parse::<RawDuration>()
-                .map_err(|err| deserializer.enrich_err(err))?
-        } else {
-            RawDuration::deserialize(deserializer)?
-        };
-        raw.try_into().map_err(|err| deserializer.enrich_err(err))
+        Self::deserialize::<RawDuration, _>(&ctx, param)
     }
 
     fn serialize_param(&self, param: &Duration) -> serde_json::Value {
@@ -347,7 +409,35 @@ impl DeserializeParam<Duration> for WithUnit {
     }
 }
 
+impl DeserializeParam<Option<Duration>> for WithUnit {
+    const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        <Self as DeserializeParam<Duration>>::describe(self, description);
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Option<Duration>, ErrorWithOrigin> {
+        Self::deserialize_opt::<RawDuration, _>(&ctx, param)
+    }
+
+    fn serialize_param(&self, param: &Option<Duration>) -> serde_json::Value {
+        match param {
+            Some(val) => self.serialize_param(val),
+            None => serde_json::Value::Null,
+        }
+    }
+}
+
 impl WellKnown for Duration {
+    type Deserializer = WithUnit;
+    const DE: Self::Deserializer = WithUnit;
+}
+
+impl WellKnown for Option<Duration> {
     type Deserializer = WithUnit;
     const DE: Self::Deserializer = WithUnit;
 }
@@ -376,7 +466,11 @@ impl RawByteSize {
 
 impl<'de> Deserialize<'de> for RawByteSize {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_enum("RawByteSize", Self::VARIANTS, EnumVisitor(PhantomData))
+        deserializer.deserialize_enum(
+            "RawByteSize",
+            Self::VARIANTS,
+            EnumVisitor(PhantomData::<Self>),
+        )
     }
 }
 
@@ -417,10 +511,11 @@ impl TryFrom<RawByteSize> for ByteSize {
 }
 
 impl DeserializeParam<ByteSize> for WithUnit {
-    const EXPECTING: BasicTypes = BasicTypes::STRING.or(BasicTypes::OBJECT);
+    const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
 
     fn describe(&self, description: &mut TypeDescription) {
         description.set_details("size with unit, or object with single unit key");
+        description.set_suffixes(TypeSuffixes::SizeUnits);
     }
 
     fn deserialize_param(
@@ -428,15 +523,7 @@ impl DeserializeParam<ByteSize> for WithUnit {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<ByteSize, ErrorWithOrigin> {
-        let deserializer = ctx.current_value_deserializer(param.name)?;
-        let raw = if let Value::String(s) = deserializer.value() {
-            s.expose()
-                .parse::<RawByteSize>()
-                .map_err(|err| deserializer.enrich_err(err))?
-        } else {
-            RawByteSize::deserialize(deserializer)?
-        };
-        raw.try_into().map_err(|err| deserializer.enrich_err(err))
+        Self::deserialize::<RawByteSize, _>(&ctx, param)
     }
 
     fn serialize_param(&self, param: &ByteSize) -> serde_json::Value {
@@ -444,9 +531,53 @@ impl DeserializeParam<ByteSize> for WithUnit {
     }
 }
 
+impl DeserializeParam<Option<ByteSize>> for WithUnit {
+    const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        <Self as DeserializeParam<ByteSize>>::describe(self, description);
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Option<ByteSize>, ErrorWithOrigin> {
+        Self::deserialize_opt::<RawByteSize, _>(&ctx, param)
+    }
+
+    fn serialize_param(&self, param: &Option<ByteSize>) -> serde_json::Value {
+        match param {
+            Some(val) => val.to_string().into(),
+            None => serde_json::Value::Null,
+        }
+    }
+}
+
 impl WellKnown for ByteSize {
     type Deserializer = WithUnit;
     const DE: Self::Deserializer = WithUnit;
+}
+
+impl WellKnown for Option<ByteSize> {
+    type Deserializer = WithUnit;
+    const DE: Self::Deserializer = WithUnit;
+}
+
+impl TypeSuffixes {
+    pub(crate) fn contains(self, suffix: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::DurationUnits => {
+                let suffix = suffix.strip_prefix("in_").unwrap_or(suffix);
+                RawDuration::VARIANTS.contains(&suffix)
+            }
+            Self::SizeUnits => {
+                let suffix = suffix.strip_prefix("in_").unwrap_or(suffix);
+                RawByteSize::VARIANTS.contains(&suffix)
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -95,7 +95,7 @@
 //! ```
 //! use std::collections::HashMap;
 //! use smart_config::{
-//!     de::{Serde, WellKnown}, metadata::BasicTypes,
+//!     de::{Serde, WellKnown, WellKnownOption}, metadata::BasicTypes,
 //!     DescribeConfig, DeserializeConfig,
 //! };
 //!
@@ -111,6 +111,9 @@
 //!     type Deserializer = Serde![str];
 //!     const DE: Self::Deserializer = Serde![str];
 //! }
+//!
+//! // Signals that the type can be used with an `Option<_>`
+//! impl WellKnownOption for CustomEnum {}
 //!
 //! // Then, the type can be used in configs basically everywhere:
 //! #[derive(Debug, DescribeConfig, DeserializeConfig)]

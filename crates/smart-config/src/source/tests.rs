@@ -807,54 +807,12 @@ fn nesting_key_value_map_to_multiple_locations() {
 }
 
 #[test]
-fn nesting_for_object_param() {
-    let schema = ConfigSchema::new(&ValueCoercingConfig::DESCRIPTION, "test");
-    let env = Environment::from_iter("", [("TEST_PARAM_INT", "123"), ("TEST_PARAM_STRING", "??")]);
-    let repo = ConfigRepository::new(&schema).with(env);
-
-    let object = repo.merged().get(Pointer("test.param")).unwrap();
-    assert_matches!(
-        object.origin.as_ref(),
-        ValueOrigin::Synthetic { transform, .. } if transform.contains("object param")
-    );
-    assert_matches!(
-        &object.inner,
-        Value::Object(obj) if obj.len() == 2 && obj.contains_key("int") && obj.contains_key("string")
-    );
-
-    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
-    assert_eq!(config.param.int, 123);
-    assert_eq!(config.param.string, "??");
-}
-
-#[test]
-fn nesting_for_object_param_with_structured_source() {
-    let schema = ConfigSchema::new(&ValueCoercingConfig::DESCRIPTION, "test");
-    let json = config!(
-        "test.param_int": 123,
-        "test.param.string": "??",
-    );
-    let repo = ConfigRepository::new(&schema).with(json);
-
-    let object = repo.merged().get(Pointer("test.param")).unwrap();
-    assert_matches!(
-        &object.inner,
-        Value::Object(obj) if obj.len() == 2 && obj.contains_key("int") && obj.contains_key("string")
-    );
-
-    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
-    assert_eq!(config.param.int, 123);
-    assert_eq!(config.param.string, "??");
-}
-
-#[test]
 fn nesting_for_array_param() {
     let schema = ConfigSchema::new(&ValueCoercingConfig::DESCRIPTION, "test");
     let mut env = Environment::from_iter(
         "",
         [
-            ("TEST_PARAM_INT", "123"),
-            ("TEST_PARAM_STRING", "??"),
+            ("TEST_PARAM__JSON", r#"{ "int": 123, "string": "??" }"#),
             ("TEST_SET_0", "123"),
             ("TEST_SET_1", "321"),
             ("TEST_SET_2", "777"),
@@ -933,23 +891,10 @@ fn nesting_not_applied_for_non_sequential_array_indices() {
 
 #[test]
 fn nesting_does_not_override_existing_values() {
-    let schema = ConfigSchema::new(&ValueCoercingConfig::DESCRIPTION, "test");
-    let json = config!(
-        "test.param_int": 123,
-        "test.param_string": "!!",
-        "test.param.string": "??",
-    );
-    let repo = ConfigRepository::new(&schema).with(json);
-
-    let object = repo.merged().get(Pointer("test.param")).unwrap();
-    assert_matches!(
-        &object.inner,
-        Value::Object(obj) if obj.len() == 2 && obj.contains_key("int") && obj.contains_key("string")
-    );
-
-    let config: ValueCoercingConfig = repo.single().unwrap().parse().unwrap();
-    assert_eq!(config.param.int, 123);
-    assert_eq!(config.param.string, "??");
+    let json = config!("array": [4, 5], "long_dur_sec": 30, "long_dur.sec": 15);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.long_dur, Duration::from_secs(15));
+    test_config_roundtrip(&config);
 }
 
 #[test]
@@ -1045,6 +990,24 @@ fn nesting_with_byte_size_param() {
 }
 
 #[test]
+fn nesting_with_null_value() {
+    let json = config!("array": [4, 5], "disk_size_mb": None::<()>);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size, None);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "disk_size_in_kib": None::<()>);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size, None);
+    test_config_roundtrip(&config);
+
+    let json = config!("array": [4, 5], "disk_size": None::<()>);
+    let config: ConfigWithComplexTypes = testing::test(json).unwrap();
+    assert_eq!(config.disk_size, None);
+    test_config_roundtrip(&config);
+}
+
+#[test]
 fn nesting_with_duration_param_errors() {
     fn assert_error(err: &ParseErrors) -> &ParseError {
         assert_eq!(err.len(), 1);
@@ -1060,12 +1023,6 @@ fn nesting_with_duration_param_errors() {
     assert_matches!(err.origin(), ValueOrigin::Path { path, .. } if path == "LONG_DUR_SEC");
     let inner = err.inner().to_string();
     assert!(inner.contains("what"), "{inner}");
-
-    let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR_WHAT", "123")]);
-    let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
-    let err = assert_error(&err);
-    let inner = err.inner().to_string();
-    assert!(inner.contains("unknown variant"), "{inner}");
 
     let env = Environment::from_iter("", [("ARRAY", "4,5"), ("LONG_DUR", "123 years")]);
     let err = testing::test::<ConfigWithComplexTypes>(env).unwrap_err();
@@ -1147,15 +1104,17 @@ fn merging_duration_params_is_atomic() {
 }
 
 #[test]
-fn nesting_with_composed_deserializers() {
+fn env_config_with_composed_deserializers() {
     let mut env = Environment::from_iter(
         "",
         [
             ("arrays:json", "[[1, 2], [3, 4], [5, 6]]"),
             ("durations:json", r#"["1 sec", "3 min"]"#),
             ("delimited_durations", "3ms,5sec,2hr"),
-            ("map_of_sizes_small", "3 KiB"),
-            ("map_of_sizes_large", "5 MiB"),
+            (
+                "map_of_sizes:json",
+                r#"{ "small": "3 KiB", "large": "5 MiB" }"#,
+            ),
         ],
     );
     env.coerce_json().unwrap();
@@ -1210,13 +1169,13 @@ fn nesting_with_composed_deserializers_errors() {
     let inner = err.inner().to_string();
     assert!(inner.contains("invalid type"), "{inner}");
 
-    let json = config!("map_of_sizes_small": "20 gajillion bytes");
+    let json = config!("map_of_sizes.small": "20 gajillion bytes");
     let err = testing::test::<ComposedConfig>(json).unwrap_err();
     assert_eq!(err.len(), 1);
     let err = err.first();
     assert_eq!(err.path(), "map_of_sizes.small");
     let origin = err.origin().to_string();
-    assert!(origin.ends_with("-> path 'map_of_sizes_small'"), "{origin}");
+    assert!(origin.ends_with("-> path 'map_of_sizes.small'"), "{origin}");
     let inner = err.inner().to_string();
     assert!(
         inner.contains("unknown variant") && inner.contains("gajillion"),

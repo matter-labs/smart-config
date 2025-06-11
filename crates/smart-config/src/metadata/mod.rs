@@ -1,6 +1,6 @@
 //! Configuration metadata.
 
-use std::{any, borrow::Cow, fmt, iter, ops, time::Duration};
+use std::{any, borrow::Cow, fmt, ops, time::Duration};
 
 use self::_private::{BoxedDeserializer, BoxedVisitor};
 use crate::{
@@ -72,17 +72,6 @@ pub struct ConfigMetadata {
     pub visitor: BoxedVisitor,
     #[doc(hidden)] // implementation detail
     pub validations: &'static [&'static dyn Validate<dyn any::Any>],
-}
-
-impl ConfigMetadata {
-    pub(crate) fn all_child_names(&self) -> impl Iterator<Item = &'static str> + '_ {
-        let param_names = self.params.iter().flat_map(ParamMetadata::all_names);
-        let config_names = self
-            .nested_configs
-            .iter()
-            .flat_map(NestedConfigMetadata::all_names);
-        param_names.chain(config_names)
-    }
 }
 
 /// Information about a config tag.
@@ -161,14 +150,6 @@ impl ParamMetadata {
         self.deserializer.describe(&mut description);
         description.rust_type = self.rust_type.name_in_code;
         description
-    }
-
-    fn all_names(&self) -> impl Iterator<Item = &'static str> + '_ {
-        iter::once(self.name).chain(
-            self.aliases
-                .iter()
-                .filter_map(|&(alias, _)| (!alias.starts_with('.')).then_some(alias)),
-        )
     }
 }
 
@@ -312,6 +293,20 @@ impl ChildDescription {
     }
 }
 
+/// Recognized suffixes for a param type used during object nesting when preprocessing config sources.
+/// Only these suffixes will be recognized as belonging to the param and activate its object nesting.
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+#[doc(hidden)] // not stable yet
+pub enum TypeSuffixes {
+    /// All possible suffixes.
+    All,
+    /// Duration units like `_sec` or `_millis`. May be prepended with `_in`, e.g. `_in_secs`.
+    DurationUnits,
+    /// Byte size units like `_mb` or `_bytes`. May be prepended with `_in`, e.g. `_in_mb`.
+    SizeUnits,
+}
+
 /// Human-readable description for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
 ///
 /// If a configuration parameter supports complex inputs (objects and/or arrays), this information *may* contain
@@ -321,6 +316,7 @@ pub struct TypeDescription {
     rust_type: &'static str,
     details: Option<Cow<'static, str>>,
     unit: Option<UnitOfMeasurement>,
+    suffixes: Option<TypeSuffixes>,
     pub(crate) is_secret: bool,
     validations: Vec<String>,
     deserialize_if: Option<String>,
@@ -343,6 +339,11 @@ impl TypeDescription {
     /// Gets the unit of measurement.
     pub fn unit(&self) -> Option<UnitOfMeasurement> {
         self.unit
+    }
+
+    #[doc(hidden)] // not stable yet
+    pub fn suffixes(&self) -> Option<TypeSuffixes> {
+        self.suffixes
     }
 
     #[doc(hidden)] // exposes implementation details
@@ -414,6 +415,11 @@ impl TypeDescription {
         self
     }
 
+    pub(crate) fn set_suffixes(&mut self, suffixes: TypeSuffixes) -> &mut Self {
+        self.suffixes = Some(suffixes);
+        self
+    }
+
     /// Sets validation for the type.
     pub fn set_validations<T>(&mut self, validations: &[&'static dyn Validate<T>]) -> &mut Self {
         self.validations = validations.iter().map(ToString::to_string).collect();
@@ -482,16 +488,6 @@ pub struct NestedConfigMetadata {
     pub tag_variant: Option<&'static ConfigVariant>,
     /// Config metadata.
     pub meta: &'static ConfigMetadata,
-}
-
-impl NestedConfigMetadata {
-    fn all_names(&self) -> impl Iterator<Item = &'static str> + '_ {
-        let name = (!self.name.is_empty()).then_some(self.name);
-        name.into_iter()
-            .chain(self.aliases.iter().filter_map(|&(alias, _)| {
-                (!alias.is_empty() && !alias.starts_with('.')).then_some(alias)
-            }))
-    }
 }
 
 /// Unit of time measurement.
