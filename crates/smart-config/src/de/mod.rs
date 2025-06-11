@@ -58,8 +58,8 @@ pub use self::{
     deserializer::DeserializerOptions,
     macros::Serde,
     param::{
-        DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WellKnownOption,
-        WithDefault,
+        DeserializeParam, KnownOptionTransform, Optional, OrString, Qualified, Serde, WellKnown,
+        WellKnownOption, WithDefault,
     },
     repeated::{Delimited, Entries, NamedEntries, Repeated, ToEntries},
     secret::{FromSecretString, Secret},
@@ -83,6 +83,7 @@ mod repeated;
 mod secret;
 #[cfg(test)]
 mod tests;
+pub mod transform;
 mod units;
 
 /// Context for deserializing a configuration.
@@ -409,6 +410,12 @@ impl WithOrigin {
         let Value::String(StrValue::Plain(str)) = &self.inner else {
             return None; // we only know how to coerce strings so far
         };
+
+        // Coerce string values representing `null`, provided that the original deserializer doesn't expect a string
+        // (if it does, there would be an ambiguity doing this).
+        if !expecting.contains(BasicTypes::STRING) && (str.is_empty() || str == "null") {
+            return Some(Self::new(Value::Null, self.origin.clone()));
+        }
 
         // Attempt to transform the type to the expected type
         match expecting {

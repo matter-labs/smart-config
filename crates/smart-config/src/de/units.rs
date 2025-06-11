@@ -8,7 +8,7 @@ use serde::{
 };
 
 use crate::{
-    de::{DeserializeContext, DeserializeParam, Optional, WellKnown},
+    de::{transform, DeserializeContext, DeserializeParam, KnownOptionTransform, WellKnown},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
     value::Value,
@@ -214,10 +214,6 @@ impl WithUnit {
     where
         Raw: EnumWithUnit + TryInto<T, Error = serde_json::Error>,
     {
-        if Optional::detect_null(ctx, Self::EXPECTED_TYPES) {
-            return Ok(None);
-        }
-
         let deserializer = ctx.current_value_deserializer(param.name)?;
         let raw = if let Value::String(s) = deserializer.value() {
             Some(
@@ -437,9 +433,8 @@ impl WellKnown for Duration {
     const DE: Self::Deserializer = WithUnit;
 }
 
-impl WellKnown for Option<Duration> {
-    type Deserializer = WithUnit;
-    const DE: Self::Deserializer = WithUnit;
+impl KnownOptionTransform for Duration {
+    type Transform = transform::AndThen;
 }
 
 #[derive(Debug)]
@@ -559,9 +554,8 @@ impl WellKnown for ByteSize {
     const DE: Self::Deserializer = WithUnit;
 }
 
-impl WellKnown for Option<ByteSize> {
-    type Deserializer = WithUnit;
-    const DE: Self::Deserializer = WithUnit;
+impl KnownOptionTransform for ByteSize {
+    type Transform = transform::AndThen;
 }
 
 impl TypeSuffixes {

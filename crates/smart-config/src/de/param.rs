@@ -2,6 +2,7 @@
 
 use std::{
     any, fmt,
+    marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::{
         NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
@@ -17,7 +18,7 @@ use serde::{
 };
 
 use crate::{
-    de::{deserializer::ValueDeserializer, DeserializeContext},
+    de::{deserializer::ValueDeserializer, transform, DeserializeContext},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
     value::{Value, WithOrigin},
@@ -112,8 +113,17 @@ pub trait WellKnown: 'static + Sized {
 ///
 /// It's usually sound to implement this trait for custom types, unless the type needs custom null coercion logic
 /// (e.g., coercing some structured values to null).
-// TODO: this definition makes it impossible to define custom `WellKnown for Option<_>` in other crates because of orphaning rules.
 pub trait WellKnownOption: WellKnown {}
+
+/// Customizes the well-known deserializer for `Option<Self>`.
+pub trait KnownOptionTransform: WellKnown {
+    /// Transform applied to the [`Optional`] deserializer.
+    type Transform: transform::OptionalTransform;
+}
+
+impl<T: WellKnownOption> KnownOptionTransform for T {
+    type Transform = transform::Map;
+}
 
 impl<T: WellKnown> DeserializeParam<T> for () {
     const EXPECTING: BasicTypes = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
@@ -298,9 +308,12 @@ impl_well_known_non_zero_int!(
     NonZeroIsize
 );
 
-impl<T: WellKnownOption> WellKnown for Option<T> {
-    type Deserializer = Optional<T::Deserializer>;
-    const DE: Self::Deserializer = Optional(T::DE);
+impl<T: KnownOptionTransform> WellKnown for Option<T>
+where
+    Optional<T::Deserializer, T::Transform>: DeserializeParam<Option<T>>,
+{
+    type Deserializer = Optional<T::Deserializer, T::Transform>;
+    const DE: Self::Deserializer = Optional::<_, T::Transform>(T::DE, PhantomData);
 }
 
 /// [Deserializer](DeserializeParam) decorator that provides additional [details](TypeDescription)
@@ -402,30 +415,36 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
 ///   to a null.
 /// - [`filter` attribute](macro@crate::DescribeConfig#filter) can help filtering out empty strings etc. for types
 ///   that do expect string values.
+///
+/// # Transforms
+///
+/// The second type param is the *transform* determining how the wrapped deserializer is delegated to.
+/// Regardless of the transform, missing and `null` values always result in `None`; any other value, will be passed
+/// to the wrapped deserializer.
+///
+/// - The default [`Map`] transform is similar to [`map`](Option::map()). It requires the underlying deserializer to return a non-optional value.
+/// - [`AndThen`] is similar to [`and_then`](Option::and_then()). It expects the underlying deserializer to return an `Option`.
+///   As such, it makes sense to use (e.g. via [`KnownOptionTransform`]) if some non-`null` values result in deserialized `None`.
 #[derive(Debug)]
-pub struct Optional<De>(pub De);
+pub struct Optional<De, Tr = transform::Map>(De, PhantomData<Tr>);
 
-impl Optional<()> {
-    pub(super) fn detect_null(ctx: &DeserializeContext<'_>, expecting: BasicTypes) -> bool {
-        let current_value = ctx.current_value().map(|val| &val.inner);
-        let Some(current_value) = current_value else {
-            return true;
-        };
-        if matches!(current_value, Value::Null) {
-            return true;
-        }
-
-        // Coerce string values representing `null`, provided that the original deserializer doesn't expect a string
-        // (if it does, there would be an ambiguity doing this).
-        if !expecting.contains(BasicTypes::STRING) {
-            if let Some(s) = current_value.as_plain_str() {
-                if s.is_empty() || s == "null" {
-                    return true;
-                }
-            }
-        }
-        false
+impl<De> Optional<De> {
+    /// Wraps a deserializer returning a non-optional value, similarly to [`Option::map()`].
+    pub const fn map(deserializer: De) -> Self {
+        Self(deserializer, PhantomData)
     }
+}
+
+impl<De> Optional<De, transform::AndThen> {
+    /// Wraps a deserializer returning an optional value, similarly to [`Option::and_then()`].
+    pub const fn and_then(deserializer: De) -> Self {
+        Self(deserializer, PhantomData)
+    }
+}
+
+fn detect_null(ctx: &DeserializeContext<'_>) -> bool {
+    let current_value = ctx.current_value().map(|val| &val.inner);
+    matches!(current_value, None | Some(Value::Null))
 }
 
 impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
@@ -440,7 +459,7 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<Option<T>, ErrorWithOrigin> {
-        if Optional::detect_null(&ctx, De::EXPECTING) {
+        if detect_null(&ctx) {
             return Ok(None);
         }
         self.0.deserialize_param(ctx, param).map(Some)
@@ -450,6 +469,37 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
         if let Some(param) = param {
             self.0.serialize_param(param)
         } else {
+            serde_json::Value::Null
+        }
+    }
+}
+
+impl<T, De> DeserializeParam<Option<T>> for Optional<De, transform::AndThen>
+where
+    De: DeserializeParam<Option<T>>,
+{
+    const EXPECTING: BasicTypes = De::EXPECTING;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.0.describe(description);
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Option<T>, ErrorWithOrigin> {
+        if detect_null(&ctx) {
+            return Ok(None);
+        }
+        self.0.deserialize_param(ctx, param)
+    }
+
+    fn serialize_param(&self, param: &Option<T>) -> serde_json::Value {
+        if param.is_some() {
+            self.0.serialize_param(param)
+        } else {
+            // Force `null` representation regardless of the underlying deserializer
             serde_json::Value::Null
         }
     }

@@ -129,7 +129,7 @@ pub struct FundingConfig {
     #[config(example = Some("correct horse battery staple".into()))]
     pub api_key: Option<SecretString>,
     /// Secret key.
-    #[config(secret, with = de::Optional(de::Serde![str]))]
+    #[config(secret, with = de::Optional::map(de::Serde![str]))]
     #[config(example = Some(SecretKey(H256::zero())))]
     pub secret_key: Option<SecretKey>,
 }
