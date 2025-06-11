@@ -163,6 +163,7 @@ pub enum ObjectStoreConfig {
     /// Stores objects in AWS S3.
     S3 {
         bucket_name: String,
+        #[config(deserialize_if(NotEmpty))]
         region: Option<String>,
     },
     /// Stores objects in Google Cloud Storage.

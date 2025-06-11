@@ -260,6 +260,10 @@ impl ParseErrors {
     pub fn first(&self) -> &ParseError {
         self.errors.first().expect("no errors")
     }
+
+    pub(crate) fn truncate(&mut self, len: usize) {
+        self.errors.truncate(len);
+    }
 }
 
 impl IntoIterator for ParseErrors {

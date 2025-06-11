@@ -323,6 +323,7 @@ pub struct TypeDescription {
     unit: Option<UnitOfMeasurement>,
     pub(crate) is_secret: bool,
     validations: Vec<String>,
+    deserialize_if: Option<String>,
     items: Option<ChildDescription>,
     entries: Option<(ChildDescription, ChildDescription)>,
     fallback: Option<ChildDescription>,
@@ -347,6 +348,11 @@ impl TypeDescription {
     #[doc(hidden)] // exposes implementation details
     pub fn validations(&self) -> &[String] {
         &self.validations
+    }
+
+    #[doc(hidden)] // exposes implementation details
+    pub fn deserialize_if(&self) -> Option<&str> {
+        self.deserialize_if.as_deref()
     }
 
     /// Returns the description of array items, if one was provided.
@@ -411,6 +417,12 @@ impl TypeDescription {
     /// Sets validation for the type.
     pub fn set_validations<T>(&mut self, validations: &[&'static dyn Validate<T>]) -> &mut Self {
         self.validations = validations.iter().map(ToString::to_string).collect();
+        self
+    }
+
+    /// Sets a "deserialize if" condition for the type.
+    pub fn set_deserialize_if<T>(&mut self, condition: &'static dyn Validate<T>) -> &mut Self {
+        self.deserialize_if = Some(condition.to_string());
         self
     }
 

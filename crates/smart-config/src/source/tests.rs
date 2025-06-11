@@ -1855,3 +1855,99 @@ fn parsing_named_entries_with_optional_values() {
     assert_eq!(config.overrides["submit"], None);
     assert_eq!(config.overrides["revert"], Some(3));
 }
+
+#[test]
+fn parsing_nulls_from_env() {
+    // It's always possible to use JSON coercion.
+    let mut env = Environment::from_iter("", [("URL__JSON", "null"), ("FLOAT__JSON", "null")]);
+    env.coerce_json().unwrap();
+    let config: DefaultingConfig = testing::test(env).unwrap();
+    assert_eq!(
+        config,
+        DefaultingConfig {
+            url: None,
+            float: None,
+            ..DefaultingConfig::default()
+        }
+    );
+
+    let env = Environment::from_iter("", [("URL", ""), ("FLOAT", "null")]);
+    let config: DefaultingConfig = testing::test(env).unwrap();
+    assert_eq!(
+        config,
+        DefaultingConfig {
+            url: None,
+            float: None,
+            ..DefaultingConfig::default()
+        }
+    );
+}
+
+#[test]
+fn parsing_with_custom_filter() {
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    struct FilteringConfig {
+        #[config(deserialize_if(
+            |s: &String| !s.is_empty() && s != "unset",
+            "not empty or 'unset'"
+        ))]
+        url: Option<String>,
+    }
+
+    let mut env = Environment::from_iter("", [("URL__JSON", "null")]);
+    env.coerce_json().unwrap();
+    let config: FilteringConfig = testing::test(env).unwrap();
+    assert_eq!(config.url, None);
+
+    let mut env = Environment::from_iter("", [("URL", "")]);
+    env.coerce_json().unwrap();
+    let config: FilteringConfig = testing::test(env).unwrap();
+    assert_eq!(config.url, None);
+
+    let mut env = Environment::from_iter("", [("URL", "unset")]);
+    env.coerce_json().unwrap();
+    let config: FilteringConfig = testing::test(env).unwrap();
+    assert_eq!(config.url, None);
+
+    let mut env = Environment::from_iter("", [("URL", "null")]);
+    env.coerce_json().unwrap();
+    let config: FilteringConfig = testing::test(env).unwrap();
+    assert_eq!(config.url.unwrap(), "null");
+}
+
+#[test]
+fn deserializing_optional_config() {
+    let json = config!(
+        "nested.renamed": "first",
+        "renamed": "second",
+        "nested_opt.other_int": 23,
+    );
+    let config: CompoundConfig = testing::test(json.clone()).unwrap();
+    // There's no required `nested_opt.renamed` param, but otherwise, the config is valid.
+    assert!(config.nested_opt.is_none(), "{config:?}");
+
+    // Same with a repo.
+    let schema = ConfigSchema::new(&CompoundConfig::DESCRIPTION, "");
+    let repo = ConfigRepository::new(&schema).with(json);
+    let config: Option<NestedConfig> = repo.get("nested_opt").unwrap().parse_opt().unwrap();
+    assert!(config.is_none());
+
+    let json = config!(
+        "nested.renamed": "first",
+        "renamed": "second",
+        "nested_opt.other_int": "??", // << invalid type
+    );
+    let err = testing::test::<CompoundConfig>(json.clone()).unwrap_err();
+    // Both missing param and the invalid type errors should be present
+    assert_eq!(err.len(), 2);
+
+    // Same with a repo.
+    let repo = repo.with(json);
+    let err = repo
+        .get::<NestedConfig>("nested_opt")
+        .unwrap()
+        .parse_opt()
+        .unwrap_err();
+    assert_eq!(err.len(), 2);
+}

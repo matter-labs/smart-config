@@ -161,6 +161,7 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
     pub(crate) with: Option<Expr>,
+    pub(crate) deserialize_if: Option<Validation>,
     pub(crate) validations: Vec<Validation>,
 }
 
@@ -178,6 +179,7 @@ impl ConfigFieldAttrs {
         let mut flatten_span = None;
         let mut with = None;
         let mut secret_span = None;
+        let mut deserialize_if = None;
         let mut validations = vec![];
         for attr in config_attrs {
             attr.parse_nested_meta(|meta| {
@@ -227,6 +229,9 @@ impl ConfigFieldAttrs {
                 } else if meta.path.is_ident("validate") {
                     validations.push(Validation::new(meta.input)?);
                     Ok(())
+                } else if meta.path.is_ident("deserialize_if") {
+                    deserialize_if = Some(Validation::new(meta.input)?);
+                    Ok(())
                 } else {
                     Err(meta.error("Unsupported attribute"))
                 }
@@ -248,6 +253,15 @@ impl ConfigFieldAttrs {
         if let (Some(fallback), true) = (&fallback, nest) {
             let msg = "cannot specify `fallback` for a `nest`ed / `flatten`ed configuration";
             return Err(syn::Error::new(fallback.span(), msg));
+        }
+        if let (Some(filter), true) = (&deserialize_if, nest) {
+            let msg = "cannot specify `filter` for a `nest`ed / `flatten`ed configuration";
+            return Err(syn::Error::new(filter.expr.span(), msg));
+        }
+
+        if let (Some(deserialize_if), false) = (&deserialize_if, is_option) {
+            let msg = "`deserialize_if` can only be specified for `Option`s";
+            return Err(syn::Error::new(deserialize_if.expr.span(), msg));
         }
 
         if let (Some(flatten_span), Some(_)) = (flatten_span, &rename) {
@@ -276,6 +290,7 @@ impl ConfigFieldAttrs {
             flatten,
             nest,
             with,
+            deserialize_if,
             validations,
             is_secret: secret_span.is_some(),
         })

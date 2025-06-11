@@ -66,7 +66,7 @@ use crate::{
     error::{ErrorWithOrigin, LocationInConfig, LowLevelError},
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
     value::{Pointer, StrValue, Value, ValueOrigin, WithOrigin},
-    DescribeConfig, DeserializeConfigError, ParseError, ParseErrors,
+    DescribeConfig, DeserializeConfigError, ParseError, ParseErrorCategory, ParseErrors,
 };
 
 #[doc(hidden)]
@@ -282,16 +282,56 @@ impl<'a> DeserializeContext<'a> {
             .downcast::<C>()
             .expect("Internal error: config deserializer output has wrong type"))
     }
+
+    pub(crate) fn deserialize_any_config_opt(
+        mut self,
+    ) -> Result<Option<Box<dyn any::Any>>, DeserializeConfigError> {
+        if self.current_value().is_none() {
+            return Ok(None);
+        }
+
+        let error_count = self.errors.len();
+        self.borrow()
+            .deserialize_any_config()
+            .map(Some)
+            .or_else(|err| {
+                let only_missing_field_errors = self
+                    .errors
+                    .iter()
+                    .skip(error_count)
+                    .all(|err| matches!(err.category, ParseErrorCategory::MissingField));
+                if only_missing_field_errors {
+                    tracing::trace!(
+                        "optional config misses required params and no other errors; coercing it to `None`"
+                    );
+                    self.errors.truncate(error_count);
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            })
+    }
+
+    pub(crate) fn deserialize_config_opt<C: 'static>(
+        self,
+    ) -> Result<Option<C>, DeserializeConfigError> {
+        let config = self.deserialize_any_config_opt()?.map(|boxed| {
+            *boxed
+                .downcast::<C>()
+                .expect("Internal error: config deserializer output has wrong type")
+        });
+        Ok(config)
+    }
 }
 
 /// Methods used in proc macros. Not a part of public API.
 #[doc(hidden)]
 impl DeserializeContext<'_> {
-    pub fn deserialize_nested_config<T: DeserializeConfig>(
+    pub fn deserialize_nested_config<C: DeserializeConfig>(
         &mut self,
         index: usize,
-        default_fn: Option<fn() -> T>,
-    ) -> Result<T, DeserializeConfigError> {
+        default_fn: Option<fn() -> C>,
+    ) -> Result<C, DeserializeConfigError> {
         let child_ctx = self.for_nested_config(index);
         if child_ctx.current_value().is_none() {
             if let Some(default) = default_fn {
@@ -301,15 +341,11 @@ impl DeserializeContext<'_> {
         child_ctx.deserialize_config()
     }
 
-    pub fn deserialize_nested_config_opt<T: DeserializeConfig>(
+    pub fn deserialize_nested_config_opt<C: DeserializeConfig>(
         &mut self,
         index: usize,
-    ) -> Result<Option<T>, DeserializeConfigError> {
-        let child_ctx = self.for_nested_config(index);
-        if child_ctx.current_value().is_none() {
-            return Ok(None);
-        }
-        child_ctx.deserialize_config().map(Some)
+    ) -> Result<Option<C>, DeserializeConfigError> {
+        self.for_nested_config(index).deserialize_config_opt()
     }
 
     #[tracing::instrument(

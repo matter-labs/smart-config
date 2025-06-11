@@ -225,3 +225,56 @@ impl<T, De: DeserializeParam<Option<T>>> DeserializeParam<Option<T>> for Validat
         self.inner.serialize_param(param)
     }
 }
+
+pub struct DeserializeIf<T: 'static, De> {
+    inner: De,
+    condition: &'static dyn Validate<T>,
+}
+
+impl<T, De: fmt::Debug> fmt::Debug for DeserializeIf<T, De> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Filtered")
+            .field("inner", &self.inner)
+            .field("condition", &self.condition)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T, De: DeserializeParam<Option<T>>> DeserializeIf<T, De> {
+    pub const fn new(inner: De, condition: &'static dyn Validate<T>) -> Self {
+        Self { inner, condition }
+    }
+}
+
+impl<T, De> DeserializeParam<Option<T>> for DeserializeIf<T, De>
+where
+    T: 'static,
+    De: DeserializeParam<Option<T>>,
+{
+    const EXPECTING: BasicTypes = De::EXPECTING;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.inner.describe(description);
+        description.set_deserialize_if(self.condition);
+    }
+
+    fn deserialize_param(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Option<T>, ErrorWithOrigin> {
+        let value = self.inner.deserialize_param(ctx.borrow(), param)?;
+        Ok(value.filter(|val| {
+            if let Err(err) = self.condition.validate(val) {
+                tracing::trace!(%err, filter = ?self.condition, "value filtered out");
+                return false;
+            }
+            true
+        }))
+    }
+
+    fn serialize_param(&self, param: &Option<T>) -> Value {
+        self.inner.serialize_param(param)
+    }
+}

@@ -1,10 +1,12 @@
-//! Parameter and config validation.
+//! Parameter and config validation and filtering.
 //!
 //! # Overview
 //!
 //! The core validation functionality is encapsulated in the [`Validate`] trait.
 //!
 //! # Examples
+//!
+//! ## Validation
 //!
 //! ```
 //! use secrecy::{ExposeSecret, SecretString};
@@ -49,6 +51,48 @@
 //!         Ok(())
 //!     }
 //! }
+//! ```
+//!
+//! ## Filtering
+//!
+//! Filtering reuses the `Validate` trait, but rather than failing, converts a value to `None`.
+//!
+//! ```
+//! use smart_config::validation;
+//! # use smart_config::{testing, DescribeConfig, DeserializeConfig, ErrorWithOrigin};
+//!
+//! #[derive(DescribeConfig, DeserializeConfig)]
+//! struct FilteringConfig {
+//!     /// Will convert `url: ''` to `None`.
+//!     #[config(deserialize_if(validation::NotEmpty))]
+//!     url: Option<String>,
+//!     /// Will convert either of `env: ''` or `env: 'unset'` to `None`.
+//!     #[config(deserialize_if(valid_env, "not empty or 'unset'"))]
+//!     env: Option<String>,
+//! }
+//!
+//! fn valid_env(s: &String) -> bool {
+//!     !s.is_empty() && s != "unset"
+//! }
+//!
+//! // Base case: no filtering.
+//! let env = smart_config::Environment::from_iter("", [
+//!     ("URL", "https://example.com"),
+//!     ("ENV", "prod"),
+//! ]);
+//! let config: FilteringConfig = testing::test_complete(env)?;
+//! assert_eq!(config.url.unwrap(), "https://example.com");
+//! assert_eq!(config.env.unwrap(), "prod");
+//!
+//! // Filtering applied to both params.
+//! let env = smart_config::Environment::from_iter("", [
+//!     ("URL", ""),
+//!     ("ENV", "unset"),
+//! ]);
+//! let config: FilteringConfig = testing::test_complete(env)?;
+//! assert_eq!(config.url, None);
+//! assert_eq!(config.env, None);
+//! # anyhow::Ok(())
 //! ```
 
 use std::{
@@ -100,6 +144,17 @@ impl<T: 'static + ?Sized> fmt::Debug for dyn Validate<T> {
 impl<T: 'static + ?Sized> fmt::Display for dyn Validate<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.describe(formatter)
+    }
+}
+
+/// Delegates via a reference. Useful for defining validation constants as `&'static dyn Validate<_>`.
+impl<T: ?Sized, V: Validate<T> + ?Sized> Validate<T> for &'static V {
+    fn describe(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (**self).describe(formatter)
+    }
+
+    fn validate(&self, target: &T) -> Result<(), ErrorWithOrigin> {
+        (**self).validate(target)
     }
 }
 

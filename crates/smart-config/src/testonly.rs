@@ -161,6 +161,7 @@ pub(crate) struct DefaultingConfig {
     pub int: u32,
     pub float: Option<f64>,
     #[config(default_t = Some("https://example.com/".into()))]
+    #[config(deserialize_if(NotEmpty))]
     pub url: Option<String>,
     #[config(default, with = de::Delimited(","))]
     pub set: HashSet<SimpleEnum>,

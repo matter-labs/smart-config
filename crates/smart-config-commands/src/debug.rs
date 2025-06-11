@@ -94,7 +94,7 @@ impl ConfigErrors {
                 continue;
             }
 
-            if let Err(errors) = config_parser.parse() {
+            if let Err(errors) = config_parser.parse_opt() {
                 // Only insert errors for a certain param / config if errors for it were not encountered before.
                 let mut new_params = HashSet::new();
                 let mut new_configs = HashSet::new();
@@ -178,14 +178,15 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
                 write_de_errors(&mut writer, errors)?;
             }
 
-            let (variant, mut param_values) = if let Ok(boxed_config) = config_parser.parse() {
-                let visitor_fn = config.metadata().visitor;
-                let mut visitor = ParamValuesVisitor::new(config.metadata());
-                visitor_fn(boxed_config.as_ref(), &mut visitor);
-                (visitor.variant, visitor.param_values)
-            } else {
-                (None, HashMap::new())
-            };
+            let (variant, mut param_values) =
+                if let Ok(Some(boxed_config)) = config_parser.parse_opt() {
+                    let visitor_fn = config.metadata().visitor;
+                    let mut visitor = ParamValuesVisitor::new(config.metadata());
+                    visitor_fn(boxed_config.as_ref(), &mut visitor);
+                    (visitor.variant, visitor.param_values)
+                } else {
+                    (None, HashMap::new())
+                };
 
             let variant = variant.map(|idx| {
                 // `unwrap()` is safe by construction: if there's an active variant, the config must have a tag
