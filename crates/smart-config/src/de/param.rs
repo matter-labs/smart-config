@@ -108,7 +108,11 @@ pub trait WellKnown: 'static + Sized {
     const DE: Self::Deserializer;
 }
 
-/// FIXME
+/// Marker trait for types that use a conventional [`Optional`] deserializer for `Option<Self>`.
+///
+/// It's usually sound to implement this trait for custom types, unless the type needs custom null coercion logic
+/// (e.g., coercing some structured values to null).
+// TODO: this definition makes it impossible to define custom `WellKnown for Option<_>` in other crates because of orphaning rules.
 pub trait WellKnownOption: WellKnown {}
 
 impl<T: WellKnown> DeserializeParam<T> for () {

@@ -205,6 +205,8 @@ impl WithUnit {
         raw.try_into().map_err(|err| deserializer.enrich_err(err))
     }
 
+    // We need special handling for `{ "suffix": null }` values (incl. ones produced by suffixed param names like `param_ms: null`).
+    // Without it, we'd error when parsing `null` value as `u64`.
     fn deserialize_opt<Raw, T>(
         ctx: &DeserializeContext<'_>,
         param: &'static ParamMetadata,
