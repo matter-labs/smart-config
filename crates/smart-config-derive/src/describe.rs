@@ -56,12 +56,18 @@ impl ConfigField {
     /// must come last.
     fn deserializer(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
         let mut deserializer = if let Some(with) = &self.attrs.with {
-            quote!(#with)
+            if Self::is_option(&self.ty) {
+                // Additional wrapper to handle missing values in a conventional way (and nulls as well, although
+                // they should be handled by the underlying deserializer). Without such a wrapper, it's easy to misuse
+                // `with = Serde![..]` on `Option`s; it compiles, but doesn't work as intended, producing an error on a missing field.
+                quote_spanned!(with.span()=> #cr::de::Optional::map(#with))
+            } else {
+                quote!(#with)
+            }
         } else {
             let ty = &self.ty;
             quote_spanned!(ty.span()=> <#ty as #cr::de::WellKnown>::DE)
         };
-        let default_fn = self.default_fn();
 
         if self.attrs.is_secret {
             deserializer = quote!(#cr::de::Secret(#deserializer));
@@ -75,7 +81,7 @@ impl ConfigField {
                 #cr::de::_private::DeserializeIf::<#ty, _>::new(#deserializer, &(#wrapped))
             };
         }
-        if let Some(default_fn) = &default_fn {
+        if let Some(default_fn) = self.default_fn() {
             deserializer = quote!(#cr::de::WithDefault::new(#deserializer, #default_fn));
         }
         if !self.attrs.validations.is_empty() {
