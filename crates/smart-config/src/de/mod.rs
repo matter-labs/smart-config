@@ -15,9 +15,9 @@
 //!
 //! # Deserializers
 //!
-//! The default deserializer is extracted from the param type with the help of [`WellKnown`] trait.
+//! The default deserializer is extracted from the param type with the help of [`WellKnown`] and [`WellKnownOption`] traits.
 //! If you have a custom type defined locally which you want to use in configs, the easiest solution
-//! would be to implement `WellKnown` for it.
+//! would be to implement `WellKnown` (+ maybe `WellKnownOption`) for it.
 //! Alternatively, it's possible to specify a custom deserializer using `#[config(with = _)]` attribute.
 //!
 //! ## Universal deserializers
@@ -58,8 +58,8 @@ pub use self::{
     deserializer::DeserializerOptions,
     macros::Serde,
     param::{
-        DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown, WellKnownOption,
-        WithDefault,
+        CustomKnownOption, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown,
+        WellKnownOption, WithDefault,
     },
     repeated::{Delimited, Entries, NamedEntries, Repeated, ToEntries},
     secret::{FromSecretString, Secret},
@@ -409,6 +409,12 @@ impl WithOrigin {
         let Value::String(StrValue::Plain(str)) = &self.inner else {
             return None; // we only know how to coerce strings so far
         };
+
+        // Coerce string values representing `null`, provided that the original deserializer doesn't expect a string
+        // (if it does, there would be an ambiguity doing this).
+        if !expecting.contains(BasicTypes::STRING) && (str.is_empty() || str == "null") {
+            return Some(Self::new(Value::Null, self.origin.clone()));
+        }
 
         // Attempt to transform the type to the expected type
         match expecting {

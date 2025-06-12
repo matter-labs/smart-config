@@ -264,6 +264,8 @@
 /// **Type:** const expression implementing [`DeserializeParam`]
 ///
 /// Allows changing the param deserializer. See [`de`] module docs for the overview of available deserializers.
+/// For `Option`s, `with` refers to the *internal* type deserializer; it will be wrapped into an [`Optional`](crate::de::Optional) automatically.
+///
 /// Note that there is an alternative: implementing [`WellKnown`](de::WellKnown) for the param type.
 ///
 /// ## `nest`

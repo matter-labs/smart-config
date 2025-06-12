@@ -93,9 +93,11 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
 /// |:-----------|:-------------|:----------------|
 /// | [`Duration`](std::time::Duration) | [`WithUnit`](super::WithUnit) | string or object |
 /// | [`ByteSize`](crate::ByteSize) | [`WithUnit`](super::WithUnit) | string or object |
-/// | [`Option`] | [`Optional`] | value, or `null`, or nothing |
+/// | [`Option`] | [`Optional`]† | value, or `null`, or nothing |
 /// | [`Vec`], `[_; N]`, [`HashSet`](std::collections::HashSet), [`BTreeSet`](std::collections::BTreeSet) | [`Repeated`](super::Repeated) | array |
 /// | [`HashMap`](std::collections::HashMap), [`BTreeMap`](std::collections::BTreeSet) | [`RepeatedEntries`](super::Entries) | object |
+///
+/// † `Option`s handling can be customized via [`WellKnownOption`] or [`CustomKnownOption`] traits.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` param cannot be deserialized",
     note = "Add #[config(with = _)] attribute to specify deserializer to use",
@@ -110,10 +112,84 @@ pub trait WellKnown: 'static + Sized {
 
 /// Marker trait for types that use a conventional [`Optional`] deserializer for `Option<Self>`.
 ///
-/// It's usually sound to implement this trait for custom types, unless the type needs custom null coercion logic
-/// (e.g., coercing some structured values to null).
-// TODO: this definition makes it impossible to define custom `WellKnown for Option<_>` in other crates because of orphaning rules.
+/// It's usually sound to implement this trait for custom types together with [`WellKnown`], unless:
+///
+/// - The type needs custom null coercion logic (e.g., coercing some structured values to null).
+///   In this case, implement [`CustomKnownOption`] instead. Note that `WellKnownOption` is tied to it
+///   via a blanket implementation.
+/// - It doesn't make sense to have optional type params.
+#[diagnostic::on_unimplemented(
+    message = "Optional `{Self}` param cannot be deserialized",
+    note = "Add #[config(with = _)] attribute to specify deserializer to use",
+    note = "If `{Self}` is a config, add #[config(nest)]",
+    note = "Embedded options (`Option<Option<_>>`) are not supported as param types"
+)]
 pub trait WellKnownOption: WellKnown {}
+
+/// Customizes the well-known deserializer for `Option<Self>`, similarly to [`WellKnown`].
+///
+/// This trait usually implemented automatically via the [`WellKnownOption`] blanket impl. A manual implementation
+/// is warranted for corner cases:
+///
+/// - Allow only `Option<T>` as a param type, but not `T` on its own.
+/// - Convert additional values to `None` when deserializing `Option<T>`.
+///
+/// **Tip:** It usually makes sense to have [`Optional`] wrapper for the used deserializer to handle missing / `null` values.
+///
+/// # Examples
+///
+/// ## Allow type only in `Option<_>` wrapper
+///
+/// ```
+/// # use serde::{Deserialize, Serialize};
+/// use smart_config::{de::{CustomKnownOption, Optional, Serde}, DescribeConfig};
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct OnlyInOption(u64);
+///
+/// impl CustomKnownOption for OnlyInOption {
+///     type OptDeserializer = Optional<Serde![int]>;
+///     const OPT_DE: Self::OptDeserializer = Optional(Serde![int]);
+/// }
+///
+/// #[derive(DescribeConfig)]
+/// struct TestConfig {
+///     /// Valid parameter.
+///     param: Option<OnlyInOption>,
+/// }
+/// ```
+///
+/// ...while this fails:
+///
+/// ```compile_fail
+/// # use serde::{Deserialize, Serialize};
+/// # use smart_config::{de::{CustomKnownOption, Optional, Serde}, DescribeConfig};
+/// #
+/// # #[derive(Serialize, Deserialize)]
+/// # struct OnlyInOption(u64);
+/// #
+/// # impl CustomKnownOption for OnlyInOption {
+/// #     type OptDeserializer = Optional<Serde![int]>;
+/// #     const OPT_DE: Self::OptDeserializer = Optional(Serde![int]);
+/// # }
+/// #
+/// #[derive(DescribeConfig)]
+/// struct BogusConfig {
+///     /// Bogus parameter: `OnlyInOption` doesn't implement `WellKnown`
+///     bogus: OnlyInOption,
+/// }
+/// ```
+pub trait CustomKnownOption: 'static + Send + Sized {
+    /// Type of the deserializer used for `Option<Self>`.
+    type OptDeserializer: DeserializeParam<Option<Self>>;
+    /// Deserializer instance.
+    const OPT_DE: Self::OptDeserializer;
+}
+
+impl<T: WellKnownOption + Send> CustomKnownOption for T {
+    type OptDeserializer = Optional<T::Deserializer>;
+    const OPT_DE: Self::OptDeserializer = Optional(Self::DE);
+}
 
 impl<T: WellKnown> DeserializeParam<T> for () {
     const EXPECTING: BasicTypes = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
@@ -298,9 +374,9 @@ impl_well_known_non_zero_int!(
     NonZeroIsize
 );
 
-impl<T: WellKnownOption> WellKnown for Option<T> {
-    type Deserializer = Optional<T::Deserializer>;
-    const DE: Self::Deserializer = Optional(T::DE);
+impl<T: CustomKnownOption> WellKnown for Option<T> {
+    type Deserializer = T::OptDeserializer;
+    const DE: Self::Deserializer = T::OPT_DE;
 }
 
 /// [Deserializer](DeserializeParam) decorator that provides additional [details](TypeDescription)
@@ -400,32 +476,37 @@ impl<T: 'static, De: DeserializeParam<T>> DeserializeParam<T> for WithDefault<T,
 /// - [JSON coercion](crate::Environment::coerce_json()) can be used to pass unambiguous JSON values (incl. `null`).
 /// - If the original deserializer doesn't expect string values, an empty string or `"null"` will be coerced
 ///   to a null.
-/// - [`filter` attribute](macro@crate::DescribeConfig#filter) can help filtering out empty strings etc. for types
+/// - [`deserialize_if` attribute](macro@crate::DescribeConfig#deserialize_if) can help filtering out empty strings etc. for types
 ///   that do expect string values.
+///
+/// # Transforms
+///
+/// The second generic param is the *transform* determining how the wrapped deserializer is delegated to.
+/// Regardless of the transform, missing and `null` values always result in `None`; any other value, will be passed
+/// to the wrapped deserializer.
+///
+/// - The default transform (`AND_THEN == false`) is similar to [`map`](Option::map()). It requires the underlying deserializer to return a non-optional value.
+/// - `AND_THEN == true` is similar to [`and_then`](Option::and_then()). It expects the underlying deserializer to return an `Option`.
 #[derive(Debug)]
-pub struct Optional<De>(pub De);
+pub struct Optional<De, const AND_THEN: bool = false>(pub De);
 
-impl Optional<()> {
-    pub(super) fn detect_null(ctx: &DeserializeContext<'_>, expecting: BasicTypes) -> bool {
-        let current_value = ctx.current_value().map(|val| &val.inner);
-        let Some(current_value) = current_value else {
-            return true;
-        };
-        if matches!(current_value, Value::Null) {
-            return true;
-        }
-
-        // Coerce string values representing `null`, provided that the original deserializer doesn't expect a string
-        // (if it does, there would be an ambiguity doing this).
-        if !expecting.contains(BasicTypes::STRING) {
-            if let Some(s) = current_value.as_plain_str() {
-                if s.is_empty() || s == "null" {
-                    return true;
-                }
-            }
-        }
-        false
+impl<De> Optional<De> {
+    /// Wraps a deserializer returning a non-optional value, similarly to [`Option::map()`].
+    pub const fn map(deserializer: De) -> Self {
+        Self(deserializer)
     }
+}
+
+impl<De> Optional<De, true> {
+    /// Wraps a deserializer returning an optional value, similarly to [`Option::and_then()`].
+    pub const fn and_then(deserializer: De) -> Self {
+        Self(deserializer)
+    }
+}
+
+fn detect_null(ctx: &DeserializeContext<'_>) -> bool {
+    let current_value = ctx.current_value().map(|val| &val.inner);
+    matches!(current_value, None | Some(Value::Null))
 }
 
 impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
@@ -440,7 +521,7 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<Option<T>, ErrorWithOrigin> {
-        if Optional::detect_null(&ctx, De::EXPECTING) {
+        if detect_null(&ctx) {
             return Ok(None);
         }
         self.0.deserialize_param(ctx, param).map(Some)
@@ -450,6 +531,37 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<Option<T>> for Optional<De> {
         if let Some(param) = param {
             self.0.serialize_param(param)
         } else {
+            serde_json::Value::Null
+        }
+    }
+}
+
+impl<T, De> DeserializeParam<Option<T>> for Optional<De, true>
+where
+    De: DeserializeParam<Option<T>>,
+{
+    const EXPECTING: BasicTypes = De::EXPECTING;
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.0.describe(description);
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<Option<T>, ErrorWithOrigin> {
+        if detect_null(&ctx) {
+            return Ok(None);
+        }
+        self.0.deserialize_param(ctx, param)
+    }
+
+    fn serialize_param(&self, param: &Option<T>) -> serde_json::Value {
+        if param.is_some() {
+            self.0.serialize_param(param)
+        } else {
+            // Force `null` representation regardless of the underlying deserializer
             serde_json::Value::Null
         }
     }

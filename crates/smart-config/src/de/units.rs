@@ -8,7 +8,7 @@ use serde::{
 };
 
 use crate::{
-    de::{DeserializeContext, DeserializeParam, Optional, WellKnown},
+    de::{CustomKnownOption, DeserializeContext, DeserializeParam, Optional, WellKnown},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
     value::Value,
@@ -214,10 +214,6 @@ impl WithUnit {
     where
         Raw: EnumWithUnit + TryInto<T, Error = serde_json::Error>,
     {
-        if Optional::detect_null(ctx, Self::EXPECTED_TYPES) {
-            return Ok(None);
-        }
-
         let deserializer = ctx.current_value_deserializer(param.name)?;
         let raw = if let Value::String(s) = deserializer.value() {
             Some(
@@ -437,9 +433,9 @@ impl WellKnown for Duration {
     const DE: Self::Deserializer = WithUnit;
 }
 
-impl WellKnown for Option<Duration> {
-    type Deserializer = WithUnit;
-    const DE: Self::Deserializer = WithUnit;
+impl CustomKnownOption for Duration {
+    type OptDeserializer = Optional<WithUnit, true>;
+    const OPT_DE: Self::OptDeserializer = Optional(WithUnit);
 }
 
 #[derive(Debug)]
@@ -559,9 +555,9 @@ impl WellKnown for ByteSize {
     const DE: Self::Deserializer = WithUnit;
 }
 
-impl WellKnown for Option<ByteSize> {
-    type Deserializer = WithUnit;
-    const DE: Self::Deserializer = WithUnit;
+impl CustomKnownOption for ByteSize {
+    type OptDeserializer = Optional<WithUnit, true>;
+    const OPT_DE: Self::OptDeserializer = Optional(WithUnit);
 }
 
 impl TypeSuffixes {
