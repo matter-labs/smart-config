@@ -15,9 +15,9 @@
 //!
 //! # Deserializers
 //!
-//! The default deserializer is extracted from the param type with the help of [`WellKnown`] trait.
+//! The default deserializer is extracted from the param type with the help of [`WellKnown`] and [`WellKnownOption`] traits.
 //! If you have a custom type defined locally which you want to use in configs, the easiest solution
-//! would be to implement `WellKnown` for it.
+//! would be to implement `WellKnown` (+ maybe `WellKnownOption`) for it.
 //! Alternatively, it's possible to specify a custom deserializer using `#[config(with = _)]` attribute.
 //!
 //! ## Universal deserializers
