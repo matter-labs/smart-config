@@ -1,0 +1,20 @@
+error[E0277]: Optional `Option<u64>` param cannot be deserialized
+ --> tests/ui/derives/option_in_option.rs:5:12
+  |
+5 |     bogus: Option<Option<u64>>,
+  |            ^^^^^^^^^^^^^^^^^^^ the trait `WellKnownOption` is not implemented for `Option<u64>`
+  |
+  = note: Add #[config(with = _)] attribute to specify deserializer to use
+  = note: If `Option<u64>` is a config, add #[config(nest)]
+  = note: Embedded options (`Option<Option<_>>`) are not supported as param types
+  = help: the following other types implement trait `WellKnownOption`:
+            BTreeMap<K, V>
+            BTreeSet<T>
+            HashMap<K, V, S>
+            HashSet<T, S>
+            IpAddr
+            Ipv4Addr
+            Ipv6Addr
+            NonZero<i16>
+          and $N others
+  = note: required for `Option<u64>` to implement `CustomKnownOption`
