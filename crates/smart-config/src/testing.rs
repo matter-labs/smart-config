@@ -150,8 +150,8 @@ pub fn test<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseE
 ///     size_mb: ByteSize,
 /// }
 ///
-/// let incomplete_sample = smart_config::config!("flag": "false");
-/// // Will panic with a message detailing missing params (`size_mb` in this case)
+/// let incomplete_sample = smart_config::config!("size_mb": 64);
+/// // Will panic with a message detailing missing params (`flag` in this case)
 /// testing::test_complete::<TestConfig>(incomplete_sample)?;
 /// # anyhow::Ok(())
 /// ```
@@ -160,28 +160,106 @@ pub fn test_complete<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<
     Tester::default().test_complete(sample)
 }
 
+/// Tests config deserialization ensuring that *only* required config params are covered.
+/// This is useful to detect new required params (i.e., backward-incompatible changes).
+///
+/// # Panics
+///
+/// Panics if the `sample` contains non-required params in the config. The config message
+/// will contain paths to the redundant params.
+///
+/// # Errors
+///
+/// Propagates parsing errors, which allows testing negative cases.
+///
+/// # Examples
+///
+/// ## Basic usage
+///
+/// ```
+/// # use smart_config::{DescribeConfig, DeserializeConfig};
+/// use smart_config::{metadata::SizeUnit, testing, ByteSize};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default_t = true, alias = "flag")]
+///     boolean: bool,
+///     #[config(with = SizeUnit::MiB)]
+///     size_mb: ByteSize,
+/// }
+///
+/// let sample = smart_config::config!("size_mb": 64);
+/// let config: TestConfig = testing::test_minimal(sample)?;
+/// assert!(config.boolean);
+/// assert_eq!(config.size_mb, ByteSize(64 << 20));
+/// # anyhow::Ok(())
+/// ```
+///
+/// ## Panics on redundant sample
+///
+/// ```should_panic
+/// # use smart_config::{DescribeConfig, DeserializeConfig};
+/// # use smart_config::{metadata::SizeUnit, testing, ByteSize};
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(default_t = true, alias = "flag")]
+///     boolean: bool,
+///     #[config(with = SizeUnit::MiB)]
+///     size_mb: ByteSize,
+/// }
+///
+/// let redundant_sample = smart_config::config!("flag": "false", "size_mb": 64);
+/// // Will panic with a message detailing redundant params (`boolean` in this case)
+/// testing::test_minimal::<TestConfig>(redundant_sample)?;
+/// # anyhow::Ok(())
+/// ```
+#[track_caller]
+pub fn test_minimal<C: DeserializeConfig>(sample: impl ConfigSource) -> Result<C, ParseErrors> {
+    Tester::default().test_minimal(sample)
+}
+
+#[derive(Debug)]
+enum CompletenessCheckerMode {
+    Complete,
+    Minimal,
+}
+
 #[derive(Debug)]
 struct CompletenessChecker<'a> {
+    mode: CompletenessCheckerMode,
     current_path: String,
     sample: &'a WithOrigin,
     config: &'static ConfigMetadata,
-    missing_params: HashMap<String, RustType>,
+    found_params: HashMap<String, RustType>,
 }
 
 impl<'a> CompletenessChecker<'a> {
-    fn new(sample: &'a WithOrigin, config: &'static ConfigMetadata, config_prefix: &str) -> Self {
+    fn new(
+        mode: CompletenessCheckerMode,
+        sample: &'a WithOrigin,
+        config: &'static ConfigMetadata,
+        config_prefix: &str,
+    ) -> Self {
         Self {
+            mode,
             current_path: config_prefix.to_owned(),
             sample,
             config,
-            missing_params: HashMap::new(),
+            found_params: HashMap::new(),
         }
     }
 
     fn check_param(&mut self, param: &ParamMetadata) {
         let param_path = Pointer(&self.current_path).join(param.name);
-        if self.sample.get(Pointer(&param_path)).is_none() {
-            self.missing_params.insert(param_path, param.rust_type);
+        let should_add_param = match self.mode {
+            CompletenessCheckerMode::Complete => self.sample.get(Pointer(&param_path)).is_none(),
+            CompletenessCheckerMode::Minimal => {
+                param.default_value.is_some() && self.sample.get(Pointer(&param_path)).is_some()
+            }
+        };
+
+        if should_add_param {
+            self.found_params.insert(param_path, param.rust_type);
         }
     }
 }
@@ -406,17 +484,51 @@ impl<C: DeserializeConfig + VisitConfig> Tester<'_, C> {
     #[track_caller]
     pub fn test_complete(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
         let repo = self.new_repository().with(sample);
-
-        let config_ref = repo.single::<C>().unwrap();
-        let config_prefix = config_ref.config().prefix();
-        let config = config_ref.parse()?;
-        let mut visitor = CompletenessChecker::new(repo.merged(), &C::DESCRIPTION, config_prefix);
-        config.visit_config(&mut visitor);
-        let CompletenessChecker { missing_params, .. } = visitor;
-
+        let (missing_params, config) =
+            Self::test_with_checker(&repo, CompletenessCheckerMode::Complete)?;
         assert!(
             missing_params.is_empty(),
             "The provided sample is incomplete; missing params: {missing_params:?}"
+        );
+        Ok(config)
+    }
+
+    fn test_with_checker(
+        repo: &ConfigRepository<'_>,
+        mode: CompletenessCheckerMode,
+    ) -> Result<(HashMap<String, RustType>, C), ParseErrors> {
+        let config_ref = repo.single::<C>().unwrap();
+        let config_prefix = config_ref.config().prefix();
+        let config = config_ref.parse()?;
+        let mut visitor =
+            CompletenessChecker::new(mode, repo.merged(), &C::DESCRIPTION, config_prefix);
+        config.visit_config(&mut visitor);
+        let CompletenessChecker { found_params, .. } = visitor;
+        Ok((found_params, config))
+    }
+
+    /// Tests config deserialization ensuring that only the required config params are present in `sample`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `sample` contains params with default values. The config message
+    /// will contain paths to the redundant params.
+    ///
+    /// # Errors
+    ///
+    /// Propagates parsing errors, which allows testing negative cases.
+    ///
+    /// # Examples
+    ///
+    /// See [`test_minimal()`] for the examples of usage.
+    #[track_caller]
+    pub fn test_minimal(&self, sample: impl ConfigSource) -> Result<C, ParseErrors> {
+        let repo = self.new_repository().with(sample);
+        let (redundant_params, config) =
+            Self::test_with_checker(&repo, CompletenessCheckerMode::Minimal)?;
+        assert!(
+            redundant_params.is_empty(),
+            "The provided sample is not minimal; params with default values: {redundant_params:?}"
         );
         Ok(config)
     }
@@ -429,13 +541,16 @@ mod tests {
     use super::*;
     use crate::{
         config,
-        testonly::{CompoundConfig, DefaultingConfig, EnumConfig, SimpleEnum},
+        testonly::{CompoundConfig, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum},
         Environment, Json,
     };
 
     #[test]
     fn testing_config() {
         let config = test::<DefaultingConfig>(Json::empty("test.json")).unwrap();
+        assert_eq!(config, DefaultingConfig::default());
+
+        let config = test_minimal::<DefaultingConfig>(Json::empty("test.json")).unwrap();
         assert_eq!(config, DefaultingConfig::default());
 
         let json = config!("float": 4.2, "url": ());
@@ -455,6 +570,23 @@ mod tests {
     fn panicking_on_incomplete_sample() {
         let json = config!("renamed": "first", "nested.renamed": "second");
         test_complete::<CompoundConfig>(json).unwrap();
+    }
+
+    #[should_panic(expected = "sample is not minimal")]
+    #[test]
+    fn panicking_on_redundant_sample() {
+        let json = config!("renamed": "first", "other_int": 23);
+        test_minimal::<NestedConfig>(json).unwrap();
+    }
+
+    #[test]
+    fn minimal_testing() {
+        let json = config!("renamed": "first", "nested.renamed": "second");
+        let config: CompoundConfig = test_minimal(json).unwrap();
+        assert_eq!(config.flat.simple_enum, SimpleEnum::First);
+        assert_eq!(config.nested.simple_enum, SimpleEnum::Second);
+        assert!(config.nested_opt.is_none());
+        assert_eq!(config.nested_default, NestedConfig::default_nested());
     }
 
     #[test]
