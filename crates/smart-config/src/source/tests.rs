@@ -1908,9 +1908,9 @@ fn coercing_enum_with_suffixes() {
     #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
     #[config(crate = crate, tag = "version")]
     enum TestConfig {
-        V1 {
-            timeout: Duration,
-        },
+        #[config(alias = "v1")]
+        V1 { timeout: Duration },
+        #[config(alias = "Latest")]
         V2 {
             size: ByteSize,
             #[config(nest)]
@@ -1936,6 +1936,50 @@ fn coercing_enum_with_suffixes() {
             ("TEST_V2_SIZE_IN_MB", "128"),
             ("TEST_V2_NESTED_RENAMED", "second"),
             ("TEST_V2_NESTED_OTHER_INT", "23"),
+        ],
+    );
+    let config = tester.test(env).unwrap();
+    assert_eq!(
+        config,
+        TestConfig::V2 {
+            size: 128 * SizeUnit::MiB,
+            nested: NestedConfig {
+                simple_enum: SimpleEnum::Second,
+                other_int: 23,
+                map: HashMap::new(),
+            },
+        }
+    );
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_LATEST_SIZE_IN_MB", "128"),
+            ("TEST_LATEST_NESTED_RENAMED", "second"),
+            ("TEST_LATEST_NESTED_OTHER_INT", "23"),
+        ],
+    );
+    let config = tester.test(env).unwrap();
+    assert_eq!(
+        config,
+        TestConfig::V2 {
+            size: 128 * SizeUnit::MiB,
+            nested: NestedConfig {
+                simple_enum: SimpleEnum::Second,
+                other_int: 23,
+                map: HashMap::new(),
+            },
+        }
+    );
+
+    // Mix of multiple aliases; works because the enum tag is explicitly specified.
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_VERSION", "Latest"),
+            ("TEST_V2_SIZE_IN_MB", "128"),
+            ("TEST_LATEST_NESTED_RENAMED", "second"),
+            ("TEST_NESTED_OTHER_INT", "23"),
         ],
     );
     let config = tester.test(env).unwrap();

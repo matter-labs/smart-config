@@ -48,6 +48,7 @@
 #![warn(missing_docs)]
 
 use std::{
+    collections::HashSet,
     io,
     io::{StderrLock, StdoutLock},
 };
@@ -129,7 +130,11 @@ impl ParamRef<'_> {
 
     /// Iterates over all paths to the param.
     pub fn all_paths(&self) -> impl Iterator<Item = (String, AliasOptions)> + '_ {
-        self.config.all_paths_for_param(self.param)
+        // Deduplicate paths so that duplicates aren't displayed in UI; `all_paths_for_param()` doesn't do this internally.
+        let mut known_paths = HashSet::new();
+        self.config
+            .all_paths_for_param(self.param)
+            .filter(move |(name, _)| known_paths.insert(name.clone()))
     }
 }
 

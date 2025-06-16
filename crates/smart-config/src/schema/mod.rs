@@ -237,7 +237,7 @@ impl ConfigSchema {
     /// to nested enum configs as well.
     ///
     /// For example, if a config param named `param` corresponds to the tag `SomeTag`, then alias `.some_tag.param`
-    /// (snake_cased tag + param name) will be added for the param. Tag aliases and param aliases will result
+    /// (`snake_cased` tag + param name) will be added for the param. Tag aliases and param aliases will result
     /// in additional path aliases, as expected. For example, if `param` has alias `alias` and the tag has alias `AliasTag`,
     /// then the param will have `.alias_tag.param`, `.alias_tag.alias` and `.some_tag.alias` aliases.
     pub fn coerce_serde_enums(&mut self, coerce: bool) -> &mut Self {
