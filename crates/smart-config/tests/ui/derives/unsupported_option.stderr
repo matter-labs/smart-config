@@ -1,0 +1,20 @@
+error[E0277]: Optional `CustomParam` param cannot be deserialized
+  --> tests/ui/derives/unsupported_option.rs:15:15
+   |
+15 |     optional: Option<CustomParam>,
+   |               ^^^^^^ the trait `WellKnownOption` is not implemented for `CustomParam`
+   |
+   = note: Add #[config(with = _)] attribute to specify deserializer to use
+   = note: If `CustomParam` is a config, add #[config(nest)]
+   = note: Embedded options (`Option<Option<_>>`) are not supported as param types
+   = help: the following other types implement trait `WellKnownOption`:
+             BTreeMap<K, V>
+             BTreeSet<T>
+             HashMap<K, V, S>
+             HashSet<T, S>
+             IpAddr
+             Ipv4Addr
+             Ipv6Addr
+             NonZero<i16>
+           and $N others
+   = note: required for `CustomParam` to implement `CustomKnownOption`
