@@ -60,10 +60,10 @@
 </tspan><tspan xml:space="preserve" x="42" y="302" class="output">      <tspan class="bold">map</tspan>:
 </tspan><tspan xml:space="preserve" x="42" y="320" class="output">        <tspan class="bold">value</tspan>: <tspan class="fg2">25</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="338" class="output">    <tspan class="bold">method_limits</tspan>:
-</tspan><tspan xml:space="preserve" x="42" y="356" class="output">      - <tspan class="bold">method</tspan>: <tspan class="fg6">eth_blockNumber</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="374" class="output">        <tspan class="bold">rps</tspan>: <tspan class="fg2">3</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="392" class="output">      - <tspan class="bold">method</tspan>: <tspan class="fg6">eth_getLogs</tspan>
-</tspan><tspan xml:space="preserve" x="42" y="410" class="output">        <tspan class="bold">rps</tspan>: <tspan class="fg2">100</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="356" class="output">      - <tspan class="bold">method</tspan>: <tspan class="fg6">eth_getLogs</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="374" class="output">        <tspan class="bold">rps</tspan>: <tspan class="fg2">100</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="392" class="output">      - <tspan class="bold">method</tspan>: <tspan class="fg6">eth_blockNumber</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="410" class="output">        <tspan class="bold">rps</tspan>: <tspan class="fg2">3</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="428" class="output">  <tspan class="bold">object_store</tspan>:
 </tspan><tspan xml:space="preserve" x="42" y="446" class="output">    <tspan class="bold">bucket_name</tspan>: <tspan class="fg6">test-bucket</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="464" class="output">    <tspan class="bold">type</tspan>: <tspan class="fg6">gcs</tspan>
