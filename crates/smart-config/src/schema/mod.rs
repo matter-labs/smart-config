@@ -11,7 +11,7 @@ use anyhow::Context;
 
 use self::mount::{MountingPoint, MountingPoints};
 use crate::{
-    metadata::{AliasOptions, BasicTypes, ConfigMetadata, ParamMetadata},
+    metadata::{AliasOptions, BasicTypes, ConfigMetadata, NestedConfigMetadata, ParamMetadata},
     value::Pointer,
 };
 
@@ -19,10 +19,16 @@ mod mount;
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug, Clone, Copy)]
+struct ParentLink {
+    parent_ty: any::TypeId,
+    this_ref: &'static NestedConfigMetadata,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ConfigData {
     pub(crate) metadata: &'static ConfigMetadata,
-    pub(crate) is_top_level: bool,
+    parent_link: Option<ParentLink>,
     all_paths: Vec<(Cow<'static, str>, AliasOptions)>,
 }
 
@@ -60,6 +66,7 @@ impl ConfigData {
 /// Reference to a specific configuration inside [`ConfigSchema`].
 #[derive(Debug, Clone, Copy)]
 pub struct ConfigRef<'a> {
+    schema: &'a ConfigSchema,
     prefix: &'a str,
     pub(crate) data: &'a ConfigData,
 }
@@ -77,7 +84,25 @@ impl<'a> ConfigRef<'a> {
 
     /// Checks whether this config is top-level (i.e., was included into the schema directly, rather than as a sub-config).
     pub fn is_top_level(&self) -> bool {
-        self.data.is_top_level
+        self.data.parent_link.is_none()
+    }
+
+    #[doc(hidden)] // not stabilized yet
+    pub fn parent_link(&self) -> Option<(Self, &'static NestedConfigMetadata)> {
+        let link = self.data.parent_link?;
+        let parent_prefix = if link.this_ref.name.is_empty() {
+            // Flattened config
+            self.prefix
+        } else {
+            let (parent, _) = Pointer(self.prefix).split_last().unwrap();
+            parent.0
+        };
+        let parent_ref = Self {
+            schema: self.schema,
+            prefix: parent_prefix,
+            data: self.schema.get_ll(parent_prefix, link.parent_ty)?,
+        };
+        Some((parent_ref, link.this_ref))
     }
 
     /// Iterates over all aliases for this config.
@@ -230,8 +255,9 @@ impl ConfigSchema {
     /// Iterates over all configs contained in this schema. A unique key for a config is its type + location;
     /// i.e., multiple returned refs may have the same config type xor same location (never both).
     pub fn iter(&self) -> impl Iterator<Item = ConfigRef<'_>> + '_ {
-        self.configs.iter().flat_map(|(prefix, data)| {
+        self.configs.iter().flat_map(move |(prefix, data)| {
             data.by_depth().map(move |data| ConfigRef {
+                schema: self,
                 prefix: prefix.as_ref(),
                 data,
             })
@@ -255,7 +281,11 @@ impl ConfigSchema {
         prefix: &'s str,
     ) -> Option<ConfigRef<'s>> {
         let data = self.get_ll(prefix, metadata.ty.id())?;
-        Some(ConfigRef { prefix, data })
+        Some(ConfigRef {
+            schema: self,
+            prefix,
+            data,
+        })
     }
 
     fn get_ll(&self, prefix: &str, ty: any::TypeId) -> Option<&ConfigData> {
@@ -294,6 +324,7 @@ impl ConfigSchema {
                 metadata.ty.name_in_code()
             ),
             &[prefix] => Ok(ConfigRef {
+                schema: self,
                 prefix,
                 data: &self.configs[prefix].inner[&metadata.ty.id()],
             }),
@@ -397,7 +428,7 @@ impl<'a> PatchedSchema<'a> {
             true,
             ConfigData {
                 metadata,
-                is_top_level: true,
+                parent_link: None,
                 all_paths: vec![(prefix.into(), AliasOptions::new())],
             },
         )
@@ -451,7 +482,7 @@ impl<'a> PatchedSchema<'a> {
             false,
             ConfigData {
                 metadata,
-                is_top_level: config_data.is_top_level,
+                parent_link: config_data.parent_link,
                 all_paths: vec![(alias.0.into(), options)],
             },
         )
@@ -479,7 +510,10 @@ impl<'a> PatchedSchema<'a> {
 
             let config_data = ConfigData {
                 metadata: nested.meta,
-                is_top_level: false,
+                parent_link: Some(ParentLink {
+                    parent_ty: data.metadata.ty.id(),
+                    this_ref: nested,
+                }),
                 all_paths: all_paths.collect(),
             };
             (prefix.join(nested.name), config_data)

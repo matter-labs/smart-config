@@ -164,6 +164,26 @@ fn using_nesting() {
         ]
     );
 
+    let parent_link = schema
+        .single(&NestingConfig::DESCRIPTION)
+        .unwrap()
+        .parent_link();
+    assert!(parent_link.is_none());
+    let (parent_ref, this_ref) = schema
+        .get(&TestConfig::DESCRIPTION, "")
+        .unwrap()
+        .parent_link()
+        .unwrap();
+    assert_eq!(parent_ref.metadata().ty.name_in_code(), "NestingConfig");
+    assert_eq!(this_ref.rust_field_name, "flattened");
+    let (parent_ref, this_ref) = schema
+        .get(&TestConfig::DESCRIPTION, "hierarchical")
+        .unwrap()
+        .parent_link()
+        .unwrap();
+    assert_eq!(parent_ref.metadata().ty.name_in_code(), "NestingConfig");
+    assert_eq!(this_ref.rust_field_name, "hierarchical");
+
     let err = schema
         .single(&TestConfig::DESCRIPTION)
         .unwrap_err()
