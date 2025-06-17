@@ -1,6 +1,6 @@
 ---
 source: crates/smart-config-commands/tests/integration/main.rs
-assertion_line: 49
+assertion_line: 85
 expression: buffer
 ---
 Configuration sources:
@@ -24,8 +24,8 @@ test.poll_latency [Rust: TestConfig.poll_latency] = "300ms"
 test.scaling_factor [Rust: TestConfig.scaling_factor] = 4.199999809265137
   Raw: 4.2
   Origin: JSON:/config/base.json -> .scaling_factor
-test.temp_dir [Rust: TestConfig.temp_dir] = "/var/folders/mw/lhb7m9dj3jbdm3w994t0_c8h0000gn/T/"
-  Raw: "/var/folders/mw/lhb7m9dj3jbdm3w994t0_c8h0000gn/T/"
+test.temp_dir [Rust: TestConfig.temp_dir] = "/tmp"
+  Raw: "/tmp"
   Origin: env:"TMPDIR" -> fallback for `TestConfig.temp_dir`
 test.dir_paths [Rust: TestConfig.dir_paths] = [
   "/usr/bin",

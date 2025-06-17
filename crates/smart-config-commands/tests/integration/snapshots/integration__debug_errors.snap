@@ -1,6 +1,6 @@
 ---
 source: crates/smart-config-commands/tests/integration/main.rs
-assertion_line: 63
+assertion_line: 100
 expression: buffer
 ---
 Configuration sources:
@@ -34,7 +34,7 @@ test.scaling_factor [Rust: TestConfig.scaling_factor]
     at test.scaling_factor
     env:"BOGUS_TEST_SCALING_FACTOR"
 test.temp_dir [Rust: TestConfig.temp_dir]
-  Raw: "/var/folders/mw/lhb7m9dj3jbdm3w994t0_c8h0000gn/T/"
+  Raw: "/tmp"
   Origin: env:"TMPDIR" -> fallback for `TestConfig.temp_dir`
 test.dir_paths [Rust: TestConfig.dir_paths]
   Raw: "/usr/bin:/usr/local/bin"

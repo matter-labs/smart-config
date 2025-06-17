@@ -1,7 +1,7 @@
 //! **Important.** The generated snapshots are specific to stable Rust; nightly Rust provides better spanning for types
 //! (`Option<u64>` instead of `Option`).
 
-use std::fmt;
+use std::{env, fmt, sync::Once};
 
 use anstream::AutoStream;
 use smart_config::{
@@ -13,6 +13,14 @@ use test_casing::{test_casing, Product};
 use crate::configs::{create_mock_repo, ObjectStoreConfig, TestConfig};
 
 mod configs;
+
+fn init_env_vars() {
+    static ENV_VARS_LOCK: Once = Once::new();
+
+    ENV_VARS_LOCK.call_once(|| {
+        env::set_var("TMPDIR", "/tmp");
+    });
+}
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(tag = "client", derive(Default))]
@@ -64,6 +72,7 @@ fn embedded_enum_config_help() {
 
 #[test]
 fn full_config_debug() {
+    init_env_vars();
     let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
     let repo = create_mock_repo(&schema, false);
 
@@ -78,6 +87,7 @@ fn full_config_debug() {
 
 #[test]
 fn erroneous_config_debug() {
+    init_env_vars();
     let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
     let repo = create_mock_repo(&schema, true);
 
