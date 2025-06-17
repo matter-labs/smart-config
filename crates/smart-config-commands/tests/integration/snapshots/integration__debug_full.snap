@@ -1,0 +1,111 @@
+---
+source: crates/smart-config-commands/tests/integration/main.rs
+assertion_line: 49
+expression: buffer
+---
+Configuration sources:
+- fallbacks, 1 param(s)
+- JSON:/config/base.json -> prefixed with `test`, 4 param(s)
+- YAML:/config/test.yml, 11 param(s)
+- env, 6 param(s)
+
+Values:
+test.port [Rust: TestConfig.port] = 3000
+  Raw: 3000
+  Origin: YAML:/config/test.yml -> .test.port
+test.app_name [Rust: TestConfig.app_name] = "test"
+  Raw: "test"
+  Origin: env:"APP_TEST_APP_NAME"
+test.poll_latency [Rust: TestConfig.poll_latency] = "300ms"
+  Raw: {
+    "in_ms": 300,
+  }
+  Origin: YAML:/config/test.yml -> .test -> nesting for object param 'poll_latency'
+test.scaling_factor [Rust: TestConfig.scaling_factor] = 4.199999809265137
+  Raw: 4.2
+  Origin: JSON:/config/base.json -> .scaling_factor
+test.temp_dir [Rust: TestConfig.temp_dir] = "/var/folders/mw/lhb7m9dj3jbdm3w994t0_c8h0000gn/T/"
+  Raw: "/var/folders/mw/lhb7m9dj3jbdm3w994t0_c8h0000gn/T/"
+  Origin: env:"TMPDIR" -> fallback for `TestConfig.temp_dir`
+test.dir_paths [Rust: TestConfig.dir_paths] = [
+  "/usr/bin",
+  "/usr/local/bin"
+]
+  Raw: "/usr/bin:/usr/local/bin"
+  Origin: env:"APP_TEST_DIRS"
+test.timeout_sec [Rust: TestConfig.timeout_sec] = 60
+test.cache_size [Rust: TestConfig.cache_size] = "128 MiB"
+  Raw: "128 MiB"
+  Origin: env:"APP_TEST_EXPERIMENTAL_CACHE_SIZE"
+test.required [Rust: TestConfig.required] = 123
+  Raw: "123"
+  Origin: env:"APP_TEST_REQUIRED"
+test.funding.address [Rust: FundingConfig.address] = "0x0000000000000000000000000000000000001234"
+  Raw: "0x0000000000000000000000000000000000001234"
+  Origin: YAML:/config/test.yml -> .test.funding.address
+test.funding.balance [Rust: FundingConfig.balance] = "0x123456"
+  Raw: "0x123456"
+  Origin: YAML:/config/test.yml -> .test.funding.balance
+test.funding.api_key [Rust: FundingConfig.api_key] = "[REDACTED]"
+  Raw: [REDACTED]
+  Origin: env:"APP_TEST_FUNDS_API_KEY"
+test.funding.secret_key [Rust: FundingConfig.secret_key] = "[REDACTED]"
+  Raw: [REDACTED]
+  Origin: env:"APP_TEST_FUNDS_SECRET_KEY"
+test.nested.exit_on_error [Rust: NestedConfig.exit_on_error] = true
+  Raw: true
+  Origin: YAML:/config/test.yml -> .test.experimental.exit_on_error
+test.nested.complex [Rust: NestedConfig.complex] = {
+  "array": [
+    1,
+    2
+  ],
+  "map": {
+    "value": 25
+  }
+}
+  Raw: {
+    "array": [
+      1,
+      2,
+    ],
+    "map": {
+      "value": 25,
+    },
+  }
+  Origin: YAML:/config/test.yml -> .test.nested.complex
+test.nested.more_timeouts [Rust: NestedConfig.more_timeouts] = []
+test.nested.method_limits [Rust: NestedConfig.method_limits] = [
+  {
+    "method": "eth_getLogs",
+    "rps": 100
+  },
+  {
+    "method": "eth_blockNumber",
+    "rps": 3
+  }
+]
+  Raw: [
+    {
+      "method": "eth_getLogs",
+      "rps": 100,
+    },
+    {
+      "method": "eth_blockNumber",
+      "rps": 3,
+    },
+  ]
+  Origin: YAML:/config/test.yml -> .test.nested.method_limits
+test.object_store.bucket_name [Rust: ObjectStoreConfig.bucket_name] = "test-bucket"
+  Active: test.object_store.type == 'gcs'
+  Raw: "test-bucket"
+  Origin: YAML:/config/test.yml -> .test.object_store.bucket_name
+test.object_store.type [Rust: ObjectStoreConfig.type] = "gcs"
+  Raw: "google"
+  Origin: YAML:/config/test.yml -> .test.object_store.type
+test.object_store.bucket_name [Rust: S3Config.bucket_name] = "test-bucket"
+  Raw: "test-bucket"
+  Origin: YAML:/config/test.yml -> .test.object_store.bucket_name
+test.object_store.region [Rust: S3Config.region] = "euw1"
+  Raw: "euw1"
+  Origin: YAML:/config/test.yml -> .test.object_store.region

@@ -1,0 +1,106 @@
+---
+source: crates/smart-config-commands/tests/integration/main.rs
+assertion_line: 63
+expression: buffer
+---
+Configuration sources:
+- fallbacks, 1 param(s)
+- JSON:/config/base.json -> prefixed with `test`, 4 param(s)
+- YAML:/config/test.yml, 11 param(s)
+- env, 5 param(s)
+- env, 9 param(s)
+
+Values:
+test.port [Rust: TestConfig.port]
+  Raw: 3000
+  Origin: YAML:/config/test.yml -> .test.port
+test.app_name [Rust: TestConfig.app_name]
+  Raw: ""
+  Origin: env:"BOGUS_TEST_APP_NAME"
+  Error: value is empty
+    validation: must not be empty
+    at test.app_name
+    env:"BOGUS_TEST_APP_NAME"
+test.poll_latency [Rust: TestConfig.poll_latency]
+  Raw: {
+    "in_ms": 300,
+  }
+  Origin: YAML:/config/test.yml -> .test -> nesting for object param 'poll_latency'
+test.scaling_factor [Rust: TestConfig.scaling_factor]
+  Raw: "-1"
+  Origin: env:"BOGUS_TEST_SCALING_FACTOR"
+  Error: invalid value: -1.0, expected value in range 0.0..=10.0
+    validation: must be in range 0.0..=10.0
+    at test.scaling_factor
+    env:"BOGUS_TEST_SCALING_FACTOR"
+test.temp_dir [Rust: TestConfig.temp_dir]
+  Raw: "/var/folders/mw/lhb7m9dj3jbdm3w994t0_c8h0000gn/T/"
+  Origin: env:"TMPDIR" -> fallback for `TestConfig.temp_dir`
+test.dir_paths [Rust: TestConfig.dir_paths]
+  Raw: "/usr/bin:/usr/local/bin"
+  Origin: env:"APP_TEST_DIRS"
+test.timeout_sec [Rust: TestConfig.timeout_sec]
+  Raw: "what?"
+  Origin: env:"BOGUS_TEST_TIMEOUT_SEC"
+  Error: invalid digit found in string while parsing u64 value 'what?'
+    at test.timeout_sec
+    env:"BOGUS_TEST_TIMEOUT_SEC"
+test.cache_size [Rust: TestConfig.cache_size]
+  Raw: "128 MiBis"
+  Origin: env:"BOGUS_TEST_CACHE_SIZE"
+  Error: unknown variant `mibis`, expected one of `bytes`, `b`, `kilobytes`, `kb`, `kib`, `megabytes`, `mb`, `mib`, `gigabytes`, `gb`, `gib`
+    at test.cache_size
+    env:"BOGUS_TEST_CACHE_SIZE"
+test.required [Rust: TestConfig.required]
+  Error: missing field `required`
+    at test.required
+test.funding [Rust: FundingConfig], config
+  Error: `address` should be non-zero for non-zero `balance`
+    validation: `address` should be non-zero for non-zero `balance`
+    at test.funding
+    JSON:/config/base.json -> .funding
+test.funding.address [Rust: FundingConfig.address]
+  Raw: "0x0000000000000000000000000000000000000000"
+  Origin: env:"BOGUS_TEST_FUNDS_ADDRESS"
+test.funding.balance [Rust: FundingConfig.balance]
+  Raw: "0x123456"
+  Origin: YAML:/config/test.yml -> .test.funding.balance
+test.funding.api_key [Rust: FundingConfig.api_key]
+  Raw: [REDACTED]
+  Origin: env:"APP_TEST_FUNDS_API_KEY"
+test.funding.secret_key [Rust: FundingConfig.secret_key]
+  Raw: [REDACTED]
+  Origin: env:"APP_TEST_FUNDS_SECRET_KEY"
+test.nested.exit_on_error [Rust: NestedConfig.exit_on_error]
+  Raw: true
+  Origin: YAML:/config/test.yml -> .test.experimental.exit_on_error
+test.nested.complex [Rust: NestedConfig.complex]
+  Raw: "{ \"array\": [1, true] }"
+  Origin: env:"BOGUS_TEST_NESTED_COMPLEX"
+  Error: invalid type: string "{ \"array\": [1, true] }", expected object
+    at test.nested.complex
+    env:"BOGUS_TEST_NESTED_COMPLEX"
+test.nested.more_timeouts [Rust: NestedConfig.more_timeouts]
+  Raw: "nope,124us"
+  Origin: env:"BOGUS_TEST_NESTED_TIMEOUTS"
+test.nested.method_limits [Rust: NestedConfig.method_limits]
+  Raw: "{ \"eth_getLogs\": 0 }"
+  Origin: env:"BOGUS_TEST_NESTED_METHOD_LIMITS"
+  Error: invalid type: string "{ \"eth_getLogs\": 0 }", expected object or array
+    at test.nested.method_limits
+    env:"BOGUS_TEST_NESTED_METHOD_LIMITS"
+test.object_store.bucket_name [Rust: ObjectStoreConfig.bucket_name]
+  Raw: "test-bucket"
+  Origin: YAML:/config/test.yml -> .test.object_store.bucket_name
+test.object_store.type [Rust: ObjectStoreConfig.type]
+  Raw: "file"
+  Origin: env:"BOGUS_TEST_OBJECT_STORE_TYPE"
+  Error: unknown variant `file`, expected one of `local`, `s3`, `gcs`, `google`, `google_cloud`
+    at test.object_store.type
+    env:"BOGUS_TEST_OBJECT_STORE_TYPE"
+test.object_store.bucket_name [Rust: S3Config.bucket_name] = "test-bucket"
+  Raw: "test-bucket"
+  Origin: YAML:/config/test.yml -> .test.object_store.bucket_name
+test.object_store.region [Rust: S3Config.region] = "euw1"
+  Raw: "euw1"
+  Origin: YAML:/config/test.yml -> .test.object_store.region

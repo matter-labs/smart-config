@@ -1,15 +1,11 @@
 use std::{
-    collections::{HashMap, HashSet},
     fmt,
+    hash::{BuildHasherDefault, DefaultHasher},
     num::NonZeroU32,
     path::PathBuf,
-    process,
     time::Duration,
 };
 
-use anstream::AutoStream;
-use anstyle::{AnsiColor, Color, Style};
-use clap::{Parser, ValueEnum};
 use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Serialize};
 use smart_config::{
@@ -18,13 +14,17 @@ use smart_config::{
     validation::NotEmpty,
     value::{ExposeSecret, SecretString},
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
-    ExampleConfig, Json, Prefixed, SerializerOptions, Yaml,
+    ExampleConfig, Json, Prefixed, Yaml,
 };
-use smart_config_commands::{ParamRef, Printer};
+
+// Use deterministic hasher to get deterministic command outputs. Since `serde_json` uses deterministic
+// `BTreeMap` for objects, it doesn't create a non-determinism source.
+type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<DefaultHasher>>;
+type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
 
 /// Configuration with type params of several types.
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
-pub struct TestConfig {
+pub(crate) struct TestConfig {
     /// Port to bind to.
     #[config(example = 8080, deprecated = "bind_to")]
     pub port: u16,
@@ -41,7 +41,7 @@ pub struct TestConfig {
     pub temp_dir: PathBuf,
     /// Paths to key directories.
     #[config(default, alias = "dirs", with = de::Delimited(":"))]
-    #[config(example = ["./local".into()].into())]
+    #[config(example = HashSet::from_iter(["./local".into()]))]
     pub dir_paths: HashSet<PathBuf>,
     /// Timeout for some operation.
     #[config(default_t = 1 * TimeUnit::Minutes, with = TimeUnit::Seconds)]
@@ -62,7 +62,7 @@ pub struct TestConfig {
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(derive(Default))]
-pub struct NestedConfig {
+pub(crate) struct NestedConfig {
     /// Whether to exit the application on error.
     #[config(default_t = true, deprecated = "..experimental.exit_on_error")]
     pub exit_on_error: bool,
@@ -74,15 +74,15 @@ pub struct NestedConfig {
     pub more_timeouts: Vec<Duration>,
     /// Can be deserialized either from a map or an array of tuples.
     #[config(default, with = de::Entries::WELL_KNOWN.named("method", "rps"))]
-    #[config(example = HashMap::from([
-        ("eth_call".into(), NonZeroU32::new(100).unwrap()),
-        ("eth_blockNumber".into(), NonZeroU32::new(1).unwrap()),
+    #[config(example = HashMap::from_iter([
+    ("eth_call".into(), NonZeroU32::new(100).unwrap()),
+    ("eth_blockNumber".into(), NonZeroU32::new(1).unwrap()),
     ]))]
     pub method_limits: HashMap<String, NonZeroU32>,
 }
 
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct ComplexParam {
+pub(crate) struct ComplexParam {
     #[serde(default)]
     pub array: Vec<u32>,
     #[serde(default)]
@@ -93,7 +93,7 @@ impl ComplexParam {
     fn example() -> Self {
         Self {
             array: vec![3, 5],
-            map: HashMap::from([("var".into(), 3)]),
+            map: HashMap::from_iter([("var".into(), 3)]),
         }
     }
 }
@@ -105,7 +105,7 @@ impl de::WellKnown for ComplexParam {
 
 #[derive(PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct SecretKey(pub H256);
+pub(crate) struct SecretKey(pub H256);
 
 impl fmt::Debug for SecretKey {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -118,7 +118,7 @@ impl fmt::Debug for SecretKey {
     Self::validate_address,
     "`address` should be non-zero for non-zero `balance`"
 ))]
-pub struct FundingConfig {
+pub(crate) struct FundingConfig {
     /// Ethereum-like address to fund.
     #[config(default)]
     pub address: Address,
@@ -152,7 +152,7 @@ impl FundingConfig {
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(derive(Default), tag = "type", rename_all = "snake_case")]
-pub enum ObjectStoreConfig {
+pub(crate) enum ObjectStoreConfig {
     /// Stores object locally as files.
     #[config(default)]
     Local {
@@ -171,7 +171,7 @@ pub enum ObjectStoreConfig {
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
-pub struct S3Config {
+pub(crate) struct S3Config {
     /// Bucket to put objects into.
     pub bucket_name: String,
     /// AWS availability region.
@@ -226,7 +226,7 @@ test:
     region: euw1
 "#;
 
-fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> {
+pub(crate) fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> {
     let json = serde_json::from_str(JSON).unwrap();
     let json = Json::new("/config/base.json", json);
     let json = Prefixed::new(json, "test");
@@ -274,139 +274,4 @@ fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepository<'_> 
         repo = repo.with(bogus_vars);
     }
     repo
-}
-
-#[derive(Debug, Parser)]
-enum Cli {
-    /// Prints configuration help.
-    Print {
-        /// Filter for param paths.
-        filter: Option<String>,
-    },
-    /// Debugs configuration values.
-    Debug {
-        /// Whether to inject incorrect config values.
-        #[arg(long)]
-        bogus: bool,
-        /// Filter for param paths.
-        filter: Option<String>,
-    },
-    /// Serializes example config.
-    Serialize {
-        /// Use example config instead of parsing sources.
-        #[arg(long)]
-        example: bool,
-        /// Do not output default param values.
-        #[arg(long)]
-        diff: bool,
-        /// Serialization format.
-        #[arg(long, value_enum, default_value_t = SerializationFormat::Yaml)]
-        format: SerializationFormat,
-    },
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum SerializationFormat {
-    Json,
-    Yaml,
-    Env,
-}
-
-const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
-
-fn main() {
-    let cli = Cli::parse();
-    let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
-
-    match cli {
-        Cli::Print { filter } => {
-            let filter = |param_ref: ParamRef<'_>| {
-                filter.as_ref().map_or(true, |needle| {
-                    param_ref.all_paths().any(|(path, _)| path.contains(needle))
-                })
-            };
-            Printer::stderr().print_help(&schema, filter).unwrap();
-        }
-        Cli::Debug { bogus, filter } => {
-            let repo = create_mock_repo(&schema, bogus);
-            let filter = |param_ref: ParamRef<'_>| {
-                filter.as_ref().map_or(true, |needle| {
-                    param_ref.all_paths().any(|(path, _)| path.contains(needle))
-                })
-            };
-
-            let res = Printer::stderr().print_debug(&repo, filter).unwrap();
-            if let Err(err) = res {
-                anstream::eprintln!(
-                    "\n{ERROR}There were errors parsing configuration params:\n{err}{ERROR:#}"
-                );
-                process::exit(1);
-            }
-        }
-        Cli::Serialize {
-            example,
-            diff,
-            format,
-        } => {
-            let mut options = if diff {
-                SerializerOptions::diff_with_default()
-            } else {
-                SerializerOptions::default()
-            };
-            options = options.flat(matches!(format, SerializationFormat::Env));
-
-            let (json, original_config) = if example {
-                let example_config = TestConfig::example_config();
-                let json = options.serialize(&example_config);
-                // Need to wrap the serialized value with the 'test' prefix so that it corresponds to the schema.
-                (serde_json::json!({ "test": json }), example_config)
-            } else {
-                let repo = create_mock_repo(&schema, false);
-                let original_config: TestConfig = repo.single().unwrap().parse().unwrap();
-                (repo.canonicalize(&options).unwrap().into(), original_config)
-            };
-
-            let mut buffer = vec![];
-            let restored_repo = match format {
-                SerializationFormat::Json => {
-                    Printer::stderr().print_json(&json).unwrap();
-
-                    // Parse the produced JSON back and check that it describes the same config.
-                    Printer::custom(AutoStream::never(&mut buffer))
-                        .print_json(&json)
-                        .unwrap();
-                    let deserialized = serde_json::from_slice(&buffer).unwrap();
-                    let source = Json::new("deserialized.json", deserialized);
-                    ConfigRepository::new(&schema).with(source)
-                }
-                SerializationFormat::Yaml => {
-                    Printer::stderr().print_yaml(&json).unwrap();
-
-                    Printer::custom(AutoStream::never(&mut buffer))
-                        .print_yaml(&json)
-                        .unwrap();
-                    let deserialized = serde_yaml::from_slice(&buffer).unwrap();
-                    let source = Yaml::new("deserialized.yaml", deserialized).unwrap();
-                    ConfigRepository::new(&schema).with(source)
-                }
-                SerializationFormat::Env => {
-                    let env =
-                        Environment::convert_flat_params(json.as_object().unwrap(), "APP_").into();
-                    Printer::stderr().print_yaml(&env).unwrap();
-                    let env = env.as_object().unwrap().iter().map(|(name, value)| {
-                        let value = match value {
-                            serde_json::Value::String(s) => s.clone(),
-                            _ => value.to_string(),
-                        };
-                        (name.as_str(), value)
-                    });
-                    let mut env = Environment::from_iter("APP_", env);
-                    env.coerce_json().unwrap();
-                    ConfigRepository::new(&schema).with(env)
-                }
-            };
-            let restored_config: TestConfig = restored_repo.single().unwrap().parse().unwrap();
-            assert_eq!(original_config, restored_config);
-        }
-    }
 }
