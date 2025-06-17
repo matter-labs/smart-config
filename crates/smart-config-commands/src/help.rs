@@ -67,7 +67,7 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
             }
 
             if let Some(tag) = &config.metadata().tag {
-                write_tag_help(&mut writer, config, tag)?;
+                write_tag_help(&mut writer, config, tag, &conditions)?;
                 // Do not output the tag param twice.
                 filtered_params
                     .retain(|param| param.param.rust_field_name != tag.param.rust_field_name);
@@ -120,6 +120,7 @@ fn write_tag_help(
     writer: &mut impl io::Write,
     config: ConfigRef<'_>,
     tag: &ConfigTag,
+    conditions: &[(ParamRef<'_>, &ConfigVariant)],
 ) -> io::Result<()> {
     ParamRef {
         config,
@@ -163,7 +164,9 @@ fn write_tag_help(
             }
         }
     }
-    Ok(())
+
+    let condition_count = conditions.len();
+    ParamRef::write_tag_conditions(writer, condition_count, conditions.iter().copied())
 }
 
 impl ParamRef<'_> {

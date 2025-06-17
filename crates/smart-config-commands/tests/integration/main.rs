@@ -4,13 +4,25 @@
 use std::fmt;
 
 use anstream::AutoStream;
-use smart_config::{ConfigSchema, DescribeConfig, Environment, ExampleConfig, SerializerOptions};
+use smart_config::{
+    ConfigSchema, DescribeConfig, DeserializeConfig, Environment, ExampleConfig, SerializerOptions,
+};
 use smart_config_commands::Printer;
 use test_casing::{test_casing, Product};
 
-use crate::configs::{create_mock_repo, TestConfig};
+use crate::configs::{create_mock_repo, ObjectStoreConfig, TestConfig};
 
 mod configs;
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(tag = "client", derive(Default))]
+enum DataAvailabilityConfig {
+    /// Do not use data availability anywhere.
+    #[config(default)]
+    None,
+    /// Store data in an object store.
+    ObjectStore(ObjectStoreConfig),
+}
 
 #[test]
 fn full_config_help() {
@@ -36,6 +48,18 @@ fn filtered_config_help() {
         .unwrap();
     let buffer = String::from_utf8(buffer).unwrap();
     insta::assert_snapshot!("help_filtered", buffer);
+}
+
+#[test]
+fn embedded_enum_config_help() {
+    let schema = ConfigSchema::new(&DataAvailabilityConfig::DESCRIPTION, "da");
+
+    let mut buffer = vec![];
+    Printer::custom(AutoStream::never(&mut buffer))
+        .print_help(&schema, |_| true)
+        .unwrap();
+    let buffer = String::from_utf8(buffer).unwrap();
+    insta::assert_snapshot!("help_embedded_enum", buffer);
 }
 
 #[test]

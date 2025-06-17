@@ -1,0 +1,45 @@
+---
+source: crates/smart-config-commands/tests/integration/main.rs
+assertion_line: 60
+expression: buffer
+---
+da.client
+  Type: string tag with variants:
+  - 'None' [Rust: DataAvailabilityConfig::None] (default)
+    Do not use data availability anywhere.
+  - 'ObjectStore' [Rust: DataAvailabilityConfig::ObjectStore]
+    Store data in an object store.
+
+da.type
+  Type: string tag with variants:
+  - 'local' [Rust: ObjectStoreConfig::Local] (default)
+    Stores object locally as files.
+  - 's3' [Rust: ObjectStoreConfig::S3]
+    Stores objects in AWS S3.
+  - 'gcs' [Rust: ObjectStoreConfig::Gcs]
+    Aliases: 'google', 'google_cloud'
+    Stores objects in Google Cloud Storage.
+  Tag: da.client == 'ObjectStore'
+
+da.path
+  Type: string [Rust: PathBuf]; filesystem path
+  Tags: da.client == 'ObjectStore' && da.type == 'local'
+  Default: "."
+  Path to the root directory.
+
+da.bucket_name
+  Type: string [Rust: String]
+  Tags: da.client == 'ObjectStore' && da.type == 'gcs'
+  Bucket to put objects into.
+
+da.bucket_name
+  Type: string [Rust: String]
+  Tags: da.client == 'ObjectStore' && da.type == 's3'
+  Bucket to put objects into.
+
+da.region
+  Type: string [Rust: Option]
+  Filtering: must not be empty, otherwise set to null
+  Tags: da.client == 'ObjectStore' && da.type == 's3'
+  Default: null
+  AWS availability region.
