@@ -161,17 +161,22 @@ pub enum ObjectStoreConfig {
         path: PathBuf,
     },
     /// Stores objects in AWS S3.
-    S3 {
-        bucket_name: String,
-        #[config(deserialize_if(NotEmpty))]
-        region: Option<String>,
-    },
+    S3(S3Config),
     /// Stores objects in Google Cloud Storage.
     #[config(alias = "google", alias = "google_cloud")]
     Gcs {
         /// Bucket to put objects into.
         bucket_name: String,
     },
+}
+
+#[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+pub struct S3Config {
+    /// Bucket to put objects into.
+    pub bucket_name: String,
+    /// AWS availability region.
+    #[config(deserialize_if(NotEmpty))]
+    pub region: Option<String>,
 }
 
 impl ExampleConfig for ObjectStoreConfig {

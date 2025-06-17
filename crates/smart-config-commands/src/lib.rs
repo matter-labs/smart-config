@@ -113,7 +113,14 @@ pub struct ParamRef<'a> {
     pub param: &'static ParamMetadata,
 }
 
-impl ParamRef<'_> {
+impl<'a> ParamRef<'a> {
+    pub(crate) fn for_tag(config: ConfigRef<'a>) -> Self {
+        Self {
+            config,
+            param: config.metadata().tag.unwrap().param,
+        }
+    }
+
     /// Returns canonical path to the param.
     pub fn canonical_path(&self) -> String {
         if self.config.prefix().is_empty() {
