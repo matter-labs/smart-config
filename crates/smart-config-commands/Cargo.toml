@@ -25,6 +25,7 @@ doc-comment.workspace = true
 insta.workspace = true
 primitive-types.workspace = true
 serde.workspace = true
+test-casing.workspace = true
 version-sync.workspace = true
 
 [lints]

@@ -1,0 +1,42 @@
+---
+source: crates/smart-config-commands/tests/integration/main.rs
+assertion_line: 124
+expression: buffer
+---
+{
+  "dir_paths": [
+    "./local"
+  ],
+  "funding": {
+    "api_key": "correct horse battery staple",
+    "secret_key": "0x0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "nested": {
+    "complex": {
+      "array": [
+        3,
+        5
+      ],
+      "map": {
+        "var": 3
+      }
+    },
+    "method_limits": [
+      {
+        "method": "eth_blockNumber",
+        "rps": 1
+      },
+      {
+        "method": "eth_call",
+        "rps": 100
+      }
+    ],
+    "more_timeouts": [
+      "5s"
+    ]
+  },
+  "port": 8080,
+  "required": 42,
+  "scaling_factor": 0.5,
+  "temp_dir": "/tmp"
+}
