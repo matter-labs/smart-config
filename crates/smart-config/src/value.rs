@@ -1,6 +1,6 @@
 //! Enriched JSON object model that allows to associate values with origins.
 
-use std::{collections::HashMap, fmt, iter, mem, sync::Arc};
+use std::{collections::BTreeMap, fmt, iter, mem, sync::Arc};
 
 pub use secrecy::{ExposeSecret, SecretString};
 
@@ -282,7 +282,7 @@ impl Value {
 }
 
 /// JSON object.
-pub type Map<V = Value> = HashMap<String, WithOrigin<V>>;
+pub type Map<V = Value> = BTreeMap<String, WithOrigin<V>>;
 
 /// JSON value together with its origin.
 #[derive(Debug, Clone, Default)]
