@@ -61,7 +61,7 @@ jobs:
       - name: Run doc tests
         run: cargo test --workspace --all-features --doc
       - name: Check CLI snapshots can be generated
-        run: ./crates/smart-config-commands/example/make-snapshots.sh
+        run: ./crates/smart-config-commands/examples/make-snapshots.sh
 
   document:
     needs:
