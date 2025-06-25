@@ -1,0 +1,177 @@
+---
+source: crates/smart-config-commands/tests/integration/main.rs
+assertion_line: 18
+expression: buffer
+---
+test.port
+test.bind_to [deprecated alias]
+  Type: integer [Rust: u16]
+  Example: 8080
+  Port to bind to.
+
+test.app_name
+  Type: string [Rust: String]
+  Validations:
+  - must not be empty
+  Default: "app"
+  Application name.
+
+test.poll_latency
+  Type: string | object [Rust: Duration]; duration with unit, or object with single unit key
+  Name suffixes: duration units from millis to weeks, e.g. _ms or _in_sec
+  Default: "500ms"
+
+test.scaling_factor
+  Type: integer | float [Rust: Option]
+  Validations:
+  - must be in range 0.0..=10.0
+  Default: null
+  Example: 0.5
+  Should be greater than 0.
+
+test.temp_dir
+  Type: string [Rust: PathBuf]; filesystem path
+  Default: "/tmp"
+  Fallbacks: env var "TMPDIR"
+  Directory for temporary stuff.
+
+test.dir_paths
+test.dirs
+  Type: string | array [Rust: HashSet]; set; using ":" delimiter
+    Array items: string [Rust: std::path::PathBuf]; filesystem path
+  Default: []
+  Example: [
+    "./local"
+  ]
+  Paths to key directories.
+
+test.timeout_sec
+  Type: integer [Rust: Duration]; time duration; unit: seconds
+  Default: 60
+  Timeout for some operation.
+
+test.cache_size
+test.experimental.cache_size [deprecated alias]
+  Type: string | object [Rust: ByteSize]; size with unit, or object with single unit key
+  Name suffixes: byte suze units up to gigabytes, e.g. _mb or _in_kib
+  Default: "16 MiB"
+  In-memory cache size.
+
+test.required
+  Type: integer [Rust: u64]
+  Example: 42
+  Required param.
+
+test.funding
+test.funds [deprecated alias]
+  Config: FundingConfig
+  Validations:
+  - `address` should be non-zero for non-zero `balance`
+
+test.funding.address
+test.funds.address [deprecated alias]
+  Type: string [Rust: Address]; hex string with optional 0x prefix
+  Default: "0x0000000000000000000000000000000000000000"
+  Ethereum-like address to fund.
+
+test.funding.balance
+test.funds.balance [deprecated alias]
+  Type: string [Rust: U256]; 0x-prefixed hex number
+  Default: "0x0"
+  Initial balance for the address.
+
+test.funding.api_key
+test.funds.api_key [deprecated alias]
+  Type: secret string [Rust: Option]
+  Default: null
+  Example: "correct horse battery staple"
+  Secret string value.
+
+test.funding.secret_key
+test.funds.secret_key [deprecated alias]
+  Type: secret string [Rust: Option]
+  Default: null
+  Example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+  Secret key.
+
+test.nested.exit_on_error
+test.experimental.exit_on_error [deprecated alias]
+  Type: Boolean [Rust: bool]
+  Default: true
+  Whether to exit the application on error.
+
+test.nested.complex
+  Type: object [Rust: ComplexParam]
+  Default: {
+    "array": [],
+    "map": {}
+  }
+  Example: {
+    "array": [
+      3,
+      5
+    ],
+    "map": {
+      "var": 3
+    }
+  }
+  Complex parameter deserialized from an object.
+
+test.nested.more_timeouts
+test.nested.timeouts
+  Type: string | array [Rust: Vec]; using "," delimiter
+    Array items: string | object [Rust: core::time::Duration]; duration with unit, or object with single unit key
+  Default: []
+  Example: [
+    "5s"
+  ]
+
+test.nested.method_limits
+  Type: array | object [Rust: HashMap]; map or array of { "method": _, "rps": _ } tuples
+    Map keys: string [Rust: alloc::string::String]
+    Map values: integer [Rust: core::num::nonzero::NonZero<u32>]; non-zero
+  Default: []
+  Example: [
+    {
+      "method": "eth_blockNumber",
+      "rps": 1
+    },
+    {
+      "method": "eth_call",
+      "rps": 100
+    }
+  ]
+  Can be deserialized either from a map or an array of tuples.
+
+test.object_store.type
+  Type: string tag with variants:
+  - 'local' [Rust: ObjectStoreConfig::Local] (default)
+    Stores object locally as files.
+  - 's3' [Rust: ObjectStoreConfig::S3]
+    Stores objects in AWS S3.
+  - 'gcs' [Rust: ObjectStoreConfig::Gcs]
+    Aliases: 'google', 'google_cloud'
+    Stores objects in Google Cloud Storage.
+
+test.object_store.path
+  Type: string [Rust: PathBuf]; filesystem path
+  Tag: test.object_store.type == 'local'
+  Default: "."
+  Path to the root directory.
+
+test.object_store.bucket_name
+  Type: string [Rust: String]
+  Tag: test.object_store.type == 'gcs'
+  Bucket to put objects into.
+
+test.object_store.bucket_name
+  Type: string [Rust: String]
+  Tag: test.object_store.type == 's3'
+  Bucket to put objects into.
+
+test.object_store.region
+  Type: string [Rust: Option]
+  Filtering: must not be empty, otherwise set to null
+  Tag: test.object_store.type == 's3'
+  Default: null
+  AWS availability region.

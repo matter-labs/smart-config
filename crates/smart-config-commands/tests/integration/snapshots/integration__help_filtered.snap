@@ -1,0 +1,36 @@
+---
+source: crates/smart-config-commands/tests/integration/main.rs
+assertion_line: 35
+expression: buffer
+---
+test.funding
+test.funds [deprecated alias]
+  Config: FundingConfig
+  Validations:
+  - `address` should be non-zero for non-zero `balance`
+
+test.funding.address
+test.funds.address [deprecated alias]
+  Type: string [Rust: Address]; hex string with optional 0x prefix
+  Default: "0x0000000000000000000000000000000000000000"
+  Ethereum-like address to fund.
+
+test.funding.balance
+test.funds.balance [deprecated alias]
+  Type: string [Rust: U256]; 0x-prefixed hex number
+  Default: "0x0"
+  Initial balance for the address.
+
+test.funding.api_key
+test.funds.api_key [deprecated alias]
+  Type: secret string [Rust: Option]
+  Default: null
+  Example: "correct horse battery staple"
+  Secret string value.
+
+test.funding.secret_key
+test.funds.secret_key [deprecated alias]
+  Type: secret string [Rust: Option]
+  Default: null
+  Example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+  Secret key.

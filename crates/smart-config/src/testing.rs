@@ -4,7 +4,7 @@ use std::{any, cell::RefCell, collections::HashMap, marker::PhantomData, mem};
 
 use crate::{
     de::DeserializerOptions,
-    metadata::{ConfigMetadata, ParamMetadata, RustType},
+    metadata::{ConfigMetadata, NestedConfigMetadata, ParamMetadata, RustType},
     schema::ConfigSchema,
     value::{Pointer, WithOrigin},
     visit::{ConfigVisitor, VisitConfig},
@@ -225,6 +225,13 @@ enum CompletenessCheckerMode {
 }
 
 #[derive(Debug)]
+#[must_use = "must be put back"]
+struct Checkpoint {
+    prev_config: &'static ConfigMetadata,
+    prev_path: Option<String>,
+}
+
+#[derive(Debug)]
 struct CompletenessChecker<'a> {
     mode: CompletenessCheckerMode,
     current_path: String,
@@ -262,6 +269,49 @@ impl<'a> CompletenessChecker<'a> {
             self.found_params.insert(param_path, param.rust_type);
         }
     }
+
+    fn insert_param(&mut self, param: &ParamMetadata) {
+        let param_path = Pointer(&self.current_path).join(param.name);
+        self.found_params.insert(param_path, param.rust_type);
+    }
+
+    fn push_config(&mut self, config_meta: &NestedConfigMetadata) -> Checkpoint {
+        let prev_config = mem::replace(&mut self.config, config_meta.meta);
+        let prev_path = if config_meta.name.is_empty() {
+            None
+        } else {
+            let nested_path = Pointer(&self.current_path).join(config_meta.name);
+            Some(mem::replace(&mut self.current_path, nested_path))
+        };
+        Checkpoint {
+            prev_config,
+            prev_path,
+        }
+    }
+
+    fn pop_config(&mut self, checkpoint: Checkpoint) {
+        self.config = checkpoint.prev_config;
+        if let Some(path) = checkpoint.prev_path {
+            self.current_path = path;
+        }
+    }
+
+    fn collect_all_params(&mut self) {
+        if let Some(tag) = &self.config.tag {
+            // Only report the tag param as missing, since all other params can be legitimately absent depending on its value.
+            self.insert_param(tag.param);
+            return;
+        }
+
+        for param in self.config.params {
+            self.insert_param(param);
+        }
+        for config_meta in self.config.nested_configs {
+            let checkpoint = self.push_config(config_meta);
+            self.collect_all_params();
+            self.pop_config(checkpoint);
+        }
+    }
 }
 
 impl ConfigVisitor for CompletenessChecker<'_> {
@@ -277,19 +327,19 @@ impl ConfigVisitor for CompletenessChecker<'_> {
 
     fn visit_nested_config(&mut self, config_index: usize, config: &dyn VisitConfig) {
         let config_meta = &self.config.nested_configs[config_index];
-        let prev_config = mem::replace(&mut self.config, config_meta.meta);
-        let prev_path = if config_meta.name.is_empty() {
-            None
-        } else {
-            let nested_path = Pointer(&self.current_path).join(config_meta.name);
-            Some(mem::replace(&mut self.current_path, nested_path))
-        };
-
+        let checkpoint = self.push_config(config_meta);
         config.visit_config(self);
+        self.pop_config(checkpoint);
+    }
 
-        self.config = prev_config;
-        if let Some(path) = prev_path {
-            self.current_path = path;
+    fn visit_nested_opt_config(&mut self, config_index: usize, config: Option<&dyn VisitConfig>) {
+        if let Some(config) = config {
+            self.visit_nested_config(config_index, config);
+        } else if matches!(self.mode, CompletenessCheckerMode::Complete) {
+            let config_meta = &self.config.nested_configs[config_index];
+            let checkpoint = self.push_config(config_meta);
+            self.collect_all_params();
+            self.pop_config(checkpoint);
         }
     }
 }
@@ -572,6 +622,8 @@ impl<C: DeserializeConfig + VisitConfig> Tester<'_, C> {
 mod tests {
     use std::collections::HashSet;
 
+    use smart_config_derive::DescribeConfig;
+
     use super::*;
     use crate::{
         config,
@@ -695,5 +747,20 @@ mod tests {
     fn incomplete_enum_config() {
         let json = config!("type": "Fields");
         test_complete::<EnumConfig>(json).unwrap();
+    }
+
+    #[should_panic(expected = "opt.nested_opt.other_int")]
+    #[test]
+    fn panicking_on_incomplete_sample_with_optional_nested_config() {
+        #[derive(Debug, DescribeConfig, DeserializeConfig)]
+        #[config(crate = crate)]
+        struct TestConfig {
+            required: u32,
+            #[config(nest)]
+            opt: Option<CompoundConfig>,
+        }
+
+        let json = config!("required": 42);
+        test_complete::<TestConfig>(json).ok();
     }
 }

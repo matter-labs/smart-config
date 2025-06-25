@@ -23,6 +23,17 @@ const SECRET: Style = Style::new()
     .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
     .fg_color(None);
 
+fn collect_conditions(mut config: ConfigRef<'_>) -> Vec<(ParamRef<'_>, &ConfigVariant)> {
+    let mut conditions = vec![];
+    while let Some((parent_ref, this_ref)) = config.parent_link() {
+        if let Some(variant) = this_ref.tag_variant {
+            conditions.push((ParamRef::for_tag(parent_ref), variant));
+        }
+        config = parent_ref;
+    }
+    conditions
+}
+
 impl<W: RawStream + AsLockedWrite> Printer<W> {
     /// Prints help on config params in the provided `schema`. Params can be filtered by the supplied predicate.
     ///
@@ -36,6 +47,8 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
     ) -> io::Result<()> {
         let mut writer = self.writer;
         for config in schema.iter() {
+            let conditions = collect_conditions(config);
+
             let mut filtered_params: Vec<_> = config
                 .metadata()
                 .params
@@ -54,14 +67,15 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
             }
 
             if let Some(tag) = &config.metadata().tag {
-                write_tag_help(&mut writer, config, tag)?;
+                write_tag_help(&mut writer, config, tag, &conditions)?;
                 // Do not output the tag param twice.
                 filtered_params
                     .retain(|param| param.param.rust_field_name != tag.param.rust_field_name);
+                writeln!(&mut writer)?;
             }
 
             for param_ref in filtered_params {
-                param_ref.write_help(&mut writer)?;
+                param_ref.write_help(&mut writer, &conditions)?;
                 writeln!(&mut writer)?;
             }
         }
@@ -106,6 +120,7 @@ fn write_tag_help(
     writer: &mut impl io::Write,
     config: ConfigRef<'_>,
     tag: &ConfigTag,
+    conditions: &[(ParamRef<'_>, &ConfigVariant)],
 ) -> io::Result<()> {
     ParamRef {
         config,
@@ -149,7 +164,9 @@ fn write_tag_help(
             }
         }
     }
-    Ok(())
+
+    let condition_count = conditions.len();
+    ParamRef::write_tag_conditions(writer, condition_count, conditions.iter().copied())
 }
 
 impl ParamRef<'_> {
@@ -185,14 +202,23 @@ impl ParamRef<'_> {
         Ok(())
     }
 
-    fn write_help(&self, writer: &mut impl io::Write) -> io::Result<()> {
+    fn write_help(
+        &self,
+        writer: &mut impl io::Write,
+        conditions: &[(ParamRef<'_>, &ConfigVariant)],
+    ) -> io::Result<()> {
         self.write_locations(writer)?;
         let description = self.param.type_description();
         write_type_description(writer, None, 2, self.param.expecting, &description)?;
 
-        if let Some(tag_variant) = self.param.tag_variant {
-            self.write_tag_variant(tag_variant, writer)?;
-        }
+        // `conditions` are ordered from most specific to least specific; we want the reverse ordering.
+        let full_conditions = conditions.iter().rev().copied().chain(
+            self.param
+                .tag_variant
+                .map(|variant| (ParamRef::for_tag(self.config), variant)),
+        );
+        let condition_count = conditions.len() + usize::from(self.param.tag_variant.is_some());
+        Self::write_tag_conditions(writer, condition_count, full_conditions)?;
 
         let default = self.param.default_value_json();
         if let Some(default) = &default {
@@ -231,21 +257,26 @@ impl ParamRef<'_> {
         Ok(())
     }
 
-    fn write_tag_variant(
-        &self,
-        variant: &ConfigVariant,
+    fn write_tag_conditions<'a>(
         writer: &mut impl io::Write,
+        condition_count: usize,
+        conditions: impl Iterator<Item = (ParamRef<'a>, &'a ConfigVariant)>,
     ) -> io::Result<()> {
-        let tag_ref = ParamRef {
-            config: self.config,
-            param: self.config.metadata().tag.unwrap().param,
-        };
-        let tag_name = tag_ref.canonical_path();
-        let variant = variant.name;
-        writeln!(
-            writer,
-            "{INDENT}{FIELD}Tag{FIELD:#}: {tag_name} == {STRING}'{variant}'{STRING:#}"
-        )
+        if condition_count == 0 {
+            return Ok(());
+        }
+
+        let tag_field = if condition_count == 1 { "Tag" } else { "Tags" };
+        write!(writer, "{INDENT}{FIELD}{tag_field}{FIELD:#}: ")?;
+        for (i, (tag_ref, variant)) in conditions.enumerate() {
+            let tag_name = tag_ref.canonical_path();
+            let variant = variant.name;
+            write!(writer, "{tag_name} == {STRING}'{variant}'{STRING:#}")?;
+            if i + 1 < condition_count {
+                write!(writer, " && ")?;
+            }
+        }
+        writeln!(writer)
     }
 }
 

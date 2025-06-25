@@ -23,8 +23,10 @@ smart-config = { workspace = true, features = ["primitive-types"] }
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
 doc-comment.workspace = true
+insta.workspace = true
 primitive-types.workspace = true
 serde.workspace = true
+test-casing.workspace = true
 version-sync.workspace = true
 
 [lints]

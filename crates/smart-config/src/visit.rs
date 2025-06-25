@@ -18,6 +18,16 @@ pub trait ConfigVisitor {
     /// Visits a nested configuration. Similarly to params, this will be called for all nested / flattened configs in a struct config,
     /// and just for ones associated with the active tag variant in an enum config.
     fn visit_nested_config(&mut self, config_index: usize, config: &dyn VisitConfig);
+
+    /// Visits an optional nested configuration.
+    ///
+    /// The default implementation calls [`Self::visit_nested_config()`] if `config` is `Some(_)`,
+    /// and does nothing if it is `None`.
+    fn visit_nested_opt_config(&mut self, config_index: usize, config: Option<&dyn VisitConfig>) {
+        if let Some(config) = config {
+            self.visit_nested_config(config_index, config);
+        }
+    }
 }
 
 /// Configuration that can be visited (e.g., to inspect its parameters in a generic way).
@@ -27,14 +37,6 @@ pub trait ConfigVisitor {
 pub trait VisitConfig {
     /// Performs the visit.
     fn visit_config(&self, visitor: &mut dyn ConfigVisitor);
-}
-
-impl<C: VisitConfig> VisitConfig for Option<C> {
-    fn visit_config(&self, visitor: &mut dyn ConfigVisitor) {
-        if let Some(config) = self {
-            config.visit_config(visitor);
-        }
-    }
 }
 
 /// Serializing [`ConfigVisitor`]. Can be used to serialize configs to the JSON object model.
