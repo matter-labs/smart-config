@@ -136,7 +136,7 @@
 </tspan><tspan xml:space="preserve" x="42" y="1634" class="output">    },
 </tspan><tspan xml:space="preserve" x="42" y="1652" class="output">  ]
 </tspan><tspan xml:space="preserve" x="42" y="1670" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1670" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.nested.method_limits
-</tspan><tspan xml:space="preserve" x="42" y="1688" class="output">test.object_store.bucket_name <tspan class="dimmed">[Rust: ObjectStoreConfig.bucket_name]</tspan> = <tspan class="fg6">"test-bucket"</tspan>
+</tspan><tspan xml:space="preserve" x="42" y="1688" class="output">test.object_store.bucket_name <tspan class="dimmed">[Rust: ObjectStoreConfig::Gcs.bucket_name]</tspan> = <tspan class="fg6">"test-bucket"</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="1706" class="output">  Active: test.object_store.type == <tspan class="fg6">'gcs'</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="1724" class="output">  Raw: <tspan class="fg6">"test-bucket"</tspan>
 </tspan><tspan xml:space="preserve" x="42" y="1742" class="output-bg">          <tspan class="fg2">█████</tspan></tspan><tspan xml:space="preserve" x="42" y="1742" class="output">  Origin: <tspan class="bg2">YAML:</tspan>/config/test.yml <tspan class="bold">-&gt;</tspan> .test.object_store.bucket_name
