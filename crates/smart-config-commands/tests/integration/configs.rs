@@ -242,6 +242,10 @@ pub(crate) fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepo
             "APP_TEST_FUNDS_SECRET_KEY",
             "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
         ),
+        (
+            "APP_TEST_OBJECT_STORE_GOOGLE_BUCKET_NAME",
+            "test-bucket-override",
+        ),
     ];
     if !bogus {
         env_vars.push(("APP_TEST_REQUIRED", "123"));

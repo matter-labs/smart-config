@@ -20,6 +20,7 @@ smart-config.workspace = true
 [dev-dependencies]
 smart-config = { workspace = true, features = ["primitive-types"] }
 
+anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
 doc-comment.workspace = true
 insta.workspace = true

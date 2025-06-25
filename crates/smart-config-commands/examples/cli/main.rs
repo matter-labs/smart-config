@@ -52,7 +52,7 @@ enum SerializationFormat {
 
 const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
 
@@ -63,7 +63,7 @@ fn main() {
                     param_ref.all_paths().any(|(path, _)| path.contains(needle))
                 })
             };
-            Printer::stderr().print_help(&schema, filter).unwrap();
+            Printer::stderr().print_help(&schema, filter)?;
         }
         Cli::Debug { bogus, filter } => {
             let repo = create_mock_repo(&schema, bogus);
@@ -73,7 +73,7 @@ fn main() {
                 })
             };
 
-            let res = Printer::stderr().print_debug(&repo, filter).unwrap();
+            let res = Printer::stderr().print_debug(&repo, filter)?;
             if let Err(err) = res {
                 anstream::eprintln!(
                     "\n{ERROR}There were errors parsing configuration params:\n{err}{ERROR:#}"
@@ -100,37 +100,33 @@ fn main() {
                 (serde_json::json!({ "test": json }), example_config)
             } else {
                 let repo = create_mock_repo(&schema, false);
-                let original_config: TestConfig = repo.single().unwrap().parse().unwrap();
-                (repo.canonicalize(&options).unwrap().into(), original_config)
+                let original_config: TestConfig = repo.single()?.parse()?;
+                (repo.canonicalize(&options)?.into(), original_config)
             };
 
             let mut buffer = vec![];
             let restored_repo = match format {
                 SerializationFormat::Json => {
-                    Printer::stderr().print_json(&json).unwrap();
+                    Printer::stderr().print_json(&json)?;
 
                     // Parse the produced JSON back and check that it describes the same config.
-                    Printer::custom(AutoStream::never(&mut buffer))
-                        .print_json(&json)
-                        .unwrap();
-                    let deserialized = serde_json::from_slice(&buffer).unwrap();
+                    Printer::custom(AutoStream::never(&mut buffer)).print_json(&json)?;
+                    let deserialized = serde_json::from_slice(&buffer)?;
                     let source = Json::new("deserialized.json", deserialized);
                     ConfigRepository::new(&schema).with(source)
                 }
                 SerializationFormat::Yaml => {
-                    Printer::stderr().print_yaml(&json).unwrap();
+                    Printer::stderr().print_yaml(&json)?;
 
-                    Printer::custom(AutoStream::never(&mut buffer))
-                        .print_yaml(&json)
-                        .unwrap();
-                    let deserialized = serde_yaml::from_slice(&buffer).unwrap();
-                    let source = Yaml::new("deserialized.yaml", deserialized).unwrap();
+                    Printer::custom(AutoStream::never(&mut buffer)).print_yaml(&json)?;
+                    let deserialized = serde_yaml::from_slice(&buffer)?;
+                    let source = Yaml::new("deserialized.yaml", deserialized)?;
                     ConfigRepository::new(&schema).with(source)
                 }
                 SerializationFormat::Env => {
                     let env =
                         Environment::convert_flat_params(json.as_object().unwrap(), "APP_").into();
-                    Printer::stderr().print_yaml(&env).unwrap();
+                    Printer::stderr().print_yaml(&env)?;
                     let env = env.as_object().unwrap().iter().map(|(name, value)| {
                         let value = match value {
                             serde_json::Value::String(s) => s.clone(),
@@ -139,12 +135,13 @@ fn main() {
                         (name.as_str(), value)
                     });
                     let mut env = Environment::from_iter("APP_", env);
-                    env.coerce_json().unwrap();
+                    env.coerce_json()?;
                     ConfigRepository::new(&schema).with(env)
                 }
             };
-            let restored_config: TestConfig = restored_repo.single().unwrap().parse().unwrap();
+            let restored_config: TestConfig = restored_repo.single()?.parse()?;
             assert_eq!(original_config, restored_config);
         }
     }
+    Ok(())
 }

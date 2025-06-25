@@ -96,7 +96,7 @@ test.nested.method_limits [Rust: NestedConfig.method_limits] = [
     },
   ]
   Origin: YAML:/config/test.yml -> .test.nested.method_limits
-test.object_store.bucket_name [Rust: ObjectStoreConfig.bucket_name] = "test-bucket"
+test.object_store.bucket_name [Rust: ObjectStoreConfig::Gcs.bucket_name] = "test-bucket"
   Active: test.object_store.type == 'gcs'
   Raw: "test-bucket"
   Origin: YAML:/config/test.yml -> .test.object_store.bucket_name

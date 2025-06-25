@@ -89,7 +89,7 @@ test.nested.method_limits [Rust: NestedConfig.method_limits]
   Error: invalid type: string "{ \"eth_getLogs\": 0 }", expected object or array
     at test.nested.method_limits
     env:"BOGUS_TEST_NESTED_METHOD_LIMITS"
-test.object_store.bucket_name [Rust: ObjectStoreConfig.bucket_name]
+test.object_store.bucket_name [Rust: ObjectStoreConfig::Gcs.bucket_name]
   Raw: "test-bucket"
   Origin: YAML:/config/test.yml -> .test.object_store.bucket_name
 test.object_store.type [Rust: ObjectStoreConfig.type]
