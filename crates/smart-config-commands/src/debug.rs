@@ -232,9 +232,14 @@ impl<W: RawStream + AsLockedWrite> Printer<W> {
                 if let Some(errors) = errors.by_param.get(&param_id) {
                     if !param_written {
                         let field_name = param.rust_field_name;
+                        let rust_variant = if let Some(variant) = param.tag_variant {
+                            format!("::{}", variant.rust_name)
+                        } else {
+                            String::new()
+                        };
                         writeln!(
                             writer,
-                            "{canonical_path} {RUST}[Rust: {config_name}.{field_name}]{RUST:#}"
+                            "{canonical_path} {RUST}[Rust: {config_name}{rust_variant}.{field_name}]{RUST:#}"
                         )?;
                     }
                     write_de_errors(&mut writer, errors)?;
@@ -297,9 +302,15 @@ fn write_param(
     } else {
         INACTIVE
     };
+    let rust_variant = if let Some(variant) = param_ref.param.tag_variant {
+        format!("::{}", variant.rust_name)
+    } else {
+        String::new()
+    };
+
     write!(
         writer,
-        "{activity_style}{path}{activity_style:#} {RUST}[Rust: {}.{}]{RUST:#}",
+        "{activity_style}{path}{activity_style:#} {RUST}[Rust: {}{rust_variant}.{}]{RUST:#}",
         param_ref.config.metadata().ty.name_in_code(),
         param_ref.param.rust_field_name
     )?;

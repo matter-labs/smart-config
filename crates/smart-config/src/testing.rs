@@ -388,6 +388,19 @@ impl<C: DeserializeConfig + VisitConfig> Default for Tester<'static, C> {
     }
 }
 
+impl Default for Tester<'static, ()> {
+    fn default() -> Self {
+        Self {
+            data: TesterDataGoat::Owned(TesterData {
+                de_options: DeserializerOptions::default(),
+                schema: ConfigSchema::default(),
+                env_guard: MockEnvGuard::default(),
+            }),
+            _config: PhantomData,
+        }
+    }
+}
+
 impl Tester<'_, ()> {
     /// Creates a tester with the specified schema.
     pub fn new(schema: ConfigSchema) -> Self {
@@ -414,6 +427,27 @@ impl Tester<'_, ()> {
             _config: PhantomData,
         }
     }
+
+    /// Similar to [`Self::for_config()`], but inserts the specified config into the schema rather
+    /// than expecting it to be present.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the config cannot be inserted into the schema.
+    pub fn insert<C: DeserializeConfig + VisitConfig>(
+        &mut self,
+        prefix: &'static str,
+    ) -> Tester<'_, C> {
+        self.data
+            .as_mut()
+            .schema
+            .insert(&C::DESCRIPTION, prefix)
+            .expect("failed inserting config into schema");
+        Tester {
+            data: TesterDataGoat::Borrowed(self.data.as_mut()),
+            _config: PhantomData,
+        }
+    }
 }
 
 impl<C> Tester<'_, C> {
@@ -425,7 +459,7 @@ impl<C> Tester<'_, C> {
 
     /// Enables coercion of serde-style enums.
     pub fn coerce_serde_enums(&mut self) -> &mut Self {
-        self.data.as_mut().de_options.coerce_serde_enums = true;
+        self.data.as_mut().schema.coerce_serde_enums(true);
         self
     }
 

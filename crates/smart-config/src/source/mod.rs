@@ -10,7 +10,7 @@ pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
     de::{DeserializeContext, DeserializerOptions},
     fallback::Fallbacks,
-    metadata::{BasicTypes, ConfigTag, TypeSuffixes},
+    metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeSuffixes},
     schema::{ConfigData, ConfigRef, ConfigSchema},
     utils::{merge_json, EnumVariant, JsonObject},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
@@ -293,11 +293,8 @@ impl<'a> ConfigRepository<'a> {
             }
         };
 
-        let param_count = source_value.preprocess_source(
-            self.schema,
-            &self.prefixes_for_canonical_configs,
-            &self.de_options,
-        );
+        let param_count =
+            source_value.preprocess_source(self.schema, &self.prefixes_for_canonical_configs);
         tracing::debug!(param_count, "Inserted source into config repo");
         self.merged
             .guided_merge(source_value, self.schema, Pointer(""));
@@ -493,13 +490,10 @@ impl WithOrigin {
         &mut self,
         schema: &ConfigSchema,
         prefixes_for_canonical_configs: &HashSet<Pointer<'_>>,
-        options: &DeserializerOptions,
     ) -> usize {
         self.copy_aliased_values(schema);
         self.mark_secrets(schema);
-        if options.coerce_serde_enums {
-            self.convert_serde_enums(schema);
-        }
+        self.convert_serde_enums(schema);
         self.nest_object_params_and_sub_configs(schema);
         self.nest_array_params(schema);
         self.collect_garbage(schema, prefixes_for_canonical_configs, Pointer(""))
@@ -679,7 +673,6 @@ impl WithOrigin {
 
     #[tracing::instrument(level = "debug", skip_all)]
     fn convert_serde_enums(&mut self, schema: &ConfigSchema) {
-        // We need ordered iteration here (parent configs before children) to avoid skipping nested enum configs.
         for config_data in schema.iter() {
             let config_meta = config_data.metadata();
             let prefix = Pointer(config_data.prefix());
@@ -687,6 +680,10 @@ impl WithOrigin {
             let Some(tag) = &config_meta.tag else {
                 continue; // Not an enum config, nothing to do.
             };
+            if !config_data.data.coerce_serde_enums {
+                continue;
+            }
+
             let canonical_map = self.get(prefix).and_then(|val| val.inner.as_object());
             let alias_maps = config_data
                 .aliases()
@@ -705,30 +702,38 @@ impl WithOrigin {
             )
             .entered();
 
-            if let Some(new_values) = Self::convert_serde_enum(canonical_map, alias_maps, tag) {
+            if let Some((variant, variant_content)) =
+                Self::detect_serde_enum_variant(canonical_map, alias_maps, tag)
+            {
+                tracing::debug!(
+                    variant = variant.name,
+                    origin = %variant_content.origin,
+                    "adding detected tag variant"
+                );
+                let origin = ValueOrigin::Synthetic {
+                    source: variant_content.origin.clone(),
+                    transform: "coercing serde enum".to_owned(),
+                };
+
                 let canonical_map = self.ensure_object(prefix, |_| {
                     Arc::new(ValueOrigin::Synthetic {
                         source: Arc::default(),
                         transform: "enum coercion".to_string(),
                     })
                 });
-                canonical_map.extend(new_values);
-
-                // Run local de-aliasing for the config again.
-                let (new_values, _) = self.copy_aliases_for_config(config_data.data);
-                // `unwrap()`s are safe: we've ensured the canonical map existence above.
-                let canonical_map = self.get_mut(prefix).unwrap().inner.as_object_mut().unwrap();
-                canonical_map.extend(new_values);
+                canonical_map.insert(
+                    tag.param.name.to_owned(),
+                    WithOrigin::new(variant.name.to_owned().into(), Arc::new(origin)),
+                );
             }
         }
     }
 
-    #[must_use = "returned `Map` should be merged"]
-    fn convert_serde_enum<'a>(
+    fn detect_serde_enum_variant<'a>(
         canonical_map: Option<&'a Map>,
         alias_maps: impl Iterator<Item = &'a Map>,
-        tag: &ConfigTag,
-    ) -> Option<Map> {
+        tag: &'static ConfigTag,
+    ) -> Option<(&'static ConfigVariant, &'a Self)> {
         let all_variant_names = tag.variants.iter().flat_map(|variant| {
             iter::once(variant.name)
                 .chain(variant.aliases.iter().copied())
@@ -766,38 +771,7 @@ impl WithOrigin {
             );
             return None;
         }
-
-        tracing::debug!(
-            field = field_name,
-            variant = variant.name,
-            "copying variant contents"
-        );
-        let origin = ValueOrigin::Synthetic {
-            source: variant_content.origin.clone(),
-            transform: "coercing serde enum".to_owned(),
-        };
-        let Value::Object(variant_content) = variant_content.inner.clone() else {
-            unreachable!(); // checked above
-        };
-
-        let mut new_values = Map::new();
-        new_values.insert(
-            tag.param.name.to_owned(),
-            WithOrigin::new(variant.name.to_owned().into(), Arc::new(origin)),
-        );
-
-        for (key, value) in variant_content {
-            #[allow(clippy::map_entry)] // False positive: `key` would need to be cloned
-            if canonical_map.is_some_and(|map| map.contains_key(&key)) {
-                tracing::info!(
-                    field = key,
-                    "config already contains field, not overwriting it"
-                );
-            } else {
-                new_values.insert(key, value);
-            }
-        }
-        (!new_values.is_empty()).then_some(new_values)
+        Some((variant, variant_content))
     }
 
     /// Removes all values that do not correspond to canonical params or their ancestors.

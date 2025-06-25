@@ -1505,11 +1505,11 @@ fn config_canonicalization_with_nesting() {
 
 #[test]
 fn coercing_serde_enum() {
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<EnumConfig>("");
+
     let json = config!("fields.string": "!", "fields.flag": false, "fields.set": [123]);
-    let config: EnumConfig = testing::Tester::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap();
+    let config = tester.test(json).unwrap();
     assert_eq!(
         config,
         EnumConfig::WithFields {
@@ -1523,10 +1523,7 @@ fn coercing_serde_enum() {
         "nested.renamed": "first_choice",
         "nested.map": serde_json::json!({ "call": 100 }),
     );
-    let config: EnumConfig = testing::Tester::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap();
+    let config = tester.test(json).unwrap();
     assert_eq!(
         config,
         EnumConfig::Nested(NestedConfig {
@@ -1535,15 +1532,23 @@ fn coercing_serde_enum() {
             map: HashMap::from([("call".to_owned(), 100)]),
         })
     );
+
+    // Tag field present.
+    let json = config!("type": "Fields", "fields.string": "!");
+    let config = tester.test(json).unwrap();
+    assert_matches!(
+        &config,
+        EnumConfig::WithFields { string: Some(s), .. } if s == "!"
+    );
 }
 
 #[test]
 fn coercing_serde_enum_with_aliased_field() {
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<EnumConfig>("");
+
     let json = config!("fields.str": "?", "fields.flag": false);
-    let config: EnumConfig = testing::Tester::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap();
+    let config: EnumConfig = tester.test(json).unwrap();
     assert_matches!(
         config,
         EnumConfig::WithFields { string: Some(s), flag: false, .. } if s == "?"
@@ -1552,9 +1557,12 @@ fn coercing_serde_enum_with_aliased_field() {
 
 #[test]
 fn origins_for_coerced_serde_enum() {
-    let schema = ConfigSchema::new(&EnumConfig::DESCRIPTION, "");
+    let mut schema = ConfigSchema::default();
+    schema
+        .coerce_serde_enums(true)
+        .insert(&EnumConfig::DESCRIPTION, "")
+        .unwrap();
     let mut repo = ConfigRepository::new(&schema);
-    repo.deserializer_options().coerce_serde_enums = true;
     let json = config!("fields.string": "!", "fields.flag": false, "fields.set": [123]);
     repo = repo.with(json);
 
@@ -1580,47 +1588,35 @@ fn origins_for_coerced_serde_enum() {
 
 #[test]
 fn coercing_serde_enum_negative_cases() {
-    // Tag field present; the variant field shouldn't be used.
-    let json = config!("type": "Fields", "fields.string": "!");
-    let config: EnumConfig = testing::Tester::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap();
-    assert_matches!(
-        config,
-        EnumConfig::WithFields {
-            string: None,
-            flag: true,
-            ..
-        }
-    );
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<EnumConfig>("");
 
     // Multiple variant fields present
+    let json = config!("fields.string": "!", "nested.renamed": "first");
+    let err = tester.test(json).unwrap_err();
+    assert_eq!(err.len(), 1);
+    assert_eq!(err.first().path(), "type");
+
+    // ...even for the same variant
     let json = config!("fields.string": "!", "with_fields.flag": false);
-    let err = testing::Tester::<EnumConfig>::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap_err();
+    let err = tester.test(json).unwrap_err();
     assert_eq!(err.len(), 1);
     assert_eq!(err.first().path(), "type");
 
     // Variant field is not an object
     let json = config!("fields": "!");
-    let err = testing::Tester::<EnumConfig>::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap_err();
+    let err = tester.test(json).unwrap_err();
     assert_eq!(err.len(), 1);
     assert_eq!(err.first().path(), "type");
 }
 
 #[test]
 fn coercing_nested_enum_config() {
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<RenamedEnumConfig>("");
+
     let json = config!("next.nested.renamed": "second");
-    let config: RenamedEnumConfig = testing::Tester::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap();
+    let config = tester.test(json).unwrap();
     assert_eq!(
         config,
         RenamedEnumConfig::V3(EnumConfig::Nested(NestedConfig {
@@ -1640,22 +1636,21 @@ fn coercing_aliased_enum_config() {
         val: EnumConfig,
     }
 
+    let mut tester = testing::Tester::default();
+    let tester = tester
+        .coerce_serde_enums()
+        .insert::<ConfigWithNestedEnum>("");
+
     // Base case: no aliasing.
     let json = config!("val.with_fields.str": "what");
-    let config: ConfigWithNestedEnum = testing::Tester::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap();
+    let config = tester.test(json).unwrap();
     assert_matches!(
         &config.val,
         EnumConfig::WithFields { string: Some(s), .. } if s == "what"
     );
 
     let json = config!("value.with_fields.string": "what");
-    let config: ConfigWithNestedEnum = testing::Tester::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap();
+    let config = tester.test(json).unwrap();
     assert_matches!(
         &config.val,
         EnumConfig::WithFields { string: Some(s), .. } if s == "what"
@@ -1663,10 +1658,7 @@ fn coercing_aliased_enum_config() {
 
     // Some more aliases for variant and the enclosed field.
     let json = config!("value.fields.str": "what");
-    let config: ConfigWithNestedEnum = testing::Tester::default()
-        .coerce_serde_enums()
-        .test(json)
-        .unwrap();
+    let config = tester.test(json).unwrap();
     assert_matches!(
         &config.val,
         EnumConfig::WithFields { string: Some(s), .. } if s == "what"
@@ -1909,4 +1901,97 @@ fn deserializing_optional_config() {
         .parse_opt()
         .unwrap_err();
     assert_eq!(err.len(), 2);
+}
+
+#[test]
+fn coercing_enum_with_suffixes() {
+    #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate, tag = "version")]
+    enum TestConfig {
+        #[config(alias = "v1")]
+        V1 { timeout: Duration },
+        #[config(alias = "Latest")]
+        V2 {
+            size: ByteSize,
+            #[config(nest)]
+            nested: NestedConfig,
+        },
+    }
+
+    let mut tester = testing::Tester::default();
+    let tester = tester.coerce_serde_enums().insert::<TestConfig>("test");
+
+    let env = Environment::from_iter("", [("TEST_V1_TIMEOUT_MS", "100")]);
+    let config = tester.test_complete(env).unwrap();
+    assert_eq!(
+        config,
+        TestConfig::V1 {
+            timeout: Duration::from_millis(100)
+        }
+    );
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_V2_SIZE_IN_MB", "128"),
+            ("TEST_V2_NESTED_RENAMED", "second"),
+            ("TEST_V2_NESTED_OTHER_INT", "23"),
+        ],
+    );
+    let config = tester.test(env).unwrap();
+    assert_eq!(
+        config,
+        TestConfig::V2 {
+            size: 128 * SizeUnit::MiB,
+            nested: NestedConfig {
+                simple_enum: SimpleEnum::Second,
+                other_int: 23,
+                map: HashMap::new(),
+            },
+        }
+    );
+
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_LATEST_SIZE_IN_MB", "128"),
+            ("TEST_LATEST_NESTED_RENAMED", "second"),
+            ("TEST_LATEST_NESTED_OTHER_INT", "23"),
+        ],
+    );
+    let config = tester.test(env).unwrap();
+    assert_eq!(
+        config,
+        TestConfig::V2 {
+            size: 128 * SizeUnit::MiB,
+            nested: NestedConfig {
+                simple_enum: SimpleEnum::Second,
+                other_int: 23,
+                map: HashMap::new(),
+            },
+        }
+    );
+
+    // Mix of multiple aliases; works because the enum tag is explicitly specified.
+    let env = Environment::from_iter(
+        "",
+        [
+            ("TEST_VERSION", "Latest"),
+            ("TEST_V2_SIZE_IN_MB", "128"),
+            ("TEST_LATEST_NESTED_RENAMED", "second"),
+            ("TEST_NESTED_OTHER_INT", "23"),
+        ],
+    );
+    let config = tester.test(env).unwrap();
+    assert_eq!(
+        config,
+        TestConfig::V2 {
+            size: 128 * SizeUnit::MiB,
+            nested: NestedConfig {
+                simple_enum: SimpleEnum::Second,
+                other_int: 23,
+                map: HashMap::new(),
+            },
+        }
+    );
 }
