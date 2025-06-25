@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/matter-labs/smart-config/compare/v0.2.0...v0.3.0) (2025-06-25)
+
+
+### Features
+
+* Better handling of optional configs / params (pt. 2) ([#36](https://github.com/matter-labs/smart-config/issues/36)) ([bd93f93](https://github.com/matter-labs/smart-config/commit/bd93f9311defc6cc63bd015a9aa0a6bdb235d8b2))
+
+
+### Bug Fixes
+
+* Fix completeness check in `test_complete()` for optional configs ([70cdc58](https://github.com/matter-labs/smart-config/commit/70cdc58c5be769515f331bd4353354d097ec131e))
+* Fix tag conditions for help CLI command ([#38](https://github.com/matter-labs/smart-config/issues/38)) ([70cdc58](https://github.com/matter-labs/smart-config/commit/70cdc58c5be769515f331bd4353354d097ec131e))
+
 ## [0.2.0](https://github.com/matter-labs/smart-config/compare/v0.1.0...v0.2.0) (2025-06-11)
 
 
