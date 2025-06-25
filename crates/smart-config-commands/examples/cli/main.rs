@@ -3,7 +3,10 @@ use std::process;
 use anstream::AutoStream;
 use anstyle::{AnsiColor, Color, Style};
 use clap::{Parser, ValueEnum};
-use smart_config::{ConfigRepository, ConfigSchema, DescribeConfig, Environment, ExampleConfig, Json, ParseErrors, SerializerOptions, Yaml};
+use smart_config::{
+    ConfigRepository, ConfigSchema, DescribeConfig, Environment, ExampleConfig, Json, ParseErrors,
+    SerializerOptions, Yaml,
+};
 use smart_config_commands::{ParamRef, Printer};
 
 use crate::configs::{create_mock_repo, TestConfig};
@@ -77,12 +80,14 @@ fn main() -> anyhow::Result<()> {
                 errors.sort_unstable_by(|lhs, rhs| {
                     let cheap_ordering = lhs.path().cmp(rhs.path());
                     // If paths are equal, order by the error message.
-                    cheap_ordering.then_with(|| {
-                        lhs.inner().to_string().cmp(&rhs.inner().to_string())
-                    })
+                    cheap_ordering
+                        .then_with(|| lhs.inner().to_string().cmp(&rhs.inner().to_string()))
                 });
                 // `unwrap_err()` is safe: there's at least one error.
-                let err = errors.into_iter().collect::<Result<(), ParseErrors>>().unwrap_err();
+                let err = errors
+                    .into_iter()
+                    .collect::<Result<(), ParseErrors>>()
+                    .unwrap_err();
 
                 anstream::eprintln!(
                     "\n{ERROR}There were errors parsing configuration params:\n{err}{ERROR:#}"
