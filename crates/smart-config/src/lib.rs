@@ -126,7 +126,7 @@
 //! ```
 
 // Documentation settings
-#![doc(html_root_url = "https://docs.rs/smart-config/0.2.0-pre")]
+#![doc(html_root_url = "https://docs.rs/smart-config/0.3.0-pre")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 // Linter settings
 #![warn(missing_docs)]
