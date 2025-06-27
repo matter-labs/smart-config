@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Constructor of `Serde` types / instances."><title>Serde in smart_config::de - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-970bf1bf55bd1c15.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="smart_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0-nightly (28a58f2fa 2024-07-31)" data-channel="nightly" data-search-js="search-ef54e092fea9c776.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-f9142fe437216fc3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../smart_config/index.html">smart_<wbr>config</a><span class="version">0.3.0-pre</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In smart_<wbr>config::<wbr>de</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Macro <a href="../index.html">smart_config</a>::<wbr><a href="index.html">de</a>::<wbr><a class="macro" href="#">Serde</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/smart_config/de/macros.rs.html#88-95">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><span class="macro">macro_rules!</span> Serde {
+    (<span class="kw-2">*</span>) =&gt; { ... };
+    ($(<span class="macro-nonterminal">$expecting</span>:tt),+ $(,)<span class="question-mark">?</span>) =&gt; { ... };
+}</pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Constructor of <a href="struct.Serde.html" title="struct smart_config::de::Serde"><code>Serde</code></a> types / instances.</p>
+<p>The macro accepts a comma-separated list of expected basic types from the following set: <code>bool</code>, <code>int</code>,
+<code>float</code>, <code>str</code>, <code>array</code>, <code>object</code>. As a shortcut, <code>Serde![*]</code> signals to accept any input.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>ComplexType {
+    <span class="comment">// ...
+</span>}
+
+<span class="kw">impl </span>Serialize <span class="kw">for </span>ComplexType {
+    <span class="comment">// Complex serialization logic...
+</span>}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>ComplexType {
+    <span class="comment">// Complex deserialization logic...
+</span>}
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+</span><span class="kw">struct </span>TestConfig {
+    <span class="doccomment">/// Will try to deserialize any integer, string or object delegating
+    /// to the `Deserialize` impl. Will error on other inputs (e.g., arrays).
+    </span><span class="attr">#[config(with = <span class="macro">Serde!</span>[int, str, object]</span>)]
+    complex_param: ComplexType,
+    <span class="attr">#[config(with = <span class="macro">Serde!</span>[<span class="kw-2">*</span>]</span>)]
+    anything: serde_json::Value,
+}</code></pre></div>
+</div></details></section></div></main></body></html>
