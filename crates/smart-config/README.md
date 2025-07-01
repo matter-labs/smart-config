@@ -47,11 +47,12 @@ For example, env vars are a flat string -> string map; with the help of a schema
 ## Usage
 
 Add this to your `Crate.toml`:
-
+<!--- x-release-please-start-version -->
 ```toml
 [dependencies]
 smart-config = "0.3.0-pre"
 ```
+<!--- x-release-please-end -->
 
 ### Declaring configurations
 

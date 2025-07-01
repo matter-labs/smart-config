@@ -8,6 +8,7 @@ permissions:
   id-token: write
   attestations: write
   packages: write
+  issues: write
 
 # Run the workflow on push to the main branch and manually
 on:
@@ -29,5 +30,4 @@ jobs:
       manifest: '.github/release-please/manifest.json' # Specify the path to the manifest file
       update-cargo-lock: true                          # Update Cargo.lock file
       publish-to-crates-io: true                       # Enable publishing to crates.io
-      version-suffix: 'pre'                            # Version suffix for the crates.io release; TODO: remove once the library is stable
       cargo_build_args: '--workspace'

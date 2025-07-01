@@ -15,11 +15,12 @@ This library provides a couple of command-line extensions for the [`smart-config
 ## Usage
 
 Add this to your `Crate.toml`:
-
+<!--- x-release-please-start-version -->
 ```toml
 [dependencies]
 smart-config-commands = "0.3.0-pre"
 ```
+<!--- x-release-please-end -->
 
 ### Printing help on config params
 
