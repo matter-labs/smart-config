@@ -3,14 +3,38 @@
   "include-component-in-tag": false,
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": false,
+  "prerelease": true,
+  "prerelease-type": "pre",
+  "versioning": "prerelease",
   "packages": {
     ".": {
       "component": "smart-config",
       "release-type": "simple",
       "extra-files": [
         {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        },
+        {
           "type": "generic",
-          "path": "Cargo.toml"
+          "path": "crates/smart-config-commands/README.md"
+        },
+        {
+          "type": "generic",
+          "path": "crates/smart-config-commands/src/lib.rs"
+        },
+        {
+          "type": "generic",
+          "path": "crates/smart-config-derive/src/lib.rs"
+        },
+        {
+          "type": "generic",
+          "path": "crates/smart-config/README.md"
+        },
+        {
+          "type": "generic",
+          "path": "crates/smart-config/src/lib.rs"
         }
       ]
     }
