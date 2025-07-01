@@ -1,0 +1,82 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Parameter and config validation and filtering."><title>smart_config::validation - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-970bf1bf55bd1c15.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="smart_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0-nightly (28a58f2fa 2024-07-31)" data-channel="nightly" data-search-js="search-ef54e092fea9c776.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-f9142fe437216fc3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../smart_config/index.html">smart_<wbr>config</a><span class="version">0.3.0-pre</span></h2></div><h2 class="location"><a href="#">Module validation</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate smart_<wbr>config</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">smart_config</a>::<wbr><a class="mod" href="#">validation</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/smart_config/validation/mod.rs.html#1-217">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Parameter and config validation and filtering.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>The core validation functionality is encapsulated in the <a href="trait.Validate.html" title="trait smart_config::validation::Validate"><code>Validate</code></a> trait.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="validation"><a class="doc-anchor" href="#validation">§</a>Validation</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>secrecy::{ExposeSecret, SecretString};
+<span class="kw">use </span>smart_config::validation;
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+#[config(validate(
+    <span class="self">Self</span>::validate_secret_key,
+    <span class="string">"secret key must have expected length"
+</span>))]
+</span><span class="kw">struct </span>ValidatedConfig {
+    secret_key: SecretString,
+    <span class="doccomment">/// Reference key length. If specified, the secret key length
+    /// will be checked against it.
+    </span><span class="attr">#[config(validate(..=<span class="number">100</span>))]
+    </span><span class="comment">// ^ Validates that the value is in the range. Note that validations
+    // handle `Option`s intelligently; if the value isn't specified
+    // (i.e., is `None`), it will pass validation.
+    </span>secret_key_len: <span class="prelude-ty">Option</span>&lt;usize&gt;,
+    <span class="attr">#[config(validate(not_empty, <span class="string">"must not be empty"</span>))]
+    </span>app_name: String,
+}
+
+<span class="comment">// We have to use `&amp;String` rather than more idiomatic `&amp;str` in order to
+// exactly match the validated type.
+</span><span class="kw">fn </span>not_empty(s: <span class="kw-2">&amp;</span>String) -&gt; bool {
+    !s.is_empty()
+}
+
+<span class="kw">impl </span>ValidatedConfig {
+    <span class="kw">fn </span>validate_secret_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), ErrorWithOrigin&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(expected_len) = <span class="self">self</span>.secret_key_len {
+            <span class="kw">let </span>actual_len = <span class="self">self</span>.secret_key.expose_secret().len();
+            <span class="kw">if </span>expected_len != actual_len {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(ErrorWithOrigin::custom(<span class="macro">format!</span>(
+                    <span class="string">"unexpected `secret_key` length ({actual_len}); \
+                     expected {expected_len}"
+                </span>)));
+            }
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+}</code></pre></div>
+<h3 id="filtering"><a class="doc-anchor" href="#filtering">§</a>Filtering</h3>
+<p>Filtering reuses the <code>Validate</code> trait, but rather than failing, converts a value to <code>None</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>smart_config::validation;
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+</span><span class="kw">struct </span>FilteringConfig {
+    <span class="doccomment">/// Will convert `url: ''` to `None`.
+    </span><span class="attr">#[config(deserialize_if(validation::NotEmpty))]
+    </span>url: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="doccomment">/// Will convert either of `env: ''` or `env: 'unset'` to `None`.
+    </span><span class="attr">#[config(deserialize_if(valid_env, <span class="string">"not empty or 'unset'"</span>))]
+    </span>env: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}
+
+<span class="kw">fn </span>valid_env(s: <span class="kw-2">&amp;</span>String) -&gt; bool {
+    !s.is_empty() &amp;&amp; s != <span class="string">"unset"
+</span>}
+
+<span class="comment">// Base case: no filtering.
+</span><span class="kw">let </span>env = smart_config::Environment::from_iter(<span class="string">""</span>, [
+    (<span class="string">"URL"</span>, <span class="string">"https://example.com"</span>),
+    (<span class="string">"ENV"</span>, <span class="string">"prod"</span>),
+]);
+<span class="kw">let </span>config: FilteringConfig = testing::test_complete(env)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(config.url.unwrap(), <span class="string">"https://example.com"</span>);
+<span class="macro">assert_eq!</span>(config.env.unwrap(), <span class="string">"prod"</span>);
+
+<span class="comment">// Filtering applied to both params.
+</span><span class="kw">let </span>env = smart_config::Environment::from_iter(<span class="string">""</span>, [
+    (<span class="string">"URL"</span>, <span class="string">""</span>),
+    (<span class="string">"ENV"</span>, <span class="string">"unset"</span>),
+]);
+<span class="kw">let </span>config: FilteringConfig = testing::test_complete(env)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(config.url, <span class="prelude-val">None</span>);
+<span class="macro">assert_eq!</span>(config.env, <span class="prelude-val">None</span>);</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.NotEmpty.html" title="struct smart_config::validation::NotEmpty">NotEmpty</a></div><div class="desc docblock-short">Validates that a string or a data collection (e.g., <a href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec"><code>Vec</code></a>) is not empty.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Validate.html" title="trait smart_config::validation::Validate">Validate</a></div><div class="desc docblock-short">Generic post-validation for a configuration parameter or a config.</div></li></ul></section></div></main></body></html>
