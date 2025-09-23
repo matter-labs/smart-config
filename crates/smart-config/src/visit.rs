@@ -85,9 +85,9 @@ impl ConfigVisitor for Serializer {
         let tag_variant = &tag.variants[variant_index];
 
         let should_insert = !self.options.diff_with_default
-            || !tag
+            || tag
                 .default_variant
-                .is_some_and(|default_variant| default_variant.rust_name == tag_variant.rust_name);
+                .is_none_or(|default_variant| default_variant.rust_name != tag_variant.rust_name);
         if should_insert {
             self.insert(tag.param.name, tag_variant.name.into());
         }

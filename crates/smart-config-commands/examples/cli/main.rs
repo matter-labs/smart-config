@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
     match cli {
         Cli::Print { filter } => {
             let filter = |param_ref: ParamRef<'_>| {
-                filter.as_ref().map_or(true, |needle| {
+                filter.as_ref().is_none_or(|needle| {
                     param_ref.all_paths().any(|(path, _)| path.contains(needle))
                 })
             };
@@ -68,7 +68,7 @@ fn main() -> anyhow::Result<()> {
         Cli::Debug { bogus, filter } => {
             let repo = create_mock_repo(&schema, bogus);
             let filter = |param_ref: ParamRef<'_>| {
-                filter.as_ref().map_or(true, |needle| {
+                filter.as_ref().is_none_or(|needle| {
                     param_ref.all_paths().any(|(path, _)| path.contains(needle))
                 })
             };
