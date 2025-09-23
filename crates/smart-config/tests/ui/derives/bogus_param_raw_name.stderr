@@ -1,5 +1,5 @@
-error[E0080]: evaluation of constant value failed
+error[E0080]: evaluation panicked: Param / config name `поле` is invalid: name contains non-ASCII chars, first at position 0
  --> tests/ui/derives/bogus_param_raw_name.rs:5:5
   |
 5 |     r#поле: u64,
-  |     ^^^^^^ evaluation panicked: Param / config name `поле` is invalid: name contains non-ASCII chars, first at position 0
+  |     ^^^^^^ evaluation of `_` failed here
