@@ -18,7 +18,7 @@ serde_yaml.workspace = true
 smart-config.workspace = true
 
 [dev-dependencies]
-smart-config = { workspace = true, features = ["primitive-types"] }
+smart-config = { workspace = true, features = ["primitive-types", "alloy"] }
 
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }

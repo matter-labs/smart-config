@@ -249,6 +249,10 @@ where
     }
 
     /// Converts this to a [`NamedEntries`] instance.
+    ///
+    /// # Panics
+    ///
+    ///  Will panic if either `keys_name` or `values_name` is empty OR they coincide
     pub const fn named(
         self,
         keys_name: &'static str,

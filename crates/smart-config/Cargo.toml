@@ -26,6 +26,9 @@ tracing.workspace = true # TODO: optional?
 # As a feature: recognizes types from `primitive-types` as well-known
 primitive-types = { workspace = true, features = ["serde"], optional = true }
 
+# As a feature: recognizes types from `alloy` as well-known
+alloy = { workspace = true, default-features = false, features = ["serde"], optional = true }
+
 [dev-dependencies]
 assert_matches.workspace = true
 doc-comment.workspace = true
