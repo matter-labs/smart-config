@@ -51,6 +51,13 @@
 //! Implements deserialization for basic Ethereum types like [`H256`](primitive_types::H256) (32-byte hash)
 //! and [`U256`](primitive_types::U256) (256-bit unsigned integer).
 //!
+//! ## `alloy`
+//!
+//! *(Off by default)*
+//!
+//! Implements deserialization for basic alloy primitive types like [`B256`](alloy::primitives::B256) (32-byte hash)
+//! and [`U256`](alloy::primitives::U256) (256-bit unsigned integer).
+//!
 //! # Examples
 //!
 //! ## Basic workflow

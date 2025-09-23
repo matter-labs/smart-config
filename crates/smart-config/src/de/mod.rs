@@ -74,6 +74,8 @@ use crate::{
 
 #[doc(hidden)]
 pub mod _private;
+#[cfg(feature = "alloy")]
+mod alloy_impl;
 mod deserializer;
 mod macros;
 mod param;
