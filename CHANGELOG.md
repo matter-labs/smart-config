@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0-pre](https://github.com/matter-labs/smart-config/compare/v0.3.0...v0.4.0-pre) (2025-09-23)
+
+
+### Features
+
+* add `alloy` feature ([#41](https://github.com/matter-labs/smart-config/issues/41)) ([7087e29](https://github.com/matter-labs/smart-config/commit/7087e299df7b8f04765cf712e3a39367401d74ff))
+
 ## [0.3.0](https://github.com/matter-labs/smart-config/compare/v0.2.0...v0.3.0) (2025-06-25)
 
 
