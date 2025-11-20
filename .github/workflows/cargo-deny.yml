@@ -13,6 +13,8 @@ env:
 jobs:
   cargo_deny:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         checks:
