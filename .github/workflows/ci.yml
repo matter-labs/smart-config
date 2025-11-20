@@ -15,7 +15,7 @@ env:
   # Minimum supported Rust version.
   msrv: 1.86.0
   # Nightly Rust necessary for building docs.
-  nightly: nightly-2024-08-01
+  nightly: nightly-2025-05-23
 
 jobs:
   build-msrv:
