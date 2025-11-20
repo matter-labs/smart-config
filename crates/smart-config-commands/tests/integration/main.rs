@@ -1,26 +1,19 @@
 //! **Important.** The generated snapshots are specific to stable Rust; nightly Rust provides better spanning for types
 //! (`Option<u64>` instead of `Option`).
 
-use std::{env, fmt, sync::Once};
+use std::{env, fmt};
 
 use anstream::AutoStream;
 use smart_config::{
     ConfigSchema, DescribeConfig, DeserializeConfig, Environment, ExampleConfig, SerializerOptions,
+    testing::Tester,
 };
 use smart_config_commands::Printer;
-use test_casing::{test_casing, Product};
+use test_casing::{Product, test_casing};
 
-use crate::configs::{create_mock_repo, ObjectStoreConfig, TestConfig};
+use crate::configs::{ObjectStoreConfig, TestConfig, create_mock_repo};
 
 mod configs;
-
-fn init_env_vars() {
-    static ENV_VARS_LOCK: Once = Once::new();
-
-    ENV_VARS_LOCK.call_once(|| {
-        env::set_var("TMPDIR", "/tmp");
-    });
-}
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(tag = "client", derive(Default))]
@@ -72,7 +65,8 @@ fn embedded_enum_config_help() {
 
 #[test]
 fn full_config_debug() {
-    init_env_vars();
+    let mut tester = Tester::<()>::default();
+    tester.set_env("TMPDIR", "/tmp");
     let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
     let repo = create_mock_repo(&schema, false);
 
@@ -87,7 +81,8 @@ fn full_config_debug() {
 
 #[test]
 fn erroneous_config_debug() {
-    init_env_vars();
+    let mut tester = Tester::<()>::default();
+    tester.set_env("TMPDIR", "/tmp");
     let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
     let repo = create_mock_repo(&schema, true);
 
