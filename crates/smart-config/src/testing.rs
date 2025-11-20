@@ -3,12 +3,12 @@
 use std::{any, cell::RefCell, collections::HashMap, marker::PhantomData, mem};
 
 use crate::{
+    ConfigRepository, ConfigSource, DeserializeConfig, ParseErrors,
     de::DeserializerOptions,
     metadata::{ConfigMetadata, NestedConfigMetadata, ParamMetadata, RustType},
     schema::ConfigSchema,
     value::{Pointer, WithOrigin},
     visit::{ConfigVisitor, VisitConfig},
-    ConfigRepository, ConfigSource, DeserializeConfig, ParseErrors,
 };
 
 // We don't actually use `std::env::set_var()` because it is unsafe (and will be marked as such in future Rust editions).
@@ -626,9 +626,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        config,
+        Environment, Json, config,
         testonly::{CompoundConfig, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum},
-        Environment, Json,
     };
 
     #[test]

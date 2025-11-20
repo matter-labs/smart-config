@@ -3,12 +3,11 @@
 use std::sync::Arc;
 
 use serde::{
-    de::{
-        self,
-        value::{MapDeserializer, SeqDeserializer},
-        DeserializeSeed, Error as DeError, IntoDeserializer,
-    },
     Deserialize, Deserializer,
+    de::{
+        self, DeserializeSeed, Error as DeError, IntoDeserializer,
+        value::{MapDeserializer, SeqDeserializer},
+    },
 };
 
 use crate::{

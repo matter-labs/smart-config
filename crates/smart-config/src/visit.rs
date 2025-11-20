@@ -2,7 +2,7 @@
 
 use std::{any, any::Any, mem};
 
-use crate::{metadata::ConfigMetadata, utils::JsonObject, value::Pointer, SerializerOptions};
+use crate::{SerializerOptions, metadata::ConfigMetadata, utils::JsonObject, value::Pointer};
 
 /// Visitor of configuration parameters in a particular configuration.
 #[doc(hidden)] // API is not stable yet
@@ -148,9 +148,9 @@ mod tests {
 
     use super::*;
     use crate::{
+        DescribeConfig,
         metadata::ConfigMetadata,
         testonly::{ConfigWithNesting, DefaultingConfig, EnumConfig, NestedConfig, SimpleEnum},
-        DescribeConfig,
     };
 
     #[derive(Debug)]

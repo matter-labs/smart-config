@@ -4,10 +4,10 @@ use anyhow::Context as _;
 
 use super::{ConfigSource, Flat};
 use crate::{
+    Json,
     testing::MOCK_ENV_VARS,
     utils::JsonObject,
     value::{FileFormat, Map, Value, ValueOrigin, WithOrigin},
-    Json,
 };
 
 /// Configuration sourced from environment variables.

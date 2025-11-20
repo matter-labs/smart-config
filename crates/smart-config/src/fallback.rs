@@ -22,10 +22,10 @@
 use std::{collections::HashMap, env, fmt, sync::Arc};
 
 use crate::{
+    ConfigSchema, ConfigSource,
     source::Hierarchical,
     testing::MOCK_ENV_VARS,
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
-    ConfigSchema, ConfigSource,
 };
 
 /// Fallback source of a configuration param.

@@ -3,16 +3,16 @@
 use std::{fmt, marker::PhantomData, str::FromStr, time::Duration};
 
 use serde::{
-    de::{self, EnumAccess, Error as DeError, Unexpected, VariantAccess},
     Deserialize, Deserializer,
+    de::{self, EnumAccess, Error as DeError, Unexpected, VariantAccess},
 };
 
 use crate::{
+    ByteSize,
     de::{CustomKnownOption, DeserializeContext, DeserializeParam, Optional, WellKnown},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
     value::Value,
-    ByteSize,
 };
 
 impl TimeUnit {

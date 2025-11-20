@@ -1,11 +1,11 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned};
-use syn::{spanned::Spanned, DeriveInput};
+use syn::{DeriveInput, spanned::Spanned};
 
 use crate::utils::{
-    wrap_in_option, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
-    RenameRule,
+    ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField, RenameRule,
+    wrap_in_option,
 };
 
 impl ConfigField {

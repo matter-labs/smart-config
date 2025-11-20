@@ -8,9 +8,9 @@ use std::{
 use proc_macro2::Ident;
 use quote::{quote, quote_spanned};
 use syn::{
-    ext::IdentExt, parse::ParseStream, spanned::Spanned, Attribute, Data, DataEnum, DataStruct,
-    DeriveInput, Expr, Field, Fields, GenericArgument, Index, Lit, LitStr, Member, Path,
-    PathArguments, Token, Type, TypePath,
+    Attribute, Data, DataEnum, DataStruct, DeriveInput, Expr, Field, Fields, GenericArgument,
+    Index, Lit, LitStr, Member, Path, PathArguments, Token, Type, TypePath, ext::IdentExt,
+    parse::ParseStream, spanned::Spanned,
 };
 
 pub(crate) fn wrap_in_option(val: Option<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
@@ -446,7 +446,7 @@ impl RenameRule {
                 return Err(
                     "Invalid case specified; should be one of: lowercase, UPPERCASE, camelCase, \
                      snake_case, SCREAMING_SNAKE_CASE, kebab-case, SCREAMING-KEBAB-CASE",
-                )
+                );
             }
         })
     }

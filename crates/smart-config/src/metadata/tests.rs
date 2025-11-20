@@ -4,10 +4,9 @@ use assert_matches::assert_matches;
 
 use super::*;
 use crate::{
-    config,
+    DescribeConfig, ParseErrors, config,
     de::{DeserializeContext, DeserializerOptions},
     testonly::{ComposedConfig, ConfigWithComplexTypes, DefaultingEnumConfig, EnumConfig},
-    DescribeConfig, ParseErrors,
 };
 
 #[test]

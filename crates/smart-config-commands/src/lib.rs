@@ -53,11 +53,11 @@ use std::{
     io::{StderrLock, StdoutLock},
 };
 
-use anstream::{stream::RawStream, AutoStream};
+use anstream::{AutoStream, stream::RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
-    metadata::{AliasOptions, ParamMetadata},
     ConfigRef,
+    metadata::{AliasOptions, ParamMetadata},
 };
 
 mod debug;

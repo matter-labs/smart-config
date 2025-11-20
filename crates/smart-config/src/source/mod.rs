@@ -8,14 +8,14 @@ use std::{
 
 pub use self::{env::Environment, json::Json, yaml::Yaml};
 use crate::{
+    DescribeConfig, DeserializeConfig, DeserializeConfigError, ParseError, ParseErrors,
     de::{DeserializeContext, DeserializerOptions},
     fallback::Fallbacks,
     metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeSuffixes},
     schema::{ConfigData, ConfigRef, ConfigSchema},
-    utils::{merge_json, EnumVariant, JsonObject},
+    utils::{EnumVariant, JsonObject, merge_json},
     value::{Map, Pointer, Value, ValueOrigin, WithOrigin},
     visit::Serializer,
-    DescribeConfig, DeserializeConfig, DeserializeConfigError, ParseError, ParseErrors,
 };
 
 #[macro_use]

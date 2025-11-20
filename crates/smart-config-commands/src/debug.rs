@@ -7,15 +7,15 @@ use std::{
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
+    ConfigRepository, ParseError, ParseErrors,
     metadata::ConfigMetadata,
     value::{FileFormat, ValueOrigin, WithOrigin},
     visit::{ConfigVisitor, VisitConfig},
-    ConfigRepository, ParseError, ParseErrors,
 };
 
 use crate::{
-    utils::{write_json_value, write_value, STRING},
-    ParamRef, Printer, CONFIG_PATH,
+    CONFIG_PATH, ParamRef, Printer,
+    utils::{STRING, write_json_value, write_value},
 };
 
 const SECTION: Style = Style::new().bold();

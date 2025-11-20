@@ -4,10 +4,10 @@ use assert_matches::assert_matches;
 
 use super::*;
 use crate::{
+    ConfigRepository, DescribeConfig, DeserializeConfig, Environment,
     metadata::BasicTypes,
     testonly::{AliasedConfig, EnumConfig, NestedAliasedConfig, NestedConfig},
     value::{StrValue, Value},
-    ConfigRepository, DescribeConfig, DeserializeConfig, Environment,
 };
 
 /// # Test configuration
@@ -457,10 +457,12 @@ fn aliasing_does_not_change_config_depth() {
         .unwrap()
         .push_alias("alias")
         .unwrap();
-    assert!(!schema
-        .get(&NestedAliasedConfig::DESCRIPTION, "test")
-        .unwrap()
-        .is_top_level());
+    assert!(
+        !schema
+            .get(&NestedAliasedConfig::DESCRIPTION, "test")
+            .unwrap()
+            .is_top_level()
+    );
 
     assert_eq!(schema.configs["test"].by_depth, expected_index_by_depth);
     assert_eq!(
