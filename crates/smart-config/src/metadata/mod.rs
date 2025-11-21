@@ -4,7 +4,7 @@ use std::{any, borrow::Cow, fmt, ops, time::Duration};
 
 use self::_private::{BoxedDeserializer, BoxedVisitor};
 use crate::{
-    de::{DeserializeParam, _private::ErasedDeserializer},
+    de::{_private::ErasedDeserializer, DeserializeParam},
     fallback::FallbackSource,
     validation::Validate,
 };
@@ -174,6 +174,7 @@ impl PartialEq for RustType {
 
 impl RustType {
     /// Creates a new type.
+    #[allow(clippy::incompatible_msrv)] // false positive; `TypeId::of` is referenced, not invoked
     pub const fn of<T: 'static>(name_in_code: &'static str) -> Self {
         Self {
             id: any::TypeId::of::<T>,

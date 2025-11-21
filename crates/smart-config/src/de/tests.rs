@@ -10,17 +10,16 @@ use serde::Deserialize;
 
 use super::deserializer::ValueDeserializer;
 use crate::{
-    config,
+    ByteSize, DescribeConfig, Environment, ParseError, config,
     de::DeserializerOptions,
     metadata::SizeUnit,
     testonly::{
-        extract_env_var_name, extract_json_name, test_config_roundtrip, test_deserialize,
-        test_deserialize_missing, wrap_into_value, ComposedConfig, CompoundConfig,
-        ConfigWithComplexTypes, ConfigWithNesting, DefaultingConfig, DefaultingEnumConfig,
-        EnumConfig, MapOrString, NestedConfig, RenamedEnumConfig, SimpleEnum, TestParam,
+        ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting,
+        DefaultingConfig, DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig,
+        RenamedEnumConfig, SimpleEnum, TestParam, extract_env_var_name, extract_json_name,
+        test_config_roundtrip, test_deserialize, test_deserialize_missing, wrap_into_value,
     },
     value::{Pointer, Value, ValueOrigin},
-    ByteSize, DescribeConfig, Environment, ParseError,
 };
 
 #[test]

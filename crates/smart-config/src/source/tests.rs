@@ -9,19 +9,18 @@ use secrecy::ExposeSecret;
 
 use super::*;
 use crate::{
-    de,
+    ByteSize, DescribeConfig, SerializerOptions, de,
     metadata::{AliasOptions, SizeUnit},
     testing,
     testing::MockEnvGuard,
     testonly::{
-        extract_env_var_name, extract_json_name, test_config_roundtrip, test_deserialize,
         AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks,
         ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations, DefaultingConfig,
         EnumConfig, KvTestConfig, NestedConfig, RenamedEnumConfig, SecretConfig, SimpleEnum,
-        ValueCoercingConfig,
+        ValueCoercingConfig, extract_env_var_name, extract_json_name, test_config_roundtrip,
+        test_deserialize,
     },
     value::StrValue,
-    ByteSize, DescribeConfig, SerializerOptions,
 };
 
 #[test]

@@ -3,13 +3,13 @@ use std::{io, io::Write as _};
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
-    metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeDescription, TypeSuffixes},
     ConfigRef, ConfigSchema,
+    metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeDescription, TypeSuffixes},
 };
 
 use crate::{
-    utils::{write_json_value, NULL, STRING},
-    ParamRef, Printer, CONFIG_PATH,
+    CONFIG_PATH, ParamRef, Printer,
+    utils::{NULL, STRING, write_json_value},
 };
 
 const INDENT: &str = "  ";
@@ -142,7 +142,8 @@ fn write_tag_help(
         };
 
         writeln!(
-            writer, "{INDENT}- {STRING}'{name}'{STRING:#} {DIMMED}[Rust: {config_name}::{rust_name}]{DIMMED:#}{default_marker}",
+            writer,
+            "{INDENT}- {STRING}'{name}'{STRING:#} {DIMMED}[Rust: {config_name}::{rust_name}]{DIMMED:#}{default_marker}",
             name = variant.name,
             config_name = config.metadata().ty.name_in_code(),
             rust_name = variant.rust_name
@@ -321,12 +322,12 @@ fn write_type_description(
     // Suffixes are only active for top-level types, not for array items etc.
     if let (None, Some(suffixes)) = (relation_to_parent, description.suffixes()) {
         let suffixes = match suffixes {
-            TypeSuffixes::DurationUnits => {
-                Some(format!("duration units from millis to weeks, e.g. {STRING}_ms{STRING:#} or {STRING}_in_sec{STRING:#}"))
-            }
-            TypeSuffixes::SizeUnits => {
-                Some(format!("byte suze units up to gigabytes, e.g. {STRING}_mb{STRING:#} or {STRING}_in_kib{STRING:#}"))
-            }
+            TypeSuffixes::DurationUnits => Some(format!(
+                "duration units from millis to weeks, e.g. {STRING}_ms{STRING:#} or {STRING}_in_sec{STRING:#}"
+            )),
+            TypeSuffixes::SizeUnits => Some(format!(
+                "byte suze units up to gigabytes, e.g. {STRING}_mb{STRING:#} or {STRING}_in_kib{STRING:#}"
+            )),
             _ => None,
         };
         if let Some(suffixes) = &suffixes {

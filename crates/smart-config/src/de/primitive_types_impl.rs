@@ -1,4 +1,4 @@
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
     de::{DeserializeContext, DeserializeParam, Qualified, Serde, WellKnown, WellKnownOption},

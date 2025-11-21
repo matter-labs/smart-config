@@ -1,6 +1,6 @@
 use std::{any, fmt, marker::PhantomData};
 
-use crate::{validation::Validate, ErrorWithOrigin};
+use crate::{ErrorWithOrigin, validation::Validate};
 
 /// Tag for `WithDescription` wrapping a type that already implements a validation.
 #[derive(Debug)]

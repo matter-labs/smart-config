@@ -9,12 +9,11 @@ use std::{
 use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Serialize};
 use smart_config::{
-    de, fallback,
+    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
+    ExampleConfig, Json, Prefixed, Yaml, de, fallback,
     metadata::{SizeUnit, TimeUnit},
     validation::NotEmpty,
     value::{ExposeSecret, SecretString},
-    ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
-    ExampleConfig, Json, Prefixed, Yaml,
 };
 
 // Use deterministic hasher to get deterministic command outputs. Since `serde_json` uses deterministic

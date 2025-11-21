@@ -2,8 +2,13 @@ error[E0277]: Optional `CustomParam` param cannot be deserialized
   --> tests/ui/derives/unsupported_option.rs:15:15
    |
 15 |     optional: Option<CustomParam>,
-   |               ^^^^^^ the trait `WellKnownOption` is not implemented for `CustomParam`
+   |               ^^^^^^ unsatisfied trait bound
    |
+help: the trait `WellKnownOption` is not implemented for `CustomParam`
+  --> tests/ui/derives/unsupported_option.rs:6:1
+   |
+ 6 | struct CustomParam(u64);
+   | ^^^^^^^^^^^^^^^^^^
    = note: Add #[config(with = _)] attribute to specify deserializer to use
    = note: If `CustomParam` is a config, add #[config(nest)]
    = note: Embedded options (`Option<Option<_>>`) are not supported as param types

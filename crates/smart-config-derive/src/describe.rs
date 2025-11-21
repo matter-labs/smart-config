@@ -2,12 +2,12 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
-use quote::{quote, quote_spanned, ToTokens};
-use syn::{spanned::Spanned, DeriveInput, LitStr, Type};
+use quote::{ToTokens, quote, quote_spanned};
+use syn::{DeriveInput, LitStr, Type, spanned::Spanned};
 
 use crate::utils::{
-    wrap_in_option, Alias, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField,
-    DefaultValue, RenameRule, Validation,
+    Alias, ConfigContainer, ConfigContainerFields, ConfigEnumVariant, ConfigField, DefaultValue,
+    RenameRule, Validation, wrap_in_option,
 };
 
 impl DefaultValue {

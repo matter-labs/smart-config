@@ -14,9 +14,11 @@ use std::{
 use anyhow::Context as _;
 use assert_matches::assert_matches;
 use secrecy::{ExposeSecret, SecretString};
-use serde::{de::Error as DeError, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Error as DeError};
 
 use crate::{
+    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
+    ExampleConfig, Json, ParseErrors, SerializerOptions,
     de::{self, DeserializeContext, DeserializeParam, DeserializerOptions, Serde, WellKnown},
     fallback,
     fallback::FallbackSource,
@@ -24,8 +26,6 @@ use crate::{
     testing,
     validation::NotEmpty,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
-    ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
-    ExampleConfig, Json, ParseErrors, SerializerOptions,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

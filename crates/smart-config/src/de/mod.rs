@@ -66,10 +66,10 @@ pub use self::{
     units::WithUnit,
 };
 use crate::{
+    DescribeConfig, DeserializeConfigError, ParseError, ParseErrorCategory, ParseErrors,
     error::{ErrorWithOrigin, LocationInConfig, LowLevelError},
     metadata::{BasicTypes, ConfigMetadata, ParamMetadata},
     value::{Pointer, StrValue, Value, ValueOrigin, WithOrigin},
-    DescribeConfig, DeserializeConfigError, ParseError, ParseErrorCategory, ParseErrors,
 };
 
 #[doc(hidden)]
@@ -191,9 +191,15 @@ impl<'a> DeserializeContext<'a> {
 
     /// Returns context for a nested configuration.
     fn for_nested_config(&mut self, index: usize) -> DeserializeContext<'_> {
-        let nested_meta = self.current_config.nested_configs.get(index).unwrap_or_else(|| {
-            panic!("Internal error: called `for_nested_config()` with missing config index {index}")
-        });
+        let nested_meta = self
+            .current_config
+            .nested_configs
+            .get(index)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Internal error: called `for_nested_config()` with missing config index {index}"
+                )
+            });
         let path = nested_meta.name;
         DeserializeContext {
             current_config: nested_meta.meta,

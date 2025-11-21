@@ -2,14 +2,14 @@
 
 use std::{any, marker::PhantomData};
 
-use compile_fmt::{clip, clip_ascii, compile_args, compile_panic, Ascii, CompileArgs};
+use compile_fmt::{Ascii, CompileArgs, clip, clip_ascii, compile_args, compile_panic};
 
 use super::{ConfigMetadata, NestedConfigMetadata, ParamMetadata};
 use crate::{
+    DeserializeConfig, DeserializeConfigError,
     de::DeserializeContext,
     utils::const_eq,
     visit::{ConfigVisitor, VisitConfig},
-    DeserializeConfig, DeserializeConfigError,
 };
 
 pub type BoxedDeserializer =

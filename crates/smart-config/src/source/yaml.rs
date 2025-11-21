@@ -38,7 +38,9 @@ impl Yaml {
             serde_yaml::Value::Number(value) => value.to_string(),
             serde_yaml::Value::Bool(value) => value.to_string(),
             serde_yaml::Value::Null => "null".into(),
-            _ => anyhow::bail!("unsupported key type at {parent_path:?}: {key:?}; only primitive value types are supported as keys"),
+            _ => anyhow::bail!(
+                "unsupported key type at {parent_path:?}: {key:?}; only primitive value types are supported as keys"
+            ),
         })
     }
 

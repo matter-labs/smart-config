@@ -9,7 +9,7 @@ use smart_config::{
 };
 use smart_config_commands::{ParamRef, Printer};
 
-use crate::configs::{create_mock_repo, TestConfig};
+use crate::configs::{TestConfig, create_mock_repo};
 
 #[path = "../../tests/integration/configs.rs"]
 mod configs;

@@ -4,20 +4,20 @@ use std::{
     any, fmt,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::{
-        NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU16, NonZeroU32,
-        NonZeroU64, NonZeroU8, NonZeroUsize,
+        NonZeroI8, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroIsize, NonZeroU8, NonZeroU16,
+        NonZeroU32, NonZeroU64, NonZeroUsize,
     },
     path::PathBuf,
     str::FromStr,
 };
 
 use serde::{
-    de::{DeserializeOwned, Error as DeError},
     Serialize,
+    de::{DeserializeOwned, Error as DeError},
 };
 
 use crate::{
-    de::{deserializer::ValueDeserializer, DeserializeContext},
+    de::{DeserializeContext, deserializer::ValueDeserializer},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
     value::{Value, WithOrigin},
@@ -346,7 +346,9 @@ macro_rules! impl_well_known_int {
     };
 }
 
-impl_well_known_int!(u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize);
+impl_well_known_int!(
+    u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize
+);
 
 macro_rules! impl_well_known_non_zero_int {
     ($($int:ty),+) => {
