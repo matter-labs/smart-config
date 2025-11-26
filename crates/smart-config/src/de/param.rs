@@ -4,8 +4,8 @@ use std::{
     any, fmt,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::{
-        NonZeroI8, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroIsize, NonZeroU8, NonZeroU16,
-        NonZeroU32, NonZeroU64, NonZeroUsize,
+        NonZeroI8, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI128, NonZeroIsize, NonZeroU8,
+        NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU128, NonZeroUsize,
     },
     path::PathBuf,
     str::FromStr,
@@ -85,7 +85,12 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
 /// - Signed and unsigned integers, including non-zero variants
 /// - `f32`, `f64`
 ///
-/// These types use [`Serde`] deserializer.
+/// These types use [`Serde`] deserializer. Integer types up to and including 64-bit ones
+/// only permit integer input. In contrast, `u128`, `i128` and their non-zero counterparts permit
+/// either integer or string input because the `serde_json` object model cannot represent large
+/// integers (`>u64::MAX` or `<i64::MIN`). **Importantly,** string representation must be used
+/// for such large integers because otherwise they will be converted (with precision loss!) to `f64`
+/// by internal `serde_json` logic before they ever enter the `smart-config` library.
 ///
 /// `WellKnown` is also implemented for more complex types:
 ///
@@ -375,8 +380,8 @@ macro_rules! impl_well_known_int {
 
 impl_well_known_int!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);
 
-// Unlike other ints, we need to allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
-// representing 128-bit numbers natively.
+/// Unlike other ints, we allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
+/// representing 128-bit numbers natively.
 impl WellKnown for u128 {
     type Deserializer = super::Serde![int, str];
     const DE: Self::Deserializer = super::Serde![int, str];
@@ -384,6 +389,8 @@ impl WellKnown for u128 {
 
 impl WellKnownOption for u128 {}
 
+/// Unlike other ints, we allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
+/// representing 128-bit numbers natively.
 impl WellKnown for i128 {
     type Deserializer = super::Serde![int, str];
     const DE: Self::Deserializer = super::Serde![int, str];
@@ -416,6 +423,24 @@ impl_well_known_non_zero_int!(
     NonZeroUsize,
     NonZeroIsize
 );
+
+/// Unlike other ints, we allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
+/// representing 128-bit numbers natively.
+impl WellKnown for NonZeroU128 {
+    type Deserializer = Qualified<super::Serde![int, str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![int, str], "non-zero");
+}
+
+impl WellKnownOption for NonZeroU128 {}
+
+/// Unlike other ints, we allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
+/// representing 128-bit numbers natively.
+impl WellKnown for NonZeroI128 {
+    type Deserializer = Qualified<super::Serde![int, str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![int, str], "non-zero");
+}
+
+impl WellKnownOption for NonZeroI128 {}
 
 impl<T: CustomKnownOption> WellKnown for Option<T> {
     type Deserializer = T::OptDeserializer;

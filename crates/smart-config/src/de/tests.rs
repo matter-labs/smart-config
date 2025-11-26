@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     net::{Ipv4Addr, Ipv6Addr},
-    num::NonZeroUsize,
+    num::{NonZeroI128, NonZeroU128, NonZeroUsize},
     time::Duration,
 };
 
@@ -504,7 +504,7 @@ fn deserializing_u128_and_i128() {
     let json = config!("int": "-1000000000000000000000000000", "uint": 54321);
     let config: U128Config = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.int, negative_value);
-    assert_eq!(config.uint, 54_321);
+    assert_eq!(config.uint, NonZeroU128::new(54_321).unwrap());
 
     let json = config!("array": serde_json::json!(["1000000000000000000000000000", 123]));
     let config: U128Config = test_deserialize(json.inner()).unwrap();
@@ -517,20 +517,26 @@ fn deserializing_u128_and_i128() {
         }),
         "keyed_map": serde_json::json!({
             "-1000000000000000000000000000": "call",
-            "0": "send",
+            "1": "send",
         }),
     );
     let config: U128Config = test_deserialize(json.inner()).unwrap();
     assert_eq!(
         config.map,
         HashMap::from([
-            ("call".to_owned(), -negative_value),
-            ("send".to_owned(), -1),
+            (
+                "call".to_owned(),
+                NonZeroI128::new(-negative_value).unwrap()
+            ),
+            ("send".to_owned(), NonZeroI128::new(-1).unwrap()),
         ])
     );
     assert_eq!(
         config.keyed_map,
-        HashMap::from([(negative_value, "call".to_owned()), (0, "send".to_owned()),])
+        HashMap::from([
+            (NonZeroI128::new(negative_value).unwrap(), "call".to_owned()),
+            (NonZeroI128::new(1).unwrap(), "send".to_owned()),
+        ])
     );
 
     let json = config!("entries": [

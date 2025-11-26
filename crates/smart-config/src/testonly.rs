@@ -4,7 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    num::NonZeroUsize,
+    num::{NonZeroI128, NonZeroU128, NonZeroUsize},
     path::PathBuf,
     str::FromStr,
     sync::Arc,
@@ -287,16 +287,16 @@ pub(crate) struct ComposedConfig {
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct U128Config {
-    #[config(default)]
-    pub uint: u128,
+    #[config(default_t = NonZeroU128::new(1).unwrap())]
+    pub uint: NonZeroU128,
     #[config(default_t = -1)]
     pub int: i128,
     #[config(default)]
     pub array: Vec<u128>,
     #[config(default)]
-    pub map: HashMap<String, i128>,
+    pub map: HashMap<String, NonZeroI128>,
     #[config(default)]
-    pub keyed_map: HashMap<i128, String>,
+    pub keyed_map: HashMap<NonZeroI128, String>,
     #[config(default, with = de::Entries::WELL_KNOWN.named("method", "priority"))]
     pub entries: HashMap<String, i128>,
 }

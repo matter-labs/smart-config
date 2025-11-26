@@ -1,6 +1,7 @@
 use std::{
     any,
     collections::{HashMap, HashSet},
+    num::NonZeroU128,
     time::Duration,
 };
 
@@ -2009,7 +2010,7 @@ fn parsing_u128_from_env() {
 
     let config: U128Config = testing::test(env).unwrap();
     assert_eq!(config.int, -10_i128.pow(27));
-    assert_eq!(config.uint, 12_345);
+    assert_eq!(config.uint, NonZeroU128::new(12_345).unwrap());
     assert_eq!(config.array, [10_u128.pow(27), 123]);
 }
 
