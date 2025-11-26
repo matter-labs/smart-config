@@ -346,9 +346,23 @@ macro_rules! impl_well_known_int {
     };
 }
 
-impl_well_known_int!(
-    u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize
-);
+impl_well_known_int!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);
+
+// Unlike other ints, we need to allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
+// representing 128-bit numbers natively.
+impl WellKnown for u128 {
+    type Deserializer = super::Serde![int, str];
+    const DE: Self::Deserializer = super::Serde![int, str];
+}
+
+impl WellKnownOption for u128 {}
+
+impl WellKnown for i128 {
+    type Deserializer = super::Serde![int, str];
+    const DE: Self::Deserializer = super::Serde![int, str];
+}
+
+impl WellKnownOption for i128 {}
 
 macro_rules! impl_well_known_non_zero_int {
     ($($int:ty),+) => {
