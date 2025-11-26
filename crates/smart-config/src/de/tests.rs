@@ -16,8 +16,9 @@ use crate::{
     testonly::{
         ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithNesting,
         DefaultingConfig, DefaultingEnumConfig, EnumConfig, MapOrString, NestedConfig,
-        RenamedEnumConfig, SimpleEnum, TestParam, extract_env_var_name, extract_json_name,
-        test_config_roundtrip, test_deserialize, test_deserialize_missing, wrap_into_value,
+        RenamedEnumConfig, SimpleEnum, TestParam, U128Config, extract_env_var_name,
+        extract_json_name, test_config_roundtrip, test_deserialize, test_deserialize_missing,
+        wrap_into_value,
     },
     value::{Pointer, Value, ValueOrigin},
 };
@@ -493,6 +494,53 @@ fn parsing_complex_types() {
             socket_addr: ([127, 0, 0, 1], 8000).into(),
             with_custom_deserializer: 1,
         }
+    );
+}
+
+// FIXME: also test env vars
+#[test]
+fn deserializing_u128_and_i128() {
+    let large_value = 10_u128.pow(27);
+    let negative_value = -10_i128.pow(27);
+    let json = config!("int": "-1000000000000000000000000000", "uint": 54321);
+    let config: U128Config = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.int, negative_value);
+    assert_eq!(config.uint, 54_321);
+
+    let json = config!("array": serde_json::json!(["1000000000000000000000000000", 123]));
+    let config: U128Config = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.array, [large_value, 123]);
+
+    let json = config!(
+        "map": serde_json::json!({
+            "call": "1000000000000000000000000000",
+            "send": -1,
+        }),
+        "keyed_map": serde_json::json!({
+            "-1000000000000000000000000000": "call",
+            "0": "send",
+        }),
+    );
+    let config: U128Config = test_deserialize(json.inner()).unwrap();
+    assert_eq!(
+        config.map,
+        HashMap::from([
+            ("call".to_owned(), -negative_value),
+            ("send".to_owned(), -1),
+        ])
+    );
+    assert_eq!(
+        config.keyed_map,
+        HashMap::from([(negative_value, "call".to_owned()), (0, "send".to_owned()),])
+    );
+
+    let json = config!("entries": [
+        serde_json::json!({"method": "get", "priority": large_value.to_string() }),
+    ]);
+    let config: U128Config = test_deserialize(json.inner()).unwrap();
+    assert_eq!(
+        config.entries,
+        HashMap::from([("get".to_owned(), i128::try_from(large_value).unwrap())])
     );
 }
 

@@ -17,8 +17,8 @@ use crate::{
         AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks,
         ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations, DefaultingConfig,
         EnumConfig, KvTestConfig, NestedConfig, RenamedEnumConfig, SecretConfig, SimpleEnum,
-        ValueCoercingConfig, extract_env_var_name, extract_json_name, test_config_roundtrip,
-        test_deserialize,
+        U128Config, ValueCoercingConfig, extract_env_var_name, extract_json_name,
+        test_config_roundtrip, test_deserialize,
     },
     value::StrValue,
 };
@@ -1993,4 +1993,22 @@ fn coercing_enum_with_suffixes() {
             },
         }
     );
+}
+
+#[test]
+fn parsing_u128_from_env() {
+    let mut env = Environment::from_iter(
+        "",
+        [
+            ("INT", "-1000000000000000000000000000"),
+            ("UINT", "12345"),
+            ("ARRAY__JSON", r#"["1000000000000000000000000000", 123]"#),
+        ],
+    );
+    env.coerce_json().unwrap();
+
+    let config: U128Config = testing::test(env).unwrap();
+    assert_eq!(config.int, -10_i128.pow(27));
+    assert_eq!(config.uint, 12_345);
+    assert_eq!(config.array, [10_u128.pow(27), 123]);
 }

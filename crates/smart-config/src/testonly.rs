@@ -286,6 +286,23 @@ pub(crate) struct ComposedConfig {
 
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
+pub(crate) struct U128Config {
+    #[config(default)]
+    pub uint: u128,
+    #[config(default_t = -1)]
+    pub int: i128,
+    #[config(default)]
+    pub array: Vec<u128>,
+    #[config(default)]
+    pub map: HashMap<String, i128>,
+    #[config(default)]
+    pub keyed_map: HashMap<i128, String>,
+    #[config(default, with = de::Entries::WELL_KNOWN.named("method", "priority"))]
+    pub entries: HashMap<String, i128>,
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
 pub(crate) struct SecretConfig {
     pub key: SecretString,
     pub opt: Option<SecretString>,
