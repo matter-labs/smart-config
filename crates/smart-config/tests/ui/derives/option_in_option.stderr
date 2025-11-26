@@ -15,6 +15,6 @@ error[E0277]: Optional `Option<u64>` param cannot be deserialized
             IpAddr
             Ipv4Addr
             Ipv6Addr
-            NonZero<i16>
+            NonZero<i128>
           and $N others
   = note: required for `Option<u64>` to implement `CustomKnownOption`
