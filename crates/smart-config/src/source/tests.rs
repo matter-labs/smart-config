@@ -2012,3 +2012,23 @@ fn parsing_u128_from_env() {
     assert_eq!(config.uint, 12_345);
     assert_eq!(config.array, [10_u128.pow(27), 123]);
 }
+
+#[test]
+fn parsing_large_u128_value_from_json() {
+    let json = serde_json::from_str(
+        r#"{
+            "int": -1000000000000000000000000000,
+            "uint": 12345
+        }"#,
+    )
+    .unwrap();
+    let err = testing::test::<U128Config>(Json::new("test.json", json)).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "int");
+    let err_message = err.inner().to_string();
+    assert!(
+        err_message.contains("enclosing the value into a string"),
+        "{err_message}"
+    );
+}

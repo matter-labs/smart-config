@@ -497,7 +497,6 @@ fn parsing_complex_types() {
     );
 }
 
-// FIXME: also test env vars
 #[test]
 fn deserializing_u128_and_i128() {
     let large_value = 10_u128.pow(27);

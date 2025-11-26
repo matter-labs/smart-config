@@ -238,6 +238,23 @@ impl<T: Serialize + DeserializeOwned, const EXPECTING: u8> DeserializeParam<T>
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
+        fn is_likely_large_integer(value: &Value) -> bool {
+            let Value::Number(num) = value else {
+                return false;
+            };
+            if !num.is_f64() {
+                // This check is stricter than implicit `num.as_f64().is_some()`!
+                return false;
+            }
+
+            #[allow(clippy::cast_precision_loss)] // acceptable in this case
+            num.as_f64().is_some_and(|num| {
+                // For `f64` numbers >= 2**53 in magnitude, all presentable numbers are integers,
+                // so it would be redundant to check `num.fract() == 0.0`.
+                num > u64::MAX as f64 || num < i64::MIN as f64
+            })
+        }
+
         let expecting = BasicTypes::from_raw(EXPECTING);
         let Some(current_value) = ctx.current_value() else {
             return Err(DeError::missing_field(param.name));
@@ -246,7 +263,17 @@ impl<T: Serialize + DeserializeOwned, const EXPECTING: u8> DeserializeParam<T>
         let deserializer = ValueDeserializer::new(current_value, ctx.de_options);
         let type_matches = deserializer.value().is_supported_by(expecting);
         if !type_matches {
-            return Err(deserializer.invalid_type(&expecting.to_string()));
+            let tip = if expecting.contains(BasicTypes::INTEGER)
+                && expecting.contains(BasicTypes::STRING)
+                && is_likely_large_integer(deserializer.value())
+            {
+                // Provide a more helpful error message
+                ". Try enclosing the value into a string so that it's not coerced to floating-point"
+            } else {
+                ""
+            };
+
+            return Err(deserializer.invalid_type(&format!("{expecting}{tip}")));
         }
         T::deserialize(deserializer)
     }
