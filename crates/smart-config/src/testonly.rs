@@ -265,6 +265,8 @@ pub(crate) struct ConfigWithComplexTypes {
     pub with_custom_deserializer: usize,
     #[config(default_t = 100 * EtherUnit::Gwei)]
     pub fee: EtherAmount,
+    #[config(validate(..EtherAmount::new(1_000, EtherUnit::Gwei)))]
+    pub tip: Option<EtherAmount>,
 }
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]

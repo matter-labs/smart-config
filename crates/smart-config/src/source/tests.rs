@@ -1070,6 +1070,19 @@ fn nesting_with_ether_amount_param() {
 }
 
 #[test]
+fn ether_amount_validation_error() {
+    let json = config!("array": [1, 2], "tip": "0.01 ether");
+    let err = testing::test::<ConfigWithComplexTypes>(json).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+
+    assert_eq!(err.path(), "tip");
+    assert_eq!(err.validation().unwrap(), "must be in range ..1000 gwei");
+    let err = err.inner().to_string();
+    assert!(err.contains("invalid value"), "{err}");
+}
+
+#[test]
 fn nesting_with_duration_param_errors() {
     fn assert_error(err: &ParseErrors) -> &ParseError {
         assert_eq!(err.len(), 1);

@@ -421,6 +421,7 @@ fn parsing_complex_types() {
             socket_addr: ([192, 168, 0, 1], 3000).into(),
             with_custom_deserializer: 0,
             fee: 100 * EtherUnit::Gwei,
+            tip: None,
         }
     );
 
@@ -439,6 +440,7 @@ fn parsing_complex_types() {
         "socket_addr": "[::1]:4040",
         "with_custom_deserializer": "what",
         "fee": "500gwei",
+        "tip": "999 gwei",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -459,6 +461,7 @@ fn parsing_complex_types() {
             socket_addr: (Ipv6Addr::LOCALHOST, 4040).into(),
             with_custom_deserializer: 4,
             fee: 500 * EtherUnit::Gwei,
+            tip: Some(999 * EtherUnit::Gwei),
         }
     );
 
@@ -479,6 +482,7 @@ fn parsing_complex_types() {
         "socket_addr": "127.0.0.1:8000",
         "with_custom_deserializer": "!",
         "fee": "1e-5 ether",
+        "tip": "8.33e-7 ether",
     );
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
     assert_eq!(
@@ -499,6 +503,7 @@ fn parsing_complex_types() {
             socket_addr: ([127, 0, 0, 1], 8000).into(),
             with_custom_deserializer: 1,
             fee: 10_000 * EtherUnit::Gwei,
+            tip: Some(833 * EtherUnit::Gwei),
         }
     );
 }

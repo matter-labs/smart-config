@@ -153,7 +153,7 @@ impl_unit_conversions!(ByteSize, SizeUnit);
 ///
 /// # Examples
 ///
-/// In non-const context, the most idiomatic way to produce a size is to multiply [`EtherAmountUnit`] by `u64`:
+/// In non-const context, the most idiomatic way to produce a size is to multiply [`EtherUnit`] by `u64`:
 ///
 /// ```
 /// # use smart_config::{metadata::EtherUnit, EtherAmount};
