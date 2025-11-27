@@ -1,6 +1,6 @@
 ---
 source: crates/smart-config-commands/tests/integration/main.rs
-assertion_line: 124
+assertion_line: 153
 expression: buffer
 ---
 {
@@ -13,6 +13,7 @@ expression: buffer
     "address": "0x0000000000000000000000000000000000000000",
     "api_key": "correct horse battery staple",
     "balance": "0x0",
+    "min_fee": "0 ether",
     "secret_key": "0x0000000000000000000000000000000000000000000000000000000000000000"
   },
   "nested": {

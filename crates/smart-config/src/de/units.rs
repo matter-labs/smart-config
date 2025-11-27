@@ -20,7 +20,7 @@ impl TimeUnit {
     fn overflow_err(self, raw_val: Decimal) -> serde_json::Error {
         let plural = self.plural();
         DeError::custom(format!(
-            "{raw_val} {plural} does not fit into `u64` when converted to seconds"
+            "{raw_val} {plural} does not fit into `u64` when converted to milliseconds"
         ))
     }
 
