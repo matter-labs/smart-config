@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["test","test_complete","test_minimal"],"struct":["Tester"]};
