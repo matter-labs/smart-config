@@ -306,6 +306,8 @@ pub enum TypeSuffixes {
     DurationUnits,
     /// Byte size units like `_mb` or `_bytes`. May be prepended with `_in`, e.g. `_in_mb`.
     SizeUnits,
+    /// Ether units like `_wei` or `_ether`. May be prepended with `_in`, e.g. `_in_wei`.
+    EtherUnits,
 }
 
 /// Human-readable description for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
