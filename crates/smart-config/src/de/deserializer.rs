@@ -279,6 +279,8 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
         i16 => deserialize_i16,
         i32 => deserialize_i32,
         i64 => deserialize_i64,
+        u128 => deserialize_u128,
+        i128 => deserialize_i128,
         f32 => deserialize_f32,
         f64 => deserialize_f64,
     }

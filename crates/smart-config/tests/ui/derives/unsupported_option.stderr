@@ -20,6 +20,6 @@ help: the trait `WellKnownOption` is not implemented for `CustomParam`
              IpAddr
              Ipv4Addr
              Ipv6Addr
-             NonZero<i16>
+             NonZero<i128>
            and $N others
    = note: required for `CustomParam` to implement `CustomKnownOption`

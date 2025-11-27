@@ -4,8 +4,8 @@ use std::{
     any, fmt,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::{
-        NonZeroI8, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroIsize, NonZeroU8, NonZeroU16,
-        NonZeroU32, NonZeroU64, NonZeroUsize,
+        NonZeroI8, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI128, NonZeroIsize, NonZeroU8,
+        NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU128, NonZeroUsize,
     },
     path::PathBuf,
     str::FromStr,
@@ -85,7 +85,12 @@ pub trait DeserializeParam<T>: fmt::Debug + Send + Sync + 'static {
 /// - Signed and unsigned integers, including non-zero variants
 /// - `f32`, `f64`
 ///
-/// These types use [`Serde`] deserializer.
+/// These types use [`Serde`] deserializer. Integer types up to and including 64-bit ones
+/// only permit integer input. In contrast, `u128`, `i128` and their non-zero counterparts permit
+/// either integer or string input because the `serde_json` object model cannot represent large
+/// integers (`>u64::MAX` or `<i64::MIN`). **Importantly,** string representation must be used
+/// for such large integers because otherwise they will be converted (with precision loss!) to `f64`
+/// by internal `serde_json` logic before they ever enter the `smart-config` library.
 ///
 /// `WellKnown` is also implemented for more complex types:
 ///
@@ -238,6 +243,23 @@ impl<T: Serialize + DeserializeOwned, const EXPECTING: u8> DeserializeParam<T>
         ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<T, ErrorWithOrigin> {
+        fn is_likely_large_integer(value: &Value) -> bool {
+            let Value::Number(num) = value else {
+                return false;
+            };
+            if !num.is_f64() {
+                // This check is stricter than implicit `num.as_f64().is_some()`!
+                return false;
+            }
+
+            #[allow(clippy::cast_precision_loss)] // acceptable in this case
+            num.as_f64().is_some_and(|num| {
+                // For `f64` numbers >= 2**53 in magnitude, all presentable numbers are integers,
+                // so it would be redundant to check `num.fract() == 0.0`.
+                num > u64::MAX as f64 || num < i64::MIN as f64
+            })
+        }
+
         let expecting = BasicTypes::from_raw(EXPECTING);
         let Some(current_value) = ctx.current_value() else {
             return Err(DeError::missing_field(param.name));
@@ -246,7 +268,17 @@ impl<T: Serialize + DeserializeOwned, const EXPECTING: u8> DeserializeParam<T>
         let deserializer = ValueDeserializer::new(current_value, ctx.de_options);
         let type_matches = deserializer.value().is_supported_by(expecting);
         if !type_matches {
-            return Err(deserializer.invalid_type(&expecting.to_string()));
+            let tip = if expecting.contains(BasicTypes::INTEGER)
+                && expecting.contains(BasicTypes::STRING)
+                && is_likely_large_integer(deserializer.value())
+            {
+                // Provide a more helpful error message
+                ". Try enclosing the value into a string so that it's not coerced to floating-point"
+            } else {
+                ""
+            };
+
+            return Err(deserializer.invalid_type(&format!("{expecting}{tip}")));
         }
         T::deserialize(deserializer)
     }
@@ -346,9 +378,25 @@ macro_rules! impl_well_known_int {
     };
 }
 
-impl_well_known_int!(
-    u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize
-);
+impl_well_known_int!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);
+
+/// Unlike other ints, we allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
+/// representing 128-bit numbers natively.
+impl WellKnown for u128 {
+    type Deserializer = super::Serde![int, str];
+    const DE: Self::Deserializer = super::Serde![int, str];
+}
+
+impl WellKnownOption for u128 {}
+
+/// Unlike other ints, we allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
+/// representing 128-bit numbers natively.
+impl WellKnown for i128 {
+    type Deserializer = super::Serde![int, str];
+    const DE: Self::Deserializer = super::Serde![int, str];
+}
+
+impl WellKnownOption for i128 {}
 
 macro_rules! impl_well_known_non_zero_int {
     ($($int:ty),+) => {
@@ -375,6 +423,24 @@ impl_well_known_non_zero_int!(
     NonZeroUsize,
     NonZeroIsize
 );
+
+/// Unlike other ints, we allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
+/// representing 128-bit numbers natively.
+impl WellKnown for NonZeroU128 {
+    type Deserializer = Qualified<super::Serde![int, str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![int, str], "non-zero");
+}
+
+impl WellKnownOption for NonZeroU128 {}
+
+/// Unlike other ints, we allow `str` inputs for 128-bit ints because `serde_json::Value` doesn't support
+/// representing 128-bit numbers natively.
+impl WellKnown for NonZeroI128 {
+    type Deserializer = Qualified<super::Serde![int, str]>;
+    const DE: Self::Deserializer = Qualified::new(super::Serde![int, str], "non-zero");
+}
+
+impl WellKnownOption for NonZeroI128 {}
 
 impl<T: CustomKnownOption> WellKnown for Option<T> {
     type Deserializer = T::OptDeserializer;

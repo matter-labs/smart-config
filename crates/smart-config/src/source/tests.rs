@@ -1,6 +1,7 @@
 use std::{
     any,
     collections::{HashMap, HashSet},
+    num::NonZeroU128,
     time::Duration,
 };
 
@@ -17,8 +18,8 @@ use crate::{
         AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks,
         ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations, DefaultingConfig,
         EnumConfig, KvTestConfig, NestedConfig, RenamedEnumConfig, SecretConfig, SimpleEnum,
-        ValueCoercingConfig, extract_env_var_name, extract_json_name, test_config_roundtrip,
-        test_deserialize,
+        U128Config, ValueCoercingConfig, extract_env_var_name, extract_json_name,
+        test_config_roundtrip, test_deserialize,
     },
     value::StrValue,
 };
@@ -1992,5 +1993,43 @@ fn coercing_enum_with_suffixes() {
                 map: HashMap::new(),
             },
         }
+    );
+}
+
+#[test]
+fn parsing_u128_from_env() {
+    let mut env = Environment::from_iter(
+        "",
+        [
+            ("INT", "-1000000000000000000000000000"),
+            ("UINT", "12345"),
+            ("ARRAY__JSON", r#"["1000000000000000000000000000", 123]"#),
+        ],
+    );
+    env.coerce_json().unwrap();
+
+    let config: U128Config = testing::test(env).unwrap();
+    assert_eq!(config.int, -10_i128.pow(27));
+    assert_eq!(config.uint, NonZeroU128::new(12_345).unwrap());
+    assert_eq!(config.array, [10_u128.pow(27), 123]);
+}
+
+#[test]
+fn parsing_large_u128_value_from_json() {
+    let json = serde_json::from_str(
+        r#"{
+            "int": -1000000000000000000000000000,
+            "uint": 12345
+        }"#,
+    )
+    .unwrap();
+    let err = testing::test::<U128Config>(Json::new("test.json", json)).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "int");
+    let err_message = err.inner().to_string();
+    assert!(
+        err_message.contains("enclosing the value into a string"),
+        "{err_message}"
     );
 }
