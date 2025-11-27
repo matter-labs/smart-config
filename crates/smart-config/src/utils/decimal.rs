@@ -225,18 +225,18 @@ impl Decimal {
 
     /// Converts to `u64` performing rounding if necessary.
     #[allow(clippy::cast_sign_loss)] // Doesn't happen due to checks
-    pub(crate) fn to_int(self) -> Option<u64> {
+    pub(crate) fn to_int(self) -> Option<u128> {
         if let Ok(exp) = u32::try_from(self.exponent) {
-            self.mantissa.checked_mul(10_u64.checked_pow(exp)?)
+            u128::from(self.mantissa).checked_mul(10_u128.checked_pow(exp)?)
         } else {
             // `self.exponent` is negative.
             let exp = -self.exponent as u32;
-            let Some(pow10) = 10_u64.checked_pow(exp) else {
+            let Some(pow10) = 10_u128.checked_pow(exp) else {
                 return Some(0); // The value is too small
             };
 
-            let mut value = self.mantissa / pow10;
-            let rem = self.mantissa % pow10;
+            let mut value = u128::from(self.mantissa) / pow10;
+            let rem = u128::from(self.mantissa) % pow10;
             match rem.cmp(&(pow10 / 2)) {
                 cmp::Ordering::Greater => value = value.checked_add(1)?,
                 cmp::Ordering::Equal if value % 2 == 1 => value = value.checked_add(1)?,
@@ -248,7 +248,7 @@ impl Decimal {
     }
 
     /// Multiplies this number by `10^scale` and returns the integer result.
-    pub(crate) fn scale(self, scale: i16) -> Result<u64, serde_json::Error> {
+    pub(crate) fn scale(self, scale: i16) -> Result<u128, serde_json::Error> {
         let scaled = Self::new(
             self.mantissa,
             self.exponent.checked_add(scale).ok_or_else(|| {
@@ -262,7 +262,7 @@ impl Decimal {
             )));
         }
         scaled.to_int().ok_or_else(|| {
-            de::Error::custom(format!("{self} * 1e{scale} = {scaled} overflows u64"))
+            de::Error::custom(format!("{self} * 1e{scale} = {scaled} overflows u128"))
         })
     }
 

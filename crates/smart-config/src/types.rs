@@ -49,16 +49,16 @@ impl fmt::Display for ByteSize {
 }
 
 macro_rules! impl_unit_conversions {
-    ($ty:ident, $unit:ident) => {
-        impl From<u64> for $ty {
-            fn from(value: u64) -> Self {
+    ($ty:ident($raw:ty), $unit:ident) => {
+        impl From<$raw> for $ty {
+            fn from(value: $raw) -> Self {
                 Self(value)
             }
         }
 
         impl $ty {
             /// Creates a value with the specified unit of measurement checking for overflow.
-            pub const fn checked(val: u64, unit: $unit) -> Option<Self> {
+            pub const fn checked(val: $raw, unit: $unit) -> Option<Self> {
                 match val.checked_mul(unit.value_in_unit()) {
                     Some(val) => Some(Self(val)),
                     None => None,
@@ -70,12 +70,12 @@ macro_rules! impl_unit_conversions {
             /// # Panics
             ///
             /// Panics on overflow.
-            pub const fn new(val: u64, unit: $unit) -> Self {
+            pub const fn new(val: $raw, unit: $unit) -> Self {
                 if let Some(size) = Self::checked(val, unit) {
                     size
                 } else {
                     compile_panic!(
-                        val => compile_fmt::fmt::<u64>(), " ", unit.as_str() => clip(16, ""), " does not fit into a `u64` value"
+                        val => compile_fmt::fmt::<$raw>(), " ", unit.as_str() => clip(16, ""), " does not fit into a value"
                     );
                 }
             }
@@ -89,7 +89,7 @@ macro_rules! impl_unit_conversions {
             }
 
             /// Multiplies this size by the given factor.
-            pub const fn checked_mul(self, factor: u64) -> Option<Self> {
+            pub const fn checked_mul(self, factor: $raw) -> Option<Self> {
                 match self.0.checked_mul(factor) {
                     Some(val) => Some(Self(val)),
                     None => None,
@@ -104,10 +104,10 @@ macro_rules! impl_unit_conversions {
         }
 
         /// Panics on overflow.
-        impl ops::Mul<u64> for $unit {
+        impl ops::Mul<$raw> for $unit {
             type Output = $ty;
 
-            fn mul(self, rhs: u64) -> Self::Output {
+            fn mul(self, rhs: $raw) -> Self::Output {
                 $ty::from(self)
                     .checked_mul(rhs)
                     .unwrap_or_else(|| panic!("Integer overflow getting {rhs} * {self}"))
@@ -115,7 +115,7 @@ macro_rules! impl_unit_conversions {
         }
 
         /// Panics on overflow.
-        impl ops::Mul<$unit> for u64 {
+        impl ops::Mul<$unit> for $raw {
             type Output = $ty;
 
             fn mul(self, rhs: $unit) -> Self::Output {
@@ -136,10 +136,10 @@ macro_rules! impl_unit_conversions {
         }
 
         /// Panics on overflow.
-        impl ops::Mul<u64> for $ty {
+        impl ops::Mul<$raw> for $ty {
             type Output = Self;
 
-            fn mul(self, rhs: u64) -> Self::Output {
+            fn mul(self, rhs: $raw) -> Self::Output {
                 self.checked_mul(rhs)
                     .unwrap_or_else(|| panic!("Integer overflow getting {self} * {rhs}"))
             }
@@ -147,7 +147,7 @@ macro_rules! impl_unit_conversions {
     };
 }
 
-impl_unit_conversions!(ByteSize, SizeUnit);
+impl_unit_conversions!(ByteSize(u64), SizeUnit);
 
 /// A wrapper for ether amounts.
 ///
@@ -169,7 +169,7 @@ impl_unit_conversions!(ByteSize, SizeUnit);
 /// assert_eq!(SIZE, EtherAmount(100_000_000_000));
 /// ```
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct EtherAmount(pub u64);
+pub struct EtherAmount(pub u128);
 
 impl fmt::Debug for EtherAmount {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -197,4 +197,4 @@ impl fmt::Display for EtherAmount {
     }
 }
 
-impl_unit_conversions!(EtherAmount, EtherUnit);
+impl_unit_conversions!(EtherAmount(u128), EtherUnit);

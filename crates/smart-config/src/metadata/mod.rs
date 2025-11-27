@@ -658,7 +658,7 @@ impl fmt::Display for EtherUnit {
 }
 
 impl EtherUnit {
-    pub(crate) const fn value_in_unit(self) -> u64 {
+    pub(crate) const fn value_in_unit(self) -> u128 {
         match self {
             Self::Wei => 1,
             Self::Gwei => 1_000_000_000,

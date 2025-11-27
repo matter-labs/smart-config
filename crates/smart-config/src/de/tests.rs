@@ -509,6 +509,28 @@ fn parsing_complex_types() {
 }
 
 #[test]
+fn deserializing_large_ether_amounts() {
+    let json = config!("array": [5, 6], "fee": "1500 ether");
+    let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.fee, 1500 * EtherUnit::Ether);
+
+    let json = config!("array": [5, 6], "fee": "2.025e6 ether");
+    let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.fee, 2_025_000 * EtherUnit::Ether);
+}
+
+#[test]
+fn ether_amount_overflow_error() {
+    let json = config!("array": [5, 6], "fee": "2.025e30 ether");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert_eq!(err.path(), "fee");
+    let err = err.inner().to_string();
+    assert!(err.contains("overflows"), "{err}");
+}
+
+#[test]
 fn deserializing_u128_and_i128() {
     let large_value = 10_u128.pow(27);
     let negative_value = -10_i128.pow(27);

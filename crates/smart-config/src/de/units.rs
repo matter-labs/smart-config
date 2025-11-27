@@ -39,7 +39,16 @@ impl TimeUnit {
         let millis = millis
             .to_int()
             .ok_or_else(|| self.overflow_err(raw_value))?;
-        Ok(Duration::from_millis(millis))
+
+        u64::try_from(millis)
+            .map(Duration::from_millis)
+            .or_else(|_| {
+                // Try converting to seconds to cover a wider range of values. Losing precision
+                // in subsecond millis is not a concern for such large values.
+                let secs =
+                    u64::try_from(millis / 1_000).map_err(|_| self.overflow_err(raw_value))?;
+                Ok(Duration::from_secs(secs))
+            })
     }
 }
 
