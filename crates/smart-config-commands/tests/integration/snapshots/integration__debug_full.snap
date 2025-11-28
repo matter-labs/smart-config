@@ -1,12 +1,12 @@
 ---
 source: crates/smart-config-commands/tests/integration/main.rs
-assertion_line: 85
+assertion_line: 79
 expression: buffer
 ---
 Configuration sources:
 - fallbacks, 1 param(s)
 - JSON:/config/base.json -> prefixed with `test`, 4 param(s)
-- YAML:/config/test.yml, 11 param(s)
+- YAML:/config/test.yml, 12 param(s)
 - env, 6 param(s)
 
 Values:
@@ -46,6 +46,9 @@ test.funding.address [Rust: FundingConfig.address] = "0x000000000000000000000000
 test.funding.balance [Rust: FundingConfig.balance] = "0x123456"
   Raw: "0x123456"
   Origin: YAML:/config/test.yml -> .test.funding.balance
+test.funding.min_fee [Rust: FundingConfig.min_fee] = "12500000000 wei"
+  Raw: "12.5 gwei"
+  Origin: YAML:/config/test.yml -> .test.funding.min_fee
 test.funding.api_key [Rust: FundingConfig.api_key] = "[REDACTED]"
   Raw: [REDACTED]
   Origin: env:"APP_TEST_FUNDS_API_KEY"

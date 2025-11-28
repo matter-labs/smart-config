@@ -10,7 +10,7 @@ use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Serialize};
 use smart_config::{
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
-    ExampleConfig, Json, Prefixed, Yaml, de, fallback,
+    EtherAmount, ExampleConfig, Json, Prefixed, Yaml, de, fallback,
     metadata::{SizeUnit, TimeUnit},
     validation::NotEmpty,
     value::{ExposeSecret, SecretString},
@@ -74,8 +74,8 @@ pub(crate) struct NestedConfig {
     /// Can be deserialized either from a map or an array of tuples.
     #[config(default, with = de::Entries::WELL_KNOWN.named("method", "rps"))]
     #[config(example = HashMap::from_iter([
-    ("eth_call".into(), NonZeroU32::new(100).unwrap()),
-    ("eth_blockNumber".into(), NonZeroU32::new(1).unwrap()),
+        ("eth_call".into(), NonZeroU32::new(100).unwrap()),
+        ("eth_blockNumber".into(), NonZeroU32::new(1).unwrap()),
     ]))]
     pub method_limits: HashMap<String, NonZeroU32>,
 }
@@ -124,6 +124,9 @@ pub(crate) struct FundingConfig {
     /// Initial balance for the address.
     #[config(default)]
     pub balance: U256,
+    /// Minimum fee.
+    #[config(default)]
+    pub min_fee: EtherAmount,
     /// Secret string value.
     #[config(example = Some("correct horse battery staple".into()))]
     pub api_key: Option<SecretString>,
@@ -219,6 +222,7 @@ test:
   funding:
     address: "0x0000000000000000000000000000000000001234"
     balance: "0x123456"
+    min_fee: 12.5 gwei
   object_store:
     type: google
     bucket_name: test-bucket

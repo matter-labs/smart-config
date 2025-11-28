@@ -326,7 +326,10 @@ fn write_type_description(
                 "duration units from millis to weeks, e.g. {STRING}_ms{STRING:#} or {STRING}_in_sec{STRING:#}"
             )),
             TypeSuffixes::SizeUnits => Some(format!(
-                "byte suze units up to gigabytes, e.g. {STRING}_mb{STRING:#} or {STRING}_in_kib{STRING:#}"
+                "byte size units up to gigabytes, e.g. {STRING}_mb{STRING:#} or {STRING}_in_kib{STRING:#}"
+            )),
+            TypeSuffixes::EtherUnits => Some(format!(
+                "ether value units, e.g. {STRING}_gwei{STRING:#} or {STRING}_in_ether{STRING:#}"
             )),
             _ => None,
         };

@@ -1,6 +1,6 @@
 ---
 source: crates/smart-config-commands/tests/integration/main.rs
-assertion_line: 18
+assertion_line: 37
 expression: buffer
 ---
 test.port
@@ -53,7 +53,7 @@ test.timeout_sec
 test.cache_size
 test.experimental.cache_size [deprecated alias]
   Type: string | object [Rust: ByteSize]; size with unit, or object with single unit key
-  Name suffixes: byte suze units up to gigabytes, e.g. _mb or _in_kib
+  Name suffixes: byte size units up to gigabytes, e.g. _mb or _in_kib
   Default: "16 MiB"
   In-memory cache size.
 
@@ -79,6 +79,13 @@ test.funds.balance [deprecated alias]
   Type: string [Rust: U256]; 0x-prefixed hex number
   Default: "0x0"
   Initial balance for the address.
+
+test.funding.min_fee
+test.funds.min_fee [deprecated alias]
+  Type: string | object [Rust: EtherAmount]; amount with unit, or object with single unit key
+  Name suffixes: ether value units, e.g. _gwei or _in_ether
+  Default: "0 ether"
+  Minimum fee.
 
 test.funding.api_key
 test.funds.api_key [deprecated alias]

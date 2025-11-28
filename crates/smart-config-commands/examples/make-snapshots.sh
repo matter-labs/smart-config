@@ -10,7 +10,7 @@ ROOT_DIR=$(realpath "$THIS_DIR/../../..")
 TARGET_DIR="$ROOT_DIR/target/debug"
 
 echo "Checking term-transcript..."
-which term-transcript || cargo install term-transcript-cli --locked --version='=0.4.0-beta.1' --force
+which term-transcript || cargo install term-transcript-cli --locked --version=0.4.0 --force
 term-transcript --version
 
 echo "Building CLI example..."
