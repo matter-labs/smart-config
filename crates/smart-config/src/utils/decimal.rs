@@ -301,7 +301,7 @@ impl Decimal {
         Ok(Self::new(mantissa, exponent))
     }
 
-    /// Converts to `u64` performing rounding if necessary.
+    /// Converts to `u128` performing rounding if necessary. Returns `None` on overflow.
     #[allow(clippy::cast_sign_loss)] // Doesn't happen due to checks
     pub(crate) fn to_int(self) -> Option<u128> {
         if let Ok(exp) = u32::try_from(self.exponent) {
@@ -326,6 +326,10 @@ impl Decimal {
     }
 
     /// Multiplies this number by `10^scale` and returns the integer result.
+    ///
+    /// # Errors
+    ///
+    /// Errors on overflow, or if the output is not an integer (has a fractional part).
     pub(crate) fn scale(self, scale: i16) -> Result<u128, serde_json::Error> {
         let scaled = Self::new(
             self.mantissa,

@@ -153,7 +153,7 @@ impl_unit_conversions!(ByteSize(u64), SizeUnit);
 ///
 /// # Examples
 ///
-/// In non-const context, the most idiomatic way to produce a size is to multiply [`EtherUnit`] by `u64`:
+/// In non-const context, the most idiomatic way to produce a size is to multiply [`EtherUnit`] by `u128`:
 ///
 /// ```
 /// # use smart_config::{metadata::EtherUnit, EtherAmount};
@@ -165,8 +165,27 @@ impl_unit_conversions!(ByteSize(u64), SizeUnit);
 ///
 /// ```
 /// # use smart_config::{metadata::EtherUnit, EtherAmount};
-/// const SIZE: EtherAmount = EtherAmount::new(100, EtherUnit::Gwei);
-/// assert_eq!(SIZE, EtherAmount(100_000_000_000));
+/// const AMOUNT: EtherAmount = EtherAmount::new(100, EtherUnit::Gwei);
+/// assert_eq!(AMOUNT, EtherAmount(100_000_000_000));
+/// ```
+///
+/// ## As config param
+///
+/// `EtherAmount` can be parsed from a string with a unit suffix. See also [`WithUnit`](crate::de::WithUnit).
+///
+/// ```
+/// # use smart_config::{metadata::EtherUnit, EtherAmount};
+/// let amount: EtherAmount = "123 gwei".parse()?;
+/// assert_eq!(amount, 123 * EtherUnit::Gwei);
+///
+/// // Decimal values are supported. The value conversion is lossless.
+/// let amount: EtherAmount = "0.0013 ether".parse()?;
+/// assert_eq!(amount, 1_300_000 * EtherUnit::Gwei);
+///
+/// // Scientific / exponential notation is supported as well.
+/// let amount: EtherAmount = "2.5e12 wei".parse()?;
+/// assert_eq!(amount, EtherAmount(2_500_000_000_000));
+/// # Ok::<_, serde_json::Error>(())
 /// ```
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EtherAmount(pub u128);

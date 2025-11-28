@@ -159,13 +159,15 @@ impl DeserializeParam<ByteSize> for SizeUnit {
     }
 }
 
-/// Default deserializer for [`Duration`]s and [`ByteSize`]s.
+/// Default deserializer for [`Duration`]s, [`ByteSize`]s and [`EtherAmount`]s.
 ///
 /// Values can be deserialized from 2 formats:
 ///
-/// - String consisting of an integer, optional whitespace and a unit, such as "30 secs" or "500ms" (for `Duration`) /
-///   "4 MiB" (for `ByteSize`). The unit must correspond to a [`TimeUnit`] / [`SizeUnit`].
-/// - Object with a single key and an integer value, such as `{ "hours": 3 }` (for `Duration`) / `{ "kb": 512 }` (for `SizeUnit`).
+/// - String consisting of a number, optional whitespace and a unit, such as "30 secs" or "500ms" (for `Duration`) /
+///   "4 MiB" (for `ByteSize`). The unit must correspond to a [`TimeUnit`] / [`SizeUnit`] / [`EtherUnit`](crate::metadata::EtherUnit).
+///   `Duration`s and `EtherAmount`s support decimal numbers, such as `3.5 sec` or `1.5e-5 ether`; `ByteSize`s only support integers.
+/// - Object with a single key and a numeric value, such as `{ "hours": 3 }` (for `Duration`) / `{ "kb": 512 }` (for `SizeUnit`).
+///   To prevent precision loss, decimal values may be enclosed in a string (e.g., `{ "ether": "0.000123456" }`).
 ///
 /// Thanks to nesting of object params, the second approach automatically means that a duration can be parsed
 /// from a param name suffixed with a unit. For example, a value `latency_ms: 500` for parameter `latency`
@@ -175,33 +177,47 @@ impl DeserializeParam<ByteSize> for SizeUnit {
 ///
 /// ```
 /// # use std::time::Duration;
-/// # use smart_config::{testing, ByteSize, Environment, DescribeConfig, DeserializeConfig};
+/// # use smart_config::{testing, ByteSize, EtherAmount, Environment, DescribeConfig, DeserializeConfig};
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct TestConfig {
 ///     latency: Duration,
 ///     disk: ByteSize,
+///     #[config(default)]
+///     fee: EtherAmount,
 /// }
 ///
 /// // Parsing from a string
-/// let source = smart_config::config!("latency": "30 secs", "disk": "256 MiB");
+/// let source = smart_config::config!(
+///     "latency": "30 secs",
+///     "disk": "256 MiB",
+///     "fee": "100 gwei",
+/// );
 /// let config: TestConfig = testing::test(source)?;
 /// assert_eq!(config.latency, Duration::from_secs(30));
 /// assert_eq!(config.disk, ByteSize(256 << 20));
+/// assert_eq!(config.fee, EtherAmount(100_000_000_000));
 ///
 /// // Parsing from an object
 /// let source = smart_config::config!(
-///     "latency": serde_json::json!({ "hours": 3 }),
+///     "latency": serde_json::json!({ "hours": 3.5 }),
 ///     "disk": serde_json::json!({ "gigabytes": 2 }),
+///     "fee": serde_json::json!({ "ether": "0.000125" }),
 /// );
 /// let config: TestConfig = testing::test(source)?;
-/// assert_eq!(config.latency, Duration::from_secs(3 * 3_600));
+/// assert_eq!(config.latency, Duration::from_secs(3_600 * 7 / 2));
 /// assert_eq!(config.disk, ByteSize(2 << 30));
+/// assert_eq!(config.fee, EtherAmount(125_000_000_000_000));
 ///
 /// // Parsing from a suffixed parameter name
-/// let source = Environment::from_iter("", [("LATENCY_SEC", "15"), ("DISK_GB", "10")]);
+/// let source = Environment::from_iter("", [
+///     ("LATENCY_SEC", "1.5"),
+///     ("DISK_GB", "10"),
+///     ("FEE_IN_ETHER", "1.5e-5"),
+/// ]);
 /// let config: TestConfig = testing::test(source)?;
-/// assert_eq!(config.latency, Duration::from_secs(15));
+/// assert_eq!(config.latency, Duration::from_millis(1_500));
 /// assert_eq!(config.disk, ByteSize(10 << 30));
+/// assert_eq!(config.fee, EtherAmount(15_000_000_000_000));
 /// # anyhow::Ok(())
 /// ```
 #[derive(Debug, Clone, Copy)]
@@ -550,6 +566,14 @@ macro_rules! impl_deserialize_param {
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 Self::from_unit_str(s, true)
+            }
+        }
+
+        impl FromStr for $ty {
+            type Err = serde_json::Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                <$raw>::from_unit_str(s, true)?.try_into()
             }
         }
 
