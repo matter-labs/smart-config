@@ -626,7 +626,7 @@ impl TryFrom<RawEtherAmount> for EtherAmount {
 
     fn try_from(value: RawEtherAmount) -> Result<Self, Self::Error> {
         let (scale, raw_value) = match value {
-            RawEtherAmount::Wei(val) => (1, val),
+            RawEtherAmount::Wei(val) => (0, val),
             RawEtherAmount::Gwei(val) => (9, val),
             RawEtherAmount::Ether(val) => (18, val),
         };
@@ -720,8 +720,18 @@ mod tests {
     fn parsing_ether_amount_string() {
         let amount: RawEtherAmount = "1wei".parse().unwrap();
         assert_eq!(amount, RawEtherAmount::Wei(1.into()));
+        let amount: EtherAmount = amount.try_into().unwrap();
+        assert_eq!(amount, EtherAmount(1));
+
+        let amount: RawEtherAmount = "123 wei".parse().unwrap();
+        assert_eq!(amount, RawEtherAmount::Wei(123.into()));
+        let amount: EtherAmount = amount.try_into().unwrap();
+        assert_eq!(amount, EtherAmount(123));
+
         let amount: RawEtherAmount = "1.5 gwei".parse().unwrap();
         assert_eq!(amount, RawEtherAmount::Gwei(Decimal::new(15, -1)));
+        let amount: EtherAmount = amount.try_into().unwrap();
+        assert_eq!(amount, EtherAmount(1_500_000_000));
 
         for input in [
             "0.0015 ether",
@@ -733,6 +743,8 @@ mod tests {
         ] {
             let amount: RawEtherAmount = input.parse().unwrap();
             assert_eq!(amount, RawEtherAmount::Ether(Decimal::new(15, -4)));
+            let amount: EtherAmount = amount.try_into().unwrap();
+            assert_eq!(amount, EtherAmount(1_500_000_000_000_000));
         }
     }
 
