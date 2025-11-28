@@ -10,9 +10,9 @@ error[E0277]: `()` param cannot be deserialized
             BTreeMap<K, V>
             BTreeSet<T>
             Duration
+            EtherAmount
             HashMap<K, V, S>
             HashSet<T, S>
             IpAddr
             Ipv4Addr
-            Ipv6Addr
           and $N others
