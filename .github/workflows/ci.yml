@@ -64,6 +64,10 @@ jobs:
         run: cargo test --workspace --all-features --all-targets
       - name: Run doc tests
         run: cargo test --workspace --all-features --doc
+      - name: Run prop tests
+        run: cargo test --release -p smart-config --all-features --all-targets prop
+        env:
+          PROPTEST_CASES: 1000000
       - name: Check CLI snapshots can be generated
         run: ./crates/smart-config-commands/examples/make-snapshots.sh
 
