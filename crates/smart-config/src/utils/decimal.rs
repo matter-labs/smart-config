@@ -1,4 +1,4 @@
-use std::{cmp, fmt, str::FromStr};
+use std::{cmp, fmt, ops, str::FromStr};
 
 use serde::{Deserialize, Deserializer, de};
 
@@ -75,47 +75,49 @@ impl<'a> DecimalStr<'a> {
     }
 }
 
+/// Print format for a [`Decimal`] value.
+#[derive(Debug, Clone, Copy)]
+enum PrintFormat {
+    /// Decimal format, e.g. `100.5` or `0.00123`.
+    Decimal,
+    /// Exponential / scientific format, e.g. `1.005e2` or `1.23e-3`.
+    Exponential,
+}
+
 /// Ad-hoc non-negative decimal value with `u64` precision.
 ///
 /// # Why not use `f64`?
 ///
 /// - Additional precision when parsing from ints and strings; the latter supports `i16` decimal exponents (vs -308..=308 for `f64`).
 /// - Lossless conversion to integers; error on overflow and imprecise conversion.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub(crate) struct Decimal {
     mantissa: u64,
     exponent: i16,
 }
 
+/// Will print small or large values in the scientific (aka exponential) format, e.g. `1.234e-9`.
+/// The output never loses precision.
 impl fmt::Debug for Decimal {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, formatter)
+        self.format_generic(formatter, None)
     }
 }
 
+/// Unlike `Display` for `f64`, will print small or large values in the scientific (aka exponential) format,
+/// e.g. `1.234e-9`. To always use the decimal format, use the alternate specifier (`{:#}`). The output never loses precision.
 impl fmt::Display for Decimal {
-    #[allow(clippy::cast_sign_loss)] // doesn't happen due to checks
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO: scientific format
-        if self.exponent >= 0 {
-            fmt::Display::fmt(&self.mantissa, formatter)?;
-            // Pad with trailing zeros
-            write!(
-                formatter,
-                "{:0>exponent$}",
-                "",
-                exponent = self.exponent as usize
-            )
-        } else {
-            let mantissa_str = self.mantissa.to_string();
-            let fraction_len = (-self.exponent) as usize;
-            let (mut int, fraction) =
-                mantissa_str.split_at(mantissa_str.len().saturating_sub(fraction_len));
-            if int.is_empty() {
-                int = "0";
-            }
-            write!(formatter, "{int}.{fraction:0>fraction_len$}")
-        }
+        let format = formatter.alternate().then_some(PrintFormat::Decimal);
+        self.format_generic(formatter, format)
+    }
+}
+
+/// Will print value in the scientific (aka exponential) format, e.g. `1.234e-9`.
+/// The output never loses precision.
+impl fmt::LowerExp for Decimal {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.format_generic(formatter, Some(PrintFormat::Exponential))
     }
 }
 
@@ -153,6 +155,82 @@ impl Decimal {
 
     pub(crate) const fn new(mantissa: u64, exponent: i16) -> Self {
         Self { mantissa, exponent }.reduced()
+    }
+
+    /// Adjusts the exponent so that the mantissa is in 1.0..10.0, e.g. 9876e3 = 9.876e6.
+    fn adjusted_exponent(self) -> i32 {
+        let (mut pow10, mut digit_count) = (1_u128, 0_i32);
+        while pow10 <= u128::from(self.mantissa) {
+            pow10 *= 10;
+            digit_count += 1;
+        }
+        digit_count = digit_count.max(1); // for `mantissa == 0`
+
+        i32::from(self.exponent) + digit_count - 1
+    }
+
+    fn format_generic(
+        self,
+        formatter: &mut fmt::Formatter<'_>,
+        format: Option<PrintFormat>,
+    ) -> fmt::Result {
+        /// Adjusted exponents (i.e., ones that would appear in the scientific / exponential notation `$.$$$..e$$`)
+        /// that are formatted as decimals. Other exponents use the scientific format. The range is the same as for `f64`.
+        const DECIMAL_EXPONENTS: ops::RangeInclusive<i32> = -4..=15;
+
+        let reduced = self.reduced();
+        match format {
+            Some(PrintFormat::Decimal) => reduced.format_decimal(formatter),
+            Some(PrintFormat::Exponential) | None => {
+                let adjusted_exponent = reduced.adjusted_exponent();
+                let use_exp_format =
+                    format.is_some() || !DECIMAL_EXPONENTS.contains(&adjusted_exponent);
+                if use_exp_format {
+                    // Use the exponential / scientific format, e.g., `1.23e15` or `7.5e-9`.
+                    Self::format_exp(formatter, reduced.mantissa, adjusted_exponent)
+                } else {
+                    // Use the decimal format, e.g. `123000` or `0.0123`.
+                    reduced.format_decimal(formatter)
+                }
+            }
+        }
+    }
+
+    #[allow(clippy::cast_sign_loss)] // doesn't happen due to checks
+    fn format_decimal(self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.exponent >= 0 {
+            fmt::Display::fmt(&self.mantissa, formatter)?;
+            // Pad with trailing zeros
+            write!(
+                formatter,
+                "{:0>exponent$}",
+                "",
+                exponent = self.exponent as usize
+            )
+        } else {
+            let fraction_digits = (-self.exponent) as usize;
+            let mantissa_str = self.mantissa.to_string();
+            let (mut int, fraction) =
+                mantissa_str.split_at(mantissa_str.len().saturating_sub(fraction_digits));
+            if int.is_empty() {
+                int = "0";
+            }
+            write!(formatter, "{int}.{fraction:0>fraction_digits$}")
+        }
+    }
+
+    fn format_exp(
+        formatter: &mut fmt::Formatter<'_>,
+        mantissa: u64,
+        adjusted_exponent: i32,
+    ) -> fmt::Result {
+        let mantissa_str = mantissa.to_string();
+        let (int, fraction) = mantissa_str.split_at(1);
+        let decimal_dot = if fraction.is_empty() { "" } else { "." };
+        write!(
+            formatter,
+            "{int}{decimal_dot}{fraction}e{adjusted_exponent}"
+        )
     }
 
     fn from_decimal_str<E: de::Error>(s: DecimalStr) -> Result<Self, E> {
@@ -537,34 +615,69 @@ mod tests {
         let dec: Decimal = "1".parse().unwrap();
         assert_eq!(dec.scale(0).unwrap(), 1);
         assert_eq!(dec.to_string(), "1");
+        assert_eq!(format!("{dec:e}"), "1e0");
 
         let dec: Decimal = "1.5".parse().unwrap();
         assert_eq!(dec.scale(1).unwrap(), 15);
         assert_eq!(dec.to_string(), "1.5");
+        assert_eq!(format!("{dec:e}"), "1.5e0");
 
         for input in ["1500", "1500.", "1500.0", "1_500.00"] {
             let dec: Decimal = input.parse().unwrap();
             assert_eq!(dec.scale(0).unwrap(), 1_500);
             assert_eq!(dec.to_string(), "1500");
+            assert_eq!(format!("{dec:e}"), "1.5e3");
         }
 
         for input in [".15", "0.1500", "00.150", ".150_00"] {
             let dec: Decimal = input.parse().unwrap();
             assert_eq!(dec.scale(2).unwrap(), 15);
             assert_eq!(dec.to_string(), "0.15");
+            assert_eq!(format!("{dec:e}"), "1.5e-1");
         }
 
         let dec: Decimal = "1.500".parse().unwrap();
         assert_eq!(dec.scale(1).unwrap(), 15);
         assert_eq!(dec.to_string(), "1.5");
+        assert_eq!(format!("{dec:e}"), "1.5e0");
 
         let dec: Decimal = "1.5001".parse().unwrap();
         assert_eq!(dec.scale(6).unwrap(), 1_500_100);
         assert_eq!(dec.to_string(), "1.5001");
+        assert_eq!(format!("{dec:e}"), "1.5001e0");
 
         let dec: Decimal = "1_001.500_1".parse().unwrap();
         assert_eq!(dec.scale(4).unwrap(), 10_015_001);
         assert_eq!(dec.to_string(), "1001.5001");
+        assert_eq!(format!("{dec:e}"), "1.0015001e3");
+    }
+
+    #[test]
+    fn displaying_exponential_decimals() {
+        for input in ["1e20", "1.e20", "1.00e20", "100e18"] {
+            let dec: Decimal = input.parse().unwrap();
+            assert_eq!(dec, Decimal::new(1, 20));
+            assert_eq!(dec.to_string(), "1e20");
+            assert_eq!(format!("{dec:#}"), "100000000000000000000");
+            assert_eq!(format!("{dec:e}"), "1e20");
+        }
+
+        for input in ["1.53e-6", "1.530e-6", "1530e-9", "0.00000153"] {
+            let dec: Decimal = input.parse().unwrap();
+            assert_eq!(dec, Decimal::new(153, -8));
+            assert_eq!(dec.to_string(), "1.53e-6");
+            assert_eq!(format!("{dec:#}"), "0.00000153");
+            assert_eq!(format!("{dec:e}"), "1.53e-6");
+        }
+    }
+
+    #[test]
+    fn displaying_zero() {
+        let dec = Decimal::default();
+        assert_eq!(dec.to_string(), "0");
+        assert_eq!(format!("{dec:#}"), "0");
+        assert_eq!(format!("{dec:?}"), "0");
+        assert_eq!(format!("{dec:e}"), "0e0");
     }
 
     #[test]
@@ -603,6 +716,10 @@ mod tests {
         let dec: Decimal = "98_372_729_502.263_3e-194".parse().unwrap();
         assert_eq!(dec.mantissa, 983_727_295_022_633);
         assert_eq!(dec.exponent, -198);
+        let expected_str = "9.83727295022633e-184";
+        assert_eq!(dec.to_string(), expected_str);
+        assert_eq!(format!("{dec:?}"), expected_str);
+        assert_eq!(format!("{dec:e}"), expected_str);
     }
 
     #[test]
@@ -620,6 +737,10 @@ mod tests {
         let dec = Decimal::from_f64::<serde_json::Error>(98_372_729_502.263_3e194).unwrap();
         assert_eq!(dec.mantissa, 983_727_295_022_633);
         assert_eq!(dec.exponent, 190);
+        let expected_str = "9.83727295022633e204";
+        assert_eq!(dec.to_string(), expected_str);
+        assert_eq!(format!("{dec:?}"), expected_str);
+        assert_eq!(format!("{dec:e}"), expected_str);
 
         let dec: Decimal = "98_372_729_502.263_3e194".parse().unwrap();
         assert_eq!(dec.mantissa, 983_727_295_022_633);
@@ -747,11 +868,27 @@ mod prop_tests {
         )
     }
 
+    fn test_decimal_str_roundtrip(dec: Decimal) -> Result<(), TestCaseError> {
+        // All representations are lossless.
+        let representations = [
+            dec.to_string(),
+            format!("{dec:#}"),
+            format!("{dec:?}"),
+            format!("{dec:e}"),
+        ];
+        for s in &representations {
+            let parsed: Decimal = Decimal::from_str(s)?;
+            prop_assert_eq!(parsed, dec, "repr: {}", s);
+        }
+        Ok(())
+    }
+
     proptest! {
         #[test]
         fn decimal_from_int_yaml(x: u64) {
             let val: Decimal = serde_yaml::from_str(&format!("{x}")).unwrap();
             prop_assert_eq!(val, Decimal::from(x));
+            test_decimal_str_roundtrip(val)?;
         }
 
         #[test]
@@ -759,6 +896,7 @@ mod prop_tests {
             let val: Decimal = serde_yaml::from_str(&s).unwrap();
             prop_assert_eq!(val, expected);
             prop_assert!(val.exponent == 0 || val.mantissa % 10 != 0);
+            test_decimal_str_roundtrip(val)?;
         }
 
         // 290 (max exponent) + 15 (digits) = 305 is roughly the `f64` precision limit
@@ -767,6 +905,7 @@ mod prop_tests {
             let val: Decimal = serde_yaml::from_str(&s).unwrap();
             prop_assert_eq!(val, expected);
             prop_assert!(val.exponent == 0 || val.mantissa % 10 != 0);
+            test_decimal_str_roundtrip(val)?;
         }
 
         #[test]
@@ -774,6 +913,7 @@ mod prop_tests {
             let val: Decimal = serde_yaml::from_str(&format!("{s:?}")).unwrap();
             prop_assert_eq!(val, expected);
             prop_assert!(val.exponent == 0 || val.mantissa % 10 != 0);
+            test_decimal_str_roundtrip(val)?;
         }
 
         #[test]
