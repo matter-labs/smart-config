@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.0-pre.1](https://github.com/matter-labs/smart-config/compare/v0.4.0-pre...v0.4.0-pre.1) (2025-12-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* Switch to 2024 Rust edition ([#43](https://github.com/matter-labs/smart-config/issues/43))
+
+### Features
+
+* Support ether amounts ([#46](https://github.com/matter-labs/smart-config/issues/46)) ([8250d8f](https://github.com/matter-labs/smart-config/commit/8250d8f50c8b28d248dc0ed9225ba19995029466))
+
+
+### Bug Fixes
+
+* Fix parsing `u128` / `i128` ([#45](https://github.com/matter-labs/smart-config/issues/45)) ([c191731](https://github.com/matter-labs/smart-config/commit/c1917311d25cca2307f51fe66af208e40409b808))
+
+
+### Miscellaneous Chores
+
+* Switch to 2024 Rust edition ([#43](https://github.com/matter-labs/smart-config/issues/43)) ([4a88936](https://github.com/matter-labs/smart-config/commit/4a88936abce2dc21f476ed548b26b16f1b4b2a74))
+
 ## [0.4.0-pre](https://github.com/matter-labs/smart-config/compare/v0.3.0...v0.4.0-pre) (2025-09-23)
 
 
