@@ -306,6 +306,8 @@ pub enum TypeSuffixes {
     DurationUnits,
     /// Byte size units like `_mb` or `_bytes`. May be prepended with `_in`, e.g. `_in_mb`.
     SizeUnits,
+    /// Ether units like `_wei` or `_ether`. May be prepended with `_in`, e.g. `_in_wei`.
+    EtherUnits,
 }
 
 /// Human-readable description for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
@@ -612,7 +614,7 @@ pub enum SizeUnit {
 }
 
 impl SizeUnit {
-    pub(crate) const fn plural(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Bytes => "bytes",
             Self::KiB => "kilobytes",
@@ -621,7 +623,7 @@ impl SizeUnit {
         }
     }
 
-    pub(crate) const fn bytes_in_unit(self) -> u64 {
+    pub(crate) const fn value_in_unit(self) -> u64 {
         match self {
             Self::Bytes => 1,
             Self::KiB => 1_024,
@@ -633,7 +635,43 @@ impl SizeUnit {
 
 impl fmt::Display for SizeUnit {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.plural())
+        formatter.write_str(self.as_str())
+    }
+}
+
+/// Unit of ether amount measurement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum EtherUnit {
+    /// Smallest unit of measurement.
+    Wei,
+    /// `10^9` wei.
+    Gwei,
+    /// `10^18` wei.
+    Ether,
+}
+
+impl fmt::Display for EtherUnit {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl EtherUnit {
+    pub(crate) const fn value_in_unit(self) -> u128 {
+        match self {
+            Self::Wei => 1,
+            Self::Gwei => 1_000_000_000,
+            Self::Ether => 1_000_000_000_000_000_000,
+        }
+    }
+
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Wei => "wei",
+            Self::Gwei => "gwei",
+            Self::Ether => "ether",
+        }
     }
 }
 
@@ -645,6 +683,8 @@ pub enum UnitOfMeasurement {
     Time(TimeUnit),
     /// Unit of byte size measurement.
     ByteSize(SizeUnit),
+    /// Unit of ether amount measurement.
+    Ether(EtherUnit),
 }
 
 impl fmt::Display for UnitOfMeasurement {
@@ -652,6 +692,7 @@ impl fmt::Display for UnitOfMeasurement {
         match self {
             Self::Time(unit) => fmt::Display::fmt(unit, formatter),
             Self::ByteSize(unit) => fmt::Display::fmt(unit, formatter),
+            Self::Ether(unit) => fmt::Display::fmt(unit, formatter),
         }
     }
 }
@@ -665,5 +706,11 @@ impl From<TimeUnit> for UnitOfMeasurement {
 impl From<SizeUnit> for UnitOfMeasurement {
     fn from(unit: SizeUnit) -> Self {
         Self::ByteSize(unit)
+    }
+}
+
+impl From<EtherUnit> for UnitOfMeasurement {
+    fn from(unit: EtherUnit) -> Self {
+        Self::Ether(unit)
     }
 }

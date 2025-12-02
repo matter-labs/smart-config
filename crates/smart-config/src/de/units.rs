@@ -4,28 +4,51 @@ use std::{fmt, marker::PhantomData, str::FromStr, time::Duration};
 
 use serde::{
     Deserialize, Deserializer,
-    de::{self, EnumAccess, Error as DeError, Unexpected, VariantAccess},
+    de::{self, EnumAccess, Error as DeError, VariantAccess},
 };
 
 use crate::{
-    ByteSize,
+    ByteSize, EtherAmount,
     de::{CustomKnownOption, DeserializeContext, DeserializeParam, Optional, WellKnown},
     error::ErrorWithOrigin,
     metadata::{BasicTypes, ParamMetadata, SizeUnit, TimeUnit, TypeDescription, TypeSuffixes},
+    utils::{Decimal, FromStrStart},
     value::Value,
 };
 
 impl TimeUnit {
-    fn overflow_err(self, raw_val: u64) -> serde_json::Error {
+    fn overflow_err(self, raw_val: Decimal) -> serde_json::Error {
         let plural = self.plural();
         DeError::custom(format!(
-            "{raw_val} {plural} does not fit into `u64` when converted to seconds"
+            "{raw_val} {plural} does not fit into `u64` when converted to milliseconds"
         ))
     }
 
-    fn into_duration(self, raw_value: u64) -> Result<Duration, serde_json::Error> {
-        self.checked_mul(raw_value)
-            .ok_or_else(|| self.overflow_err(raw_value))
+    fn into_duration(self, raw_value: Decimal) -> Result<Duration, serde_json::Error> {
+        let millis_in_unit = match self {
+            Self::Millis => Decimal::from(1),
+            Self::Seconds => Decimal::new(1, 3),
+            Self::Minutes => Decimal::new(60, 3),
+            Self::Hours => Decimal::new(3_600, 3),
+            Self::Days => Decimal::new(86_400, 3),
+            Self::Weeks => Decimal::new(7 * 86_400, 3),
+        };
+        let millis = raw_value
+            .checked_mul(millis_in_unit)
+            .ok_or_else(|| self.overflow_err(raw_value))?;
+        let millis = millis
+            .to_int()
+            .ok_or_else(|| self.overflow_err(raw_value))?;
+
+        u64::try_from(millis)
+            .map(Duration::from_millis)
+            .or_else(|_| {
+                // Try converting to seconds to cover a wider range of values. Losing precision
+                // in subsecond millis is not a concern for such large values.
+                let secs =
+                    u64::try_from(millis / 1_000).map_err(|_| self.overflow_err(raw_value))?;
+                Ok(Duration::from_secs(secs))
+            })
     }
 }
 
@@ -64,7 +87,7 @@ impl DeserializeParam<Duration> for TimeUnit {
         param: &'static ParamMetadata,
     ) -> Result<Duration, ErrorWithOrigin> {
         let deserializer = ctx.current_value_deserializer(param.name)?;
-        let raw_value = u64::deserialize(deserializer)?;
+        let raw_value = Decimal::deserialize(deserializer)?;
         self.into_duration(raw_value)
             .map_err(|err| deserializer.enrich_err(err))
     }
@@ -120,7 +143,7 @@ impl DeserializeParam<ByteSize> for SizeUnit {
         ByteSize::checked(raw_value, *self).ok_or_else(|| {
             let err = DeError::custom(format!(
                 "{raw_value} {unit} does not fit into `u64`",
-                unit = self.plural()
+                unit = self.as_str()
             ));
             deserializer.enrich_err(err)
         })
@@ -136,13 +159,15 @@ impl DeserializeParam<ByteSize> for SizeUnit {
     }
 }
 
-/// Default deserializer for [`Duration`]s and [`ByteSize`]s.
+/// Default deserializer for [`Duration`]s, [`ByteSize`]s and [`EtherAmount`]s.
 ///
 /// Values can be deserialized from 2 formats:
 ///
-/// - String consisting of an integer, optional whitespace and a unit, such as "30 secs" or "500ms" (for `Duration`) /
-///   "4 MiB" (for `ByteSize`). The unit must correspond to a [`TimeUnit`] / [`SizeUnit`].
-/// - Object with a single key and an integer value, such as `{ "hours": 3 }` (for `Duration`) / `{ "kb": 512 }` (for `SizeUnit`).
+/// - String consisting of a number, optional whitespace and a unit, such as "30 secs" or "500ms" (for `Duration`) /
+///   "4 MiB" (for `ByteSize`). The unit must correspond to a [`TimeUnit`] / [`SizeUnit`] / [`EtherUnit`](crate::metadata::EtherUnit).
+///   `Duration`s and `EtherAmount`s support decimal numbers, such as `3.5 sec` or `1.5e-5 ether`; `ByteSize`s only support integers.
+/// - Object with a single key and a numeric value, such as `{ "hours": 3 }` (for `Duration`) / `{ "kb": 512 }` (for `SizeUnit`).
+///   To prevent precision loss, decimal values may be enclosed in a string (e.g., `{ "ether": "0.000123456" }`).
 ///
 /// Thanks to nesting of object params, the second approach automatically means that a duration can be parsed
 /// from a param name suffixed with a unit. For example, a value `latency_ms: 500` for parameter `latency`
@@ -152,33 +177,47 @@ impl DeserializeParam<ByteSize> for SizeUnit {
 ///
 /// ```
 /// # use std::time::Duration;
-/// # use smart_config::{testing, ByteSize, Environment, DescribeConfig, DeserializeConfig};
+/// # use smart_config::{testing, ByteSize, EtherAmount, Environment, DescribeConfig, DeserializeConfig};
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct TestConfig {
 ///     latency: Duration,
 ///     disk: ByteSize,
+///     #[config(default)]
+///     fee: EtherAmount,
 /// }
 ///
 /// // Parsing from a string
-/// let source = smart_config::config!("latency": "30 secs", "disk": "256 MiB");
+/// let source = smart_config::config!(
+///     "latency": "30 secs",
+///     "disk": "256 MiB",
+///     "fee": "100 gwei",
+/// );
 /// let config: TestConfig = testing::test(source)?;
 /// assert_eq!(config.latency, Duration::from_secs(30));
 /// assert_eq!(config.disk, ByteSize(256 << 20));
+/// assert_eq!(config.fee, EtherAmount(100_000_000_000));
 ///
 /// // Parsing from an object
 /// let source = smart_config::config!(
-///     "latency": serde_json::json!({ "hours": 3 }),
+///     "latency": serde_json::json!({ "hours": 3.5 }),
 ///     "disk": serde_json::json!({ "gigabytes": 2 }),
+///     "fee": serde_json::json!({ "ether": "0.000125" }),
 /// );
 /// let config: TestConfig = testing::test(source)?;
-/// assert_eq!(config.latency, Duration::from_secs(3 * 3_600));
+/// assert_eq!(config.latency, Duration::from_secs(3_600 * 7 / 2));
 /// assert_eq!(config.disk, ByteSize(2 << 30));
+/// assert_eq!(config.fee, EtherAmount(125_000_000_000_000));
 ///
 /// // Parsing from a suffixed parameter name
-/// let source = Environment::from_iter("", [("LATENCY_SEC", "15"), ("DISK_GB", "10")]);
+/// let source = Environment::from_iter("", [
+///     ("LATENCY_SEC", "1.5"),
+///     ("DISK_GB", "10"),
+///     ("FEE_IN_ETHER", "1.5e-5"),
+/// ]);
 /// let config: TestConfig = testing::test(source)?;
-/// assert_eq!(config.latency, Duration::from_secs(15));
+/// assert_eq!(config.latency, Duration::from_millis(1_500));
 /// assert_eq!(config.disk, ByteSize(10 << 30));
+/// assert_eq!(config.fee, EtherAmount(15_000_000_000_000));
 /// # anyhow::Ok(())
 /// ```
 #[derive(Debug, Clone, Copy)]
@@ -239,28 +278,55 @@ impl WithUnit {
 
 /// Helper trait allowing to unify enum parsing for durations and byte sizes.
 trait EnumWithUnit: FromStr<Err = serde_json::Error> {
+    type Value: FromStrStart + de::DeserializeOwned;
+
+    const EXPECTING: &'static str;
     const VARIANTS: &'static [&'static str];
 
-    fn extract_variant(unit: &str) -> Option<fn(u64) -> Self>;
+    fn extract_variant(unit: &str) -> Option<fn(Self::Value) -> Self>;
 
-    fn parse<E: de::Error>(unit: &str, value: u64) -> Result<Self, E> {
+    fn parse<E: de::Error>(unit: &str, value: Self::Value) -> Result<Self, E> {
         let variant_mapper = Self::extract_variant(unit)
             .ok_or_else(|| DeError::unknown_variant(unit, Self::VARIANTS))?;
         Ok(variant_mapper(value))
     }
 
-    fn parse_opt<E: de::Error>(unit: &str, value: Option<u64>) -> Result<Option<Self>, E> {
+    fn parse_opt<E: de::Error>(unit: &str, value: Option<Self::Value>) -> Result<Option<Self>, E> {
         let variant_mapper = Self::extract_variant(unit)
             .ok_or_else(|| DeError::unknown_variant(unit, Self::VARIANTS))?;
         // We want to check the variant first, and only then return `Ok(None)`.
         Ok(value.map(variant_mapper))
+    }
+
+    fn from_unit_str(s: &str, lowercase_unit: bool) -> Result<Self, serde_json::Error> {
+        let (value, rem) = <Self::Value as FromStrStart>::from_str_start(s)?;
+        let value =
+            value.ok_or_else(|| DeError::invalid_type(de::Unexpected::Str(s), &Self::EXPECTING))?;
+
+        let mut unit = rem.trim();
+        if unit.is_empty() {
+            return Err(DeError::invalid_type(
+                de::Unexpected::Str(s),
+                &Self::EXPECTING,
+            ));
+        }
+
+        let lowercase_unit_string;
+        if lowercase_unit {
+            lowercase_unit_string = unit.to_lowercase();
+            unit = &lowercase_unit_string;
+        }
+        Self::parse(unit, value)
     }
 }
 
 #[derive(Debug)]
 struct EnumVisitor<T>(PhantomData<T>);
 
-impl<'v, T: EnumWithUnit> de::Visitor<'v> for EnumVisitor<T> {
+impl<'v, T> de::Visitor<'v> for EnumVisitor<T>
+where
+    T: EnumWithUnit<Value: de::DeserializeOwned>,
+{
     type Value = T;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -294,19 +360,19 @@ impl<'v, T: EnumWithUnit> de::Visitor<'v> for EnumVisitor<Option<T>> {
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 enum RawDuration {
-    Millis(u64),
-    Seconds(u64),
-    Minutes(u64),
-    Hours(u64),
-    Days(u64),
-    Weeks(u64),
+    Millis(Decimal),
+    Seconds(Decimal),
+    Minutes(Decimal),
+    Hours(Decimal),
+    Days(Decimal),
+    Weeks(Decimal),
 }
 
 macro_rules! impl_enum_with_unit {
     ($($($name:tt)|+ => $func:expr,)+) => {
         const VARIANTS: &'static [&'static str] = &[$($($name,)+)+];
 
-        fn extract_variant(unit: &str) -> Option<fn(u64) -> Self> {
+        fn extract_variant(unit: &str) -> Option<fn(Self::Value) -> Self> {
             Some(match unit {
                 $($($name )|+ => $func,)+
                 _ => return None,
@@ -316,6 +382,10 @@ macro_rules! impl_enum_with_unit {
 }
 
 impl EnumWithUnit for RawDuration {
+    type Value = Decimal;
+
+    const EXPECTING: &'static str = "value with unit, like '10 ms'";
+
     impl_enum_with_unit!(
         "milliseconds" | "millis" | "ms" => Self::Millis,
         "seconds" | "second" | "secs" | "sec" | "s" => Self::Seconds,
@@ -326,24 +396,11 @@ impl EnumWithUnit for RawDuration {
     );
 }
 
-impl RawDuration {
-    const EXPECTING: &'static str = "value with unit, like '10 ms'";
-}
-
 impl FromStr for RawDuration {
     type Err = serde_json::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let unit_start = s
-            .find(|ch: char| !ch.is_ascii_digit())
-            .ok_or_else(|| DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING))?;
-        if unit_start == 0 {
-            return Err(DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING));
-        }
-
-        let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
-        let unit = s[unit_start..].trim();
-        Self::parse(unit, value)
+        Self::from_unit_str(s, false)
     }
 }
 
@@ -381,7 +438,7 @@ impl DeserializeParam<Duration> for WithUnit {
 
     fn serialize_param(&self, param: &Duration) -> serde_json::Value {
         if param.is_zero() {
-            // Special case to produce more "expected" string.
+            // Special case to produce a more "expected" string.
             return "0s".into();
         }
 
@@ -405,38 +462,50 @@ impl DeserializeParam<Duration> for WithUnit {
     }
 }
 
-impl DeserializeParam<Option<Duration>> for WithUnit {
-    const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
+macro_rules! impl_deserialize_opt_param {
+    ($ty:ty => $raw:ty) => {
+        impl DeserializeParam<Option<$ty>> for WithUnit {
+            const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
 
-    fn describe(&self, description: &mut TypeDescription) {
-        <Self as DeserializeParam<Duration>>::describe(self, description);
-    }
+            fn describe(&self, description: &mut TypeDescription) {
+                <Self as DeserializeParam<$ty>>::describe(self, description);
+            }
 
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<Option<Duration>, ErrorWithOrigin> {
-        Self::deserialize_opt::<RawDuration, _>(&ctx, param)
-    }
+            fn deserialize_param(
+                &self,
+                ctx: DeserializeContext<'_>,
+                param: &'static ParamMetadata,
+            ) -> Result<Option<$ty>, ErrorWithOrigin> {
+                Self::deserialize_opt::<$raw, _>(&ctx, param)
+            }
 
-    fn serialize_param(&self, param: &Option<Duration>) -> serde_json::Value {
-        match param {
-            Some(val) => self.serialize_param(val),
-            None => serde_json::Value::Null,
+            fn serialize_param(&self, param: &Option<$ty>) -> serde_json::Value {
+                match param {
+                    Some(val) => self.serialize_param(val),
+                    None => serde_json::Value::Null,
+                }
+            }
         }
-    }
+    };
 }
 
-impl WellKnown for Duration {
-    type Deserializer = WithUnit;
-    const DE: Self::Deserializer = WithUnit;
+impl_deserialize_opt_param!(Duration => RawDuration);
+
+macro_rules! impl_well_known_with_unit {
+    ($ty:ty) => {
+        impl WellKnown for $ty {
+            type Deserializer = WithUnit;
+            const DE: Self::Deserializer = WithUnit;
+        }
+
+        impl CustomKnownOption for $ty {
+            type OptDeserializer = Optional<WithUnit, true>;
+            const OPT_DE: Self::OptDeserializer = Optional(WithUnit);
+        }
+    };
 }
 
-impl CustomKnownOption for Duration {
-    type OptDeserializer = Optional<WithUnit, true>;
-    const OPT_DE: Self::OptDeserializer = Optional(WithUnit);
-}
+impl_well_known_with_unit!(Duration);
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -448,43 +517,16 @@ enum RawByteSize {
 }
 
 impl EnumWithUnit for RawByteSize {
+    type Value = u64;
+
+    const EXPECTING: &'static str = "value with unit, like '32 MB'";
+
     impl_enum_with_unit!(
         "bytes" | "b" => Self::Bytes,
         "kilobytes" | "kb" | "kib" => Self::Kilobytes,
         "megabytes" | "mb" | "mib" => Self::Megabytes,
         "gigabytes" | "gb" | "gib" => Self::Gigabytes,
     );
-}
-
-impl RawByteSize {
-    const EXPECTING: &'static str = "value with unit, like '32 MB'";
-}
-
-impl<'de> Deserialize<'de> for RawByteSize {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_enum(
-            "RawByteSize",
-            Self::VARIANTS,
-            EnumVisitor(PhantomData::<Self>),
-        )
-    }
-}
-
-impl FromStr for RawByteSize {
-    type Err = serde_json::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let unit_start = s
-            .find(|ch: char| !ch.is_ascii_digit())
-            .ok_or_else(|| DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING))?;
-        if unit_start == 0 {
-            return Err(DeError::invalid_type(Unexpected::Str(s), &Self::EXPECTING));
-        }
-
-        let value: u64 = s[..unit_start].parse().map_err(DeError::custom)?;
-        let unit = s[unit_start..].trim();
-        Self::parse(&unit.to_lowercase(), value)
-    }
 }
 
 impl TryFrom<RawByteSize> for ByteSize {
@@ -500,65 +542,68 @@ impl TryFrom<RawByteSize> for ByteSize {
         ByteSize::checked(raw_value, unit).ok_or_else(|| {
             DeError::custom(format!(
                 "{raw_value} {unit} does not fit into `u64`",
-                unit = unit.plural()
+                unit = unit.as_str()
             ))
         })
     }
 }
 
-impl DeserializeParam<ByteSize> for WithUnit {
-    const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
-
-    fn describe(&self, description: &mut TypeDescription) {
-        description.set_details("size with unit, or object with single unit key");
-        description.set_suffixes(TypeSuffixes::SizeUnits);
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<ByteSize, ErrorWithOrigin> {
-        Self::deserialize::<RawByteSize, _>(&ctx, param)
-    }
-
-    fn serialize_param(&self, param: &ByteSize) -> serde_json::Value {
-        param.to_string().into()
-    }
-}
-
-impl DeserializeParam<Option<ByteSize>> for WithUnit {
-    const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
-
-    fn describe(&self, description: &mut TypeDescription) {
-        <Self as DeserializeParam<ByteSize>>::describe(self, description);
-    }
-
-    fn deserialize_param(
-        &self,
-        ctx: DeserializeContext<'_>,
-        param: &'static ParamMetadata,
-    ) -> Result<Option<ByteSize>, ErrorWithOrigin> {
-        Self::deserialize_opt::<RawByteSize, _>(&ctx, param)
-    }
-
-    fn serialize_param(&self, param: &Option<ByteSize>) -> serde_json::Value {
-        match param {
-            Some(val) => val.to_string().into(),
-            None => serde_json::Value::Null,
+// Inapplicable to `Duration` because it's not a local type.
+macro_rules! impl_deserialize_param {
+    ($ty:ty, raw: $raw:ty, name: $name:tt, units: $units:ident) => {
+        impl<'de> Deserialize<'de> for $raw {
+            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                deserializer.deserialize_enum(
+                    stringify!($raw),
+                    Self::VARIANTS,
+                    EnumVisitor(PhantomData::<Self>),
+                )
+            }
         }
-    }
+
+        impl FromStr for $raw {
+            type Err = serde_json::Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Self::from_unit_str(s, true)
+            }
+        }
+
+        impl FromStr for $ty {
+            type Err = serde_json::Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                <$raw>::from_unit_str(s, true)?.try_into()
+            }
+        }
+
+        impl DeserializeParam<$ty> for WithUnit {
+            const EXPECTING: BasicTypes = Self::EXPECTED_TYPES;
+
+            fn describe(&self, description: &mut TypeDescription) {
+                description
+                    .set_details(concat!($name, " with unit, or object with single unit key"));
+                description.set_suffixes(TypeSuffixes::$units);
+            }
+
+            fn deserialize_param(
+                &self,
+                ctx: DeserializeContext<'_>,
+                param: &'static ParamMetadata,
+            ) -> Result<$ty, ErrorWithOrigin> {
+                Self::deserialize::<$raw, _>(&ctx, param)
+            }
+
+            fn serialize_param(&self, param: &$ty) -> serde_json::Value {
+                param.to_string().into()
+            }
+        }
+    };
 }
 
-impl WellKnown for ByteSize {
-    type Deserializer = WithUnit;
-    const DE: Self::Deserializer = WithUnit;
-}
-
-impl CustomKnownOption for ByteSize {
-    type OptDeserializer = Optional<WithUnit, true>;
-    const OPT_DE: Self::OptDeserializer = Optional(WithUnit);
-}
+impl_deserialize_param!(ByteSize, raw: RawByteSize, name: "size", units: SizeUnits);
+impl_deserialize_opt_param!(ByteSize => RawByteSize);
+impl_well_known_with_unit!(ByteSize);
 
 impl TypeSuffixes {
     pub(crate) fn contains(self, suffix: &str) -> bool {
@@ -572,9 +617,51 @@ impl TypeSuffixes {
                 let suffix = suffix.strip_prefix("in_").unwrap_or(suffix);
                 RawByteSize::VARIANTS.contains(&suffix)
             }
+            Self::EtherUnits => {
+                let suffix = suffix.strip_prefix("in_").unwrap_or(suffix);
+                RawEtherAmount::VARIANTS.contains(&suffix)
+            }
         }
     }
 }
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+enum RawEtherAmount {
+    Wei(Decimal),
+    Gwei(Decimal),
+    Ether(Decimal),
+}
+
+impl EnumWithUnit for RawEtherAmount {
+    type Value = Decimal;
+
+    const EXPECTING: &'static str = "value with unit, like '100 gwei'";
+
+    impl_enum_with_unit!(
+        "wei" => Self::Wei,
+        "gwei" => Self::Gwei,
+        "ether" => Self::Ether,
+    );
+}
+
+impl TryFrom<RawEtherAmount> for EtherAmount {
+    type Error = serde_json::Error;
+
+    fn try_from(value: RawEtherAmount) -> Result<Self, Self::Error> {
+        let (scale, raw_value) = match value {
+            RawEtherAmount::Wei(val) => (0, val),
+            RawEtherAmount::Gwei(val) => (9, val),
+            RawEtherAmount::Ether(val) => (18, val),
+        };
+        let value = raw_value.scale(scale)?;
+        Ok(Self(value))
+    }
+}
+
+impl_deserialize_param!(EtherAmount, raw: RawEtherAmount, name: "amount", units: EtherUnits);
+impl_deserialize_opt_param!(EtherAmount => RawEtherAmount);
+impl_well_known_with_unit!(EtherAmount);
 
 #[cfg(test)]
 mod tests {
@@ -583,27 +670,39 @@ mod tests {
     #[test]
     fn parsing_time_string() {
         let duration: RawDuration = "10ms".parse().unwrap();
-        assert_eq!(duration, RawDuration::Millis(10));
+        assert_eq!(duration, RawDuration::Millis(10.into()));
         let duration: RawDuration = "50    seconds".parse().unwrap();
-        assert_eq!(duration, RawDuration::Seconds(50));
+        assert_eq!(duration, RawDuration::Seconds(50.into()));
         let duration: RawDuration = "40s".parse().unwrap();
-        assert_eq!(duration, RawDuration::Seconds(40));
+        assert_eq!(duration, RawDuration::Seconds(40.into()));
         let duration: RawDuration = "10 min".parse().unwrap();
-        assert_eq!(duration, RawDuration::Minutes(10));
+        assert_eq!(duration, RawDuration::Minutes(10.into()));
         let duration: RawDuration = "10m".parse().unwrap();
-        assert_eq!(duration, RawDuration::Minutes(10));
+        assert_eq!(duration, RawDuration::Minutes(10.into()));
         let duration: RawDuration = "12 hours".parse().unwrap();
-        assert_eq!(duration, RawDuration::Hours(12));
+        assert_eq!(duration, RawDuration::Hours(12.into()));
         let duration: RawDuration = "12h".parse().unwrap();
-        assert_eq!(duration, RawDuration::Hours(12));
+        assert_eq!(duration, RawDuration::Hours(12.into()));
         let duration: RawDuration = "30d".parse().unwrap();
-        assert_eq!(duration, RawDuration::Days(30));
+        assert_eq!(duration, RawDuration::Days(30.into()));
         let duration: RawDuration = "1 day".parse().unwrap();
-        assert_eq!(duration, RawDuration::Days(1));
+        assert_eq!(duration, RawDuration::Days(1.into()));
         let duration: RawDuration = "2 weeks".parse().unwrap();
-        assert_eq!(duration, RawDuration::Weeks(2));
+        assert_eq!(duration, RawDuration::Weeks(2.into()));
         let duration: RawDuration = "3w".parse().unwrap();
-        assert_eq!(duration, RawDuration::Weeks(3));
+        assert_eq!(duration, RawDuration::Weeks(3.into()));
+    }
+
+    #[test]
+    fn parsing_fractional_time_string() {
+        let duration: RawDuration = "10.0ms".parse().unwrap();
+        assert_eq!(duration, RawDuration::Millis(10.into()));
+        let duration: RawDuration = "0.2s".parse().unwrap();
+        assert_eq!(duration, RawDuration::Seconds(Decimal::new(2, -1)));
+        let duration: RawDuration = "0.33 days".parse().unwrap();
+        assert_eq!(duration, RawDuration::Days(Decimal::new(33, -2)));
+        let duration: RawDuration = "1.7e+3 hours".parse().unwrap();
+        assert_eq!(duration, RawDuration::Hours(Decimal::new(17, 2)));
     }
 
     #[test]
@@ -621,7 +720,7 @@ mod tests {
             .parse::<RawDuration>()
             .unwrap_err()
             .to_string();
-        assert!(err.contains("too large"), "{err}");
+        assert!(err.contains("too many digits"), "{err}");
 
         let err = "10 months".parse::<RawDuration>().unwrap_err().to_string();
         assert!(err.starts_with("unknown variant"), "{err}");
@@ -639,6 +738,38 @@ mod tests {
         assert_eq!(size, RawByteSize::Megabytes(4));
         let size: RawByteSize = "1 GB".parse().unwrap();
         assert_eq!(size, RawByteSize::Gigabytes(1));
+    }
+
+    #[test]
+    fn parsing_ether_amount_string() {
+        let amount: RawEtherAmount = "1wei".parse().unwrap();
+        assert_eq!(amount, RawEtherAmount::Wei(1.into()));
+        let amount: EtherAmount = amount.try_into().unwrap();
+        assert_eq!(amount, EtherAmount(1));
+
+        let amount: RawEtherAmount = "123 wei".parse().unwrap();
+        assert_eq!(amount, RawEtherAmount::Wei(123.into()));
+        let amount: EtherAmount = amount.try_into().unwrap();
+        assert_eq!(amount, EtherAmount(123));
+
+        let amount: RawEtherAmount = "1.5 gwei".parse().unwrap();
+        assert_eq!(amount, RawEtherAmount::Gwei(Decimal::new(15, -1)));
+        let amount: EtherAmount = amount.try_into().unwrap();
+        assert_eq!(amount, EtherAmount(1_500_000_000));
+
+        for input in [
+            "0.0015 ether",
+            "0.001_5ether",
+            "0.0015ether",
+            "1.5e-3 ether",
+            "15e-4ether",
+            ".015e-1 ether",
+        ] {
+            let amount: RawEtherAmount = input.parse().unwrap();
+            assert_eq!(amount, RawEtherAmount::Ether(Decimal::new(15, -4)));
+            let amount: EtherAmount = amount.try_into().unwrap();
+            assert_eq!(amount, EtherAmount(1_500_000_000_000_000));
+        }
     }
 
     #[test]

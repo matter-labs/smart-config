@@ -1,6 +1,6 @@
 ---
 source: crates/smart-config-commands/tests/integration/main.rs
-assertion_line: 124
+assertion_line: 153
 expression: buffer
 ---
 APP_APP_NAME: app
@@ -9,6 +9,7 @@ APP_DIR_PATHS__JSON: '["./local"]'
 APP_FUNDING_ADDRESS: '0x0000000000000000000000000000000000000000'
 APP_FUNDING_API_KEY: correct horse battery staple
 APP_FUNDING_BALANCE: '0x0'
+APP_FUNDING_MIN_FEE: 0 ether
 APP_FUNDING_SECRET_KEY: '0x0000000000000000000000000000000000000000000000000000000000000000'
 APP_NESTED_COMPLEX__JSON: '{"array":[3,5],"map":{"var":3}}'
 APP_NESTED_EXIT_ON_ERROR: true

@@ -1,12 +1,12 @@
 ---
 source: crates/smart-config-commands/tests/integration/main.rs
-assertion_line: 100
+assertion_line: 95
 expression: buffer
 ---
 Configuration sources:
 - fallbacks, 1 param(s)
 - JSON:/config/base.json -> prefixed with `test`, 4 param(s)
-- YAML:/config/test.yml, 11 param(s)
+- YAML:/config/test.yml, 12 param(s)
 - env, 5 param(s)
 - env, 9 param(s)
 
@@ -42,7 +42,7 @@ test.dir_paths [Rust: TestConfig.dir_paths]
 test.timeout_sec [Rust: TestConfig.timeout_sec]
   Raw: "what?"
   Origin: env:"BOGUS_TEST_TIMEOUT_SEC"
-  Error: invalid digit found in string while parsing u64 value 'what?'
+  Error: invalid value: string "what?", expected decimal fraction like 1.5
     at test.timeout_sec
     env:"BOGUS_TEST_TIMEOUT_SEC"
 test.cache_size [Rust: TestConfig.cache_size]
@@ -65,6 +65,9 @@ test.funding.address [Rust: FundingConfig.address]
 test.funding.balance [Rust: FundingConfig.balance]
   Raw: "0x123456"
   Origin: YAML:/config/test.yml -> .test.funding.balance
+test.funding.min_fee [Rust: FundingConfig.min_fee]
+  Raw: "12.5 gwei"
+  Origin: YAML:/config/test.yml -> .test.funding.min_fee
 test.funding.api_key [Rust: FundingConfig.api_key]
   Raw: [REDACTED]
   Origin: env:"APP_TEST_FUNDS_API_KEY"
