@@ -232,12 +232,11 @@ impl<'de> Deserializer<'de> for ValueDeserializer<'_> {
             _ => return Err(self.invalid_type("string or object with single key")),
         };
 
-        if self.options.coerce_variant_names {
-            if let Some(parsed) = EnumVariant::new(variant) {
-                if let Some(expected_variant) = parsed.try_match(variants) {
-                    variant = expected_variant;
-                }
-            }
+        if self.options.coerce_variant_names
+            && let Some(parsed) = EnumVariant::new(variant)
+            && let Some(expected_variant) = parsed.try_match(variants)
+        {
+            variant = expected_variant;
         }
 
         visitor

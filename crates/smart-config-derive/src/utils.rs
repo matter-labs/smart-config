@@ -690,12 +690,11 @@ impl ConfigContainer {
                         let new_field = ConfigField::new(field)?;
                         if let Some(prev_ty) =
                             merged_fields_by_name.insert(new_field.param_name(), &field.ty)
+                            && *prev_ty != new_field.ty
                         {
-                            if *prev_ty != new_field.ty {
-                                let msg = "Parameter with this name and another type is already defined in another enum variant; \
-                                    this may lead to unexpected config merge results and thus not supported";
-                                return Err(syn::Error::new_spanned(field, msg));
-                            }
+                            let msg = "Parameter with this name and another type is already defined in another enum variant; \
+                                this may lead to unexpected config merge results and thus not supported";
+                            return Err(syn::Error::new_spanned(field, msg));
                         }
                         variant_fields.push(new_field);
                     }

@@ -99,10 +99,10 @@ impl<'a> EnumVariant<'a> {
         for (pos, ch) in raw.bytes().enumerate() {
             match ch {
                 b'-' | b'_' => {
-                    if let Some(prev_sep) = sep {
-                        if prev_sep != ch {
-                            return None; // Inconsistent separator
-                        }
+                    if let Some(prev_sep) = sep
+                        && prev_sep != ch
+                    {
+                        return None; // Inconsistent separator
                     }
                     if word_start == pos {
                         // Two separators in a row

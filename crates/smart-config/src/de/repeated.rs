@@ -40,11 +40,11 @@ impl<De> Repeated<De> {
             return Err(deserializer.invalid_type("array"));
         };
 
-        if let Some(expected_len) = expected_len {
-            if items.len() != expected_len {
-                let err = DeError::invalid_length(items.len(), &expected_len.to_string().as_str());
-                return Err(deserializer.enrich_err(err));
-            }
+        if let Some(expected_len) = expected_len
+            && items.len() != expected_len
+        {
+            let err = DeError::invalid_length(items.len(), &expected_len.to_string().as_str());
+            return Err(deserializer.enrich_err(err));
         }
 
         let mut has_errors = false;

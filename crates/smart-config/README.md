@@ -2,7 +2,7 @@
 
 [![Build status](https://github.com/matter-labs/smart-config/actions/workflows/ci.yml/badge.svg)](https://github.com/matter-labs/smart-config/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%2FApache--2.0-blue)](https://github.com/matter-labs/smart-config#license)
-![rust 1.86+ required](https://img.shields.io/badge/rust-1.86+-blue.svg?label=Required%20Rust)
+![rust 1.88+ required](https://img.shields.io/badge/rust-1.88+-blue.svg?label=Required%20Rust)
 
 **Docs:**
 [![crate docs (main)](https://img.shields.io/badge/main-yellow.svg?label=docs)](https://matter-labs.github.io/smart-config/smart_config/)
