@@ -25,7 +25,7 @@ pub struct DeserializerOptions {
 
 impl WithOrigin {
     #[cold]
-    pub(super) fn invalid_type(&self, expected: &str) -> ErrorWithOrigin {
+    pub(crate) fn invalid_type(&self, expected: &str) -> ErrorWithOrigin {
         let actual = match &self.inner {
             Value::Null => de::Unexpected::Unit,
             Value::Bool(value) => de::Unexpected::Bool(*value),

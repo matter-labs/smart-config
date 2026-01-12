@@ -7,11 +7,12 @@ use std::{
 
 use assert_matches::assert_matches;
 use secrecy::ExposeSecret;
+use serde::de::Error;
 
 use super::*;
 use crate::{
-    ByteSize, DescribeConfig, SerializerOptions, de,
-    metadata::{AliasOptions, EtherUnit, SizeUnit},
+    ByteSize, DescribeConfig, ErrorWithOrigin, SerializerOptions, de,
+    metadata::{AliasOptions, EtherUnit, ParamMetadata, SizeUnit},
     testing,
     testing::MockEnvGuard,
     testonly::{
@@ -2107,4 +2108,49 @@ fn parsing_large_u128_value_from_json() {
         err_message.contains("enclosing the value into a string"),
         "{err_message}"
     );
+}
+
+#[test]
+fn using_delimited_with_custom_base() {
+    /// Toy deserializer that extracts length from a string.
+    #[derive(Debug)]
+    struct StrLen;
+
+    impl de::DeserializeParam<usize> for StrLen {
+        const EXPECTING: BasicTypes = BasicTypes::STRING;
+
+        fn deserialize_param(
+            &self,
+            ctx: DeserializeContext<'_>,
+            param: &'static ParamMetadata,
+        ) -> Result<usize, ErrorWithOrigin> {
+            let val = ctx
+                .current_value()
+                .ok_or_else(|| ErrorWithOrigin::missing_field(param.name))?;
+            let val = val
+                .inner
+                .as_plain_str()
+                .ok_or_else(|| val.invalid_type("string"))?;
+            Ok(val.len())
+        }
+
+        fn serialize_param(&self, &param: &usize) -> serde_json::Value {
+            "+".repeat(param).into()
+        }
+    }
+
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    struct TestConfig {
+        #[config(with = de::Delimited::repeat(StrLen, ":"))]
+        lengths: Vec<usize>,
+    }
+
+    let env = Environment::from_iter("", [("LENGTHS", "+++:++:+++++")]);
+    let config: TestConfig = testing::test_complete(env).unwrap();
+    assert_eq!(config.lengths, [3, 2, 5]);
+
+    let json = config!("lengths": ["+++", "++", "+++++"]);
+    let config: TestConfig = testing::test_complete(json).unwrap();
+    assert_eq!(config.lengths, [3, 2, 5]);
 }
