@@ -1,7 +1,7 @@
 //! **Important.** The generated snapshots are specific to stable Rust; nightly Rust provides better spanning for types
 //! (`Option<u64>` instead of `Option`).
 
-use std::{env, fmt};
+use std::fmt;
 
 use anstream::AutoStream;
 use smart_config::{
