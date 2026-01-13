@@ -446,13 +446,13 @@ impl DeserializeParam<Duration> for WithUnit {
             format!("{}ms", param.as_millis())
         } else {
             let seconds = param.as_secs();
-            if seconds % 60 != 0 {
+            if !seconds.is_multiple_of(60) {
                 format!("{seconds}s")
-            } else if seconds % 3_600 != 0 {
+            } else if !seconds.is_multiple_of(3_600) {
                 format!("{}min", seconds / 60)
-            } else if seconds % 86_400 != 0 {
+            } else if !seconds.is_multiple_of(86_400) {
                 format!("{}h", seconds / 3_600)
-            } else if seconds % (86_400 * 7) != 0 {
+            } else if !seconds.is_multiple_of(86_400 * 7) {
                 format!("{}d", seconds / 86_400)
             } else {
                 format!("{}w", seconds / (86_400 * 7))

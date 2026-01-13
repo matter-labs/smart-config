@@ -163,7 +163,7 @@ pub(crate) struct DefaultingConfig {
     #[config(default_t = Some("https://example.com/".into()))]
     #[config(deserialize_if(NotEmpty))]
     pub url: Option<String>,
-    #[config(default, with = de::Delimited(","))]
+    #[config(default, with = de::Delimited::new(","))]
     pub set: HashSet<SimpleEnum>,
 }
 
@@ -238,7 +238,7 @@ impl DeserializeParam<usize> for StringLen {
 pub(crate) struct ConfigWithComplexTypes {
     #[config(default_t = 4.2)]
     pub float: f32,
-    #[config(with = de::Delimited(","))]
+    #[config(with = de::Delimited::new(","))]
     pub array: [NonZeroUsize; 2],
     pub choices: Option<Vec<SimpleEnum>>,
     #[config(with = Serde![float])]
@@ -253,7 +253,7 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(default_t = Some(128 * SizeUnit::MiB))]
     pub memory_size_mb: Option<ByteSize>,
     pub disk_size: Option<ByteSize>,
-    #[config(default, with = de::Delimited(":"))]
+    #[config(default, with = de::Delimited::new(":"))]
     pub paths: Vec<PathBuf>,
     #[config(default, with = de::OrString(Serde![object]))]
     pub map_or_string: MapOrString,
@@ -276,7 +276,7 @@ pub(crate) struct ComposedConfig {
     pub arrays: HashSet<[u64; 2]>,
     #[config(default)]
     pub durations: Vec<Duration>,
-    #[config(default, with = de::Delimited(","))]
+    #[config(default, with = de::Delimited::new(","))]
     pub delimited_durations: Vec<Duration>,
     #[config(default)]
     pub map_of_sizes: HashMap<String, ByteSize>,
@@ -315,7 +315,7 @@ pub(crate) struct SecretConfig {
     /// We need to override the default deserializer to be able to read from string.
     #[config(default, secret, with = de::OrString(()))]
     pub int: u64,
-    #[config(default_t = vec![1], secret, with = de::Delimited(","))]
+    #[config(default_t = vec![1], secret, with = de::Delimited::new(","))]
     pub seq: Vec<u64>,
 }
 

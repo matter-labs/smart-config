@@ -39,7 +39,7 @@ pub(crate) struct TestConfig {
     #[config(default_t = "/tmp".into(), fallback = &fallback::Env("TMPDIR"))]
     pub temp_dir: PathBuf,
     /// Paths to key directories.
-    #[config(default, alias = "dirs", with = de::Delimited(":"))]
+    #[config(default, alias = "dirs", with = de::Delimited::new(":"))]
     #[config(example = HashSet::from_iter(["./local".into()]))]
     pub dir_paths: HashSet<PathBuf>,
     /// Timeout for some operation.
@@ -68,7 +68,7 @@ pub(crate) struct NestedConfig {
     /// Complex parameter deserialized from an object.
     #[config(default, example = ComplexParam::example())]
     pub complex: ComplexParam,
-    #[config(default, alias = "timeouts", with = de::Delimited(","))]
+    #[config(default, alias = "timeouts", with = de::Delimited::new(","))]
     #[config(example = vec![Duration::from_secs(5)])]
     pub more_timeouts: Vec<Duration>,
     /// Can be deserialized either from a map or an array of tuples.

@@ -390,10 +390,10 @@ impl TypeDescription {
         if self.is_secret {
             return true;
         }
-        if let Some(item) = &self.items {
-            if item.description.contains_secrets() {
-                return true;
-            }
+        if let Some(item) = &self.items
+            && item.description.contains_secrets()
+        {
+            return true;
         }
         if let Some((key, value)) = &self.entries {
             if key.description.contains_secrets() {

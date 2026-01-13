@@ -232,10 +232,10 @@ impl<'a> DeserializeContext<'a> {
         };
 
         let mut origin = err.origin;
-        if matches!(origin.as_ref(), ValueOrigin::Unknown) {
-            if let Some(val) = self.current_value() {
-                origin = val.origin.clone();
-            }
+        if matches!(origin.as_ref(), ValueOrigin::Unknown)
+            && let Some(val) = self.current_value()
+        {
+            origin = val.origin.clone();
         }
 
         self.errors.push(ParseError {
@@ -261,11 +261,11 @@ impl<'a> DeserializeContext<'a> {
         // should a config specified as a string override / be overridden atomically? (Probably not, but if so, it needs to be coerced to an object
         // before the merge, potentially recursively.)
 
-        if let Some(val) = self.current_value() {
-            if !matches!(&val.inner, Value::Object(_)) {
-                self.push_error(val.invalid_type("config object"));
-                return Err(DeserializeConfigError::new());
-            }
+        if let Some(val) = self.current_value()
+            && !matches!(&val.inner, Value::Object(_))
+        {
+            self.push_error(val.invalid_type("config object"));
+            return Err(DeserializeConfigError::new());
         }
         let config = (self.current_config.deserializer)(self.borrow())?;
 
@@ -344,10 +344,10 @@ impl DeserializeContext<'_> {
         default_fn: Option<fn() -> C>,
     ) -> Result<C, DeserializeConfigError> {
         let child_ctx = self.for_nested_config(index);
-        if child_ctx.current_value().is_none() {
-            if let Some(default) = default_fn {
-                return Ok(default());
-            }
+        if child_ctx.current_value().is_none()
+            && let Some(default) = default_fn
+        {
+            return Ok(default());
         }
         child_ctx.deserialize_config()
     }

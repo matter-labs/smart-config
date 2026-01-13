@@ -483,7 +483,7 @@ impl Decimal {
             return self;
         }
 
-        while self.mantissa % 10 == 0 {
+        while self.mantissa.is_multiple_of(10) {
             self.exponent += 1;
             self.mantissa /= 10;
         }
@@ -899,7 +899,7 @@ mod prop_tests {
         fn decimal_from_f64_yaml((s, expected) in f64_string(15)) {
             let val: Decimal = serde_yaml::from_str(&s).unwrap();
             prop_assert_eq!(val, expected);
-            prop_assert!(val.exponent == 0 || val.mantissa % 10 != 0);
+            prop_assert!(val.exponent == 0 || !val.mantissa.is_multiple_of(10));
             test_decimal_str_roundtrip(val)?;
         }
 
@@ -908,7 +908,7 @@ mod prop_tests {
         fn decimal_from_small_f64_yaml((s, expected) in f64_scientific_string(15, 290)) {
             let val: Decimal = serde_yaml::from_str(&s).unwrap();
             prop_assert_eq!(val, expected);
-            prop_assert!(val.exponent == 0 || val.mantissa % 10 != 0);
+            prop_assert!(val.exponent == 0 || !val.mantissa.is_multiple_of(10));
             test_decimal_str_roundtrip(val)?;
         }
 
@@ -916,7 +916,7 @@ mod prop_tests {
         fn decimal_from_string_yaml((s, expected) in f64_string(15)) {
             let val: Decimal = serde_yaml::from_str(&format!("{s:?}")).unwrap();
             prop_assert_eq!(val, expected);
-            prop_assert!(val.exponent == 0 || val.mantissa % 10 != 0);
+            prop_assert!(val.exponent == 0 || !val.mantissa.is_multiple_of(10));
             test_decimal_str_roundtrip(val)?;
         }
 

@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use serde::de::{DeserializeOwned, Error as DeError};
+use serde::de::Error as DeError;
 
 use crate::{
     de::{DeserializeContext, DeserializeParam, WellKnown, WellKnownOption},
@@ -40,11 +40,11 @@ impl<De> Repeated<De> {
             return Err(deserializer.invalid_type("array"));
         };
 
-        if let Some(expected_len) = expected_len {
-            if items.len() != expected_len {
-                let err = DeError::invalid_length(items.len(), &expected_len.to_string().as_str());
-                return Err(deserializer.enrich_err(err));
-            }
+        if let Some(expected_len) = expected_len
+            && items.len() != expected_len
+        {
+            let err = DeError::invalid_length(items.len(), &expected_len.to_string().as_str());
+            return Err(deserializer.enrich_err(err));
         }
 
         let mut has_errors = false;
@@ -462,13 +462,15 @@ where
 ///
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct TestConfig {
-///     #[config(default, with = de::Delimited(","))]
+///     #[config(default, with = de::Delimited::new(","))]
 ///     strings: Vec<String>,
-///     // More complex types are supported as well
-///     #[config(with = de::Delimited(":"))]
+///     // More complex types are supported as well (along with custom base deserializers).
+///     // Importantly, the base deserializer still refers to the entire collection, not its items,
+///     // so you should use something like `Repeated`, or use the `repeat()` constructor.
+///     #[config(with = de::Delimited::repeat(de::Serde![str], ":"))]
 ///     paths: Vec<PathBuf>,
 ///     // ...and more complex collections (here together with string -> number coercion)
-///     #[config(with = de::Delimited(";"))]
+///     #[config(with = de::Delimited::new(";"))]
 ///     ints: HashSet<u64>,
 /// }
 ///
@@ -495,16 +497,30 @@ where
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct Fail {
 ///     // will fail with "evaluation of `<Delimited as DeserializeParam<u64>>::EXPECTING` failed"
-///     #[config(default, with = de::Delimited(","))]
+///     #[config(default, with = de::Delimited::new(","))]
 ///     test: u64,
 /// }
 /// ```
 #[derive(Debug)]
-pub struct Delimited(pub &'static str);
+pub struct Delimited<De = ()>(pub De, pub &'static str);
 
-impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
+impl Delimited {
+    /// Creates a new deserializer that can be used for [`WellKnown`] collections.
+    pub const fn new(sep: &'static str) -> Self {
+        Self((), sep)
+    }
+}
+
+impl<De> Delimited<Repeated<De>> {
+    /// Shortcut to wrap a [`Repeated`] deserializer.
+    pub const fn repeat(item_de: De, sep: &'static str) -> Self {
+        Self(Repeated(item_de), sep)
+    }
+}
+
+impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Delimited<De> {
     const EXPECTING: BasicTypes = {
-        let base = <T::Deserializer as DeserializeParam<T>>::EXPECTING;
+        let base = <De as DeserializeParam<T>>::EXPECTING;
         assert!(
             base.contains(BasicTypes::ARRAY),
             "can only apply `Delimited` to types that support deserialization from array"
@@ -513,11 +529,11 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
     };
 
     fn describe(&self, description: &mut TypeDescription) {
-        T::DE.describe(description);
+        self.0.describe(description);
         let details = if let Some(details) = description.details() {
-            format!("{details}; using {:?} delimiter", self.0)
+            format!("{details}; using {:?} delimiter", self.1)
         } else {
-            format!("using {:?} delimiter", self.0)
+            format!("using {:?} delimiter", self.1)
         };
         description.set_details(details);
     }
@@ -532,14 +548,14 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
             origin,
         }) = ctx.current_value()
         else {
-            return T::DE.deserialize_param(ctx, param);
+            return self.0.deserialize_param(ctx, param);
         };
 
         let array_origin = Arc::new(ValueOrigin::Synthetic {
             source: origin.clone(),
-            transform: format!("{:?}-delimited string", self.0),
+            transform: format!("{:?}-delimited string", self.1),
         });
-        let array_items = s.expose().split(self.0).enumerate().map(|(i, part)| {
+        let array_items = s.expose().split(self.1).enumerate().map(|(i, part)| {
             let item_origin = ValueOrigin::Path {
                 source: array_origin.clone(),
                 path: i.to_string(),
@@ -552,11 +568,11 @@ impl<T: DeserializeOwned + WellKnown> DeserializeParam<T> for Delimited {
             WithOrigin::new(Value::String(part), Arc::new(item_origin))
         });
         let array = WithOrigin::new(Value::Array(array_items.collect()), array_origin);
-        T::DE.deserialize_param(ctx.patched(&array), param)
+        self.0.deserialize_param(ctx.patched(&array), param)
     }
 
     fn serialize_param(&self, param: &T) -> serde_json::Value {
-        T::DE.serialize_param(param)
+        self.0.serialize_param(param)
     }
 }
 

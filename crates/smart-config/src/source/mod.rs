@@ -745,15 +745,15 @@ impl WithOrigin {
         for map in canonical_map.into_iter().chain(alias_maps) {
             for (candidate_field_name, variant) in all_variant_names.clone() {
                 if map.contains_key(&candidate_field_name) {
-                    if let Some((_, prev_field, _)) = &variant_match {
-                        if *prev_field != candidate_field_name {
-                            tracing::info!(
-                                prev_field,
-                                field = candidate_field_name,
-                                "multiple serde-like variant fields present"
-                            );
-                            return None;
-                        }
+                    if let Some((_, prev_field, _)) = &variant_match
+                        && *prev_field != candidate_field_name
+                    {
+                        tracing::info!(
+                            prev_field,
+                            field = candidate_field_name,
+                            "multiple serde-like variant fields present"
+                        );
+                        return None;
                     }
                     variant_match = Some((map, candidate_field_name, variant));
                 }
@@ -856,10 +856,10 @@ impl WithOrigin {
                         if !suffixes.contains(suffix) {
                             return None;
                         }
-                        if let Some(param_object) = target_object {
-                            if param_object.contains_key(suffix) {
-                                return None; // Never overwrite existing fields
-                            }
+                        if let Some(param_object) = target_object
+                            && param_object.contains_key(suffix)
+                        {
+                            return None; // Never overwrite existing fields
                         }
                         Some((suffix.to_owned(), field.clone()))
                     })
