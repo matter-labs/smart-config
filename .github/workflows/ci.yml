@@ -93,15 +93,15 @@ jobs:
         run: cargo build --workspace --lib --all-features
 
       - name: Build docs
-        if: github.event_name == 'push' && github.ref_type == 'branch'
         run: |
           cargo clean --doc && \
-          cargo rustdoc -p smart-config-derive --all-features -- -Z unstable-options --enable-index-page && \
-          cargo rustdoc -p smart-config --all-features -- -Z unstable-options --enable-index-page --cfg docsrs && \
-          cargo rustdoc -p smart-config-commands --all-features -- -Z unstable-options --enable-index-page
+          cargo rustdoc -p smart-config-derive --all-features -- -D warnings -Z unstable-options --enable-index-page && \
+          cargo rustdoc -p smart-config --all-features -- -D warnings -Z unstable-options --enable-index-page --cfg docsrs && \
+          cargo rustdoc -p smart-config-commands --all-features -- -D warnings -Z unstable-options --enable-index-page
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
+        if: github.event_name == 'push' && github.ref_type == 'branch'
         with:
           branch: gh-pages
           folder: target/doc
