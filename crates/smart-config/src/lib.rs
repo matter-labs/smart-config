@@ -133,7 +133,7 @@
 //! ```
 
 // Documentation settings
-#![doc(html_root_url = "https://docs.rs/smart-config/0.4.0-pre.1")] // x-release-please-version
+#![doc(html_root_url = "https://docs.rs/smart-config/0.4.0-pre.2")] // x-release-please-version
 #![cfg_attr(docsrs, feature(doc_cfg))]
 // Linter settings
 #![warn(missing_docs)]
