@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Command-line extensions for `smart-config` library."><title>smart_config_commands - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0ce1a80b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="smart_config_commands" data-themes="" data-resource-suffix="" data-rustdoc-version="1.89.0-nightly (2eef47813 2025-05-22)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../static.files/storage-4e99c027.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-fd3af306.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../smart_config_commands/index.html">smart_<wbr>config_<wbr>commands</a><span class="version">0.4.0-pre.2</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#printing-help" title="Printing help">Printing help</a></li><li><a href="#debugging-param-values" title="Debugging param values">Debugging param values</a></li></ul></li></ul><h3><a href="#structs">Crate Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>smart_config_commands</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/smart_config_commands/lib.rs.html#1-149">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Command-line extensions for <code>smart-config</code> library.</p>
+<p>The extensions are as follows:</p>
+<ul>
+<li><a href="struct.Printer.html#method.print_help" title="method smart_config_commands::Printer::print_help">Printing help</a> for configuration params with optional filtering.</li>
+<li><a href="struct.Printer.html#method.print_debug" title="method smart_config_commands::Printer::print_debug">Debugging</a> param values and deserialization errors.</li>
+</ul>
+<p>All extensions are encapsulated in <a href="struct.Printer.html" title="struct smart_config_commands::Printer"><code>Printer</code></a>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>See the crate readme or the <code>examples</code> dir for captured output samples.</p>
+<h3 id="printing-help"><a class="doc-anchor" href="#printing-help">§</a>Printing help</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>smart_config::ConfigSchema;
+<span class="kw">use </span>smart_config_commands::Printer;
+
+<span class="kw">let </span><span class="kw-2">mut </span>schema = ConfigSchema::default();
+<span class="comment">// Add configurations to the schema...
+
+</span>Printer::stderr().print_help(<span class="kw-2">&amp;</span>schema, |<span class="kw">_</span>| <span class="bool-val">true</span>)<span class="question-mark">?</span>;</code></pre></div>
+<h3 id="debugging-param-values"><a class="doc-anchor" href="#debugging-param-values">§</a>Debugging param values</h3>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>smart_config::{ConfigSchema, ConfigRepository};
+<span class="kw">use </span>smart_config_commands::Printer;
+
+<span class="kw">let </span><span class="kw-2">mut </span>schema = ConfigSchema::default();
+<span class="comment">// Add configurations to the schema...
+</span><span class="kw">let </span><span class="kw-2">mut </span>repo = ConfigRepository::new(<span class="kw-2">&amp;</span>schema);
+<span class="comment">// Add sources to the repository...
+
+</span>Printer::stderr().print_debug(<span class="kw-2">&amp;</span>repo, |param_ref| {
+    <span class="comment">// Allows filtering output params
+    </span>param_ref.canonical_path().starts_with(<span class="string">"test."</span>)
+})<span class="question-mark">?</span>;</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ParamRef.html" title="struct smart_config_commands::ParamRef">Param<wbr>Ref</a></dt><dd>Reference to a parameter on a configuration.</dd><dt><a class="struct" href="struct.Printer.html" title="struct smart_config_commands::Printer">Printer</a></dt><dd>Wrapper around an I/O writer. Will style the output with ANSI sequences if appropriate.</dd></dl></section></div></main></body></html>

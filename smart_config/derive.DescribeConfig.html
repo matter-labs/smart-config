@@ -1,0 +1,156 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derives the `DescribeConfig` trait for a type."><title>DescribeConfig in smart_config - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0ce1a80b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="smart_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.89.0-nightly (2eef47813 2025-05-22)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../static.files/storage-4e99c027.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-fd3af306.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../smart_config/index.html">smart_<wbr>config</a><span class="version">0.4.0-pre.2</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Describe<wbr>Config</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#container-attributes" title="Container attributes">Container attributes</a><ul><li><a href="#validate" title="`validate`"><code>validate</code></a></li><li><a href="#tag" title="`tag`"><code>tag</code></a></li><li><a href="#rename_all" title="`rename_all`"><code>rename_all</code></a></li><li><a href="#derivedefault" title="`derive(Default)`"><code>derive(Default)</code></a></li></ul></li><li><a href="#variant-attributes" title="Variant attributes">Variant attributes</a><ul><li><a href="#rename-alias" title="`rename`, `alias`"><code>rename</code>, <code>alias</code></a></li><li><a href="#default" title="`default`"><code>default</code></a></li></ul></li><li><a href="#field-attributes" title="Field attributes">Field attributes</a><ul><li><a href="#rename-alias-1" title="`rename`, `alias`"><code>rename</code>, <code>alias</code></a></li><li><a href="#deprecated" title="`deprecated`"><code>deprecated</code></a></li><li><a href="#default-1" title="`default`"><code>default</code></a></li><li><a href="#default_t" title="`default_t`"><code>default_t</code></a></li><li><a href="#example" title="`example`"><code>example</code></a></li><li><a href="#fallback" title="`fallback`"><code>fallback</code></a></li><li><a href="#with" title="`with`"><code>with</code></a></li><li><a href="#nest" title="`nest`"><code>nest</code></a></li><li><a href="#flatten" title="`flatten`"><code>flatten</code></a></li><li><a href="#validate-1" title="`validate`"><code>validate</code></a></li><li><a href="#deserialize_if" title="`deserialize_if`"><code>deserialize_if</code></a></li></ul></li><li><a href="#validations" title="Validations">Validations</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate smart_<wbr>config</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">smart_config</a></div><h1>Derive Macro <span class="derive">DescribeConfig</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/smart_config_derive/lib.rs.html#21">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(DescribeConfig)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[config]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Derives the <a href="trait.DescribeConfig.html" title="trait smart_config::DescribeConfig"><code>DescribeConfig</code></a> trait for a type.</p>
+<p>This macro supports both structs and enums. It is conceptually similar to <code>Deserialize</code> macro from <code>serde</code>.
+Macro behavior can be configured with <code>#[config(_)]</code> attributes. Multiple <code>#[config(_)]</code> attributes
+on a single item are supported.</p>
+<p>Each field in the struct / each enum variant is considered a configuration param (by default),
+or a sub-config (if <code>#[config(nest)]</code> or <code>#[config(flatten)]</code> is present for the field).</p>
+<h2 id="container-attributes"><a class="doc-anchor" href="#container-attributes">§</a>Container attributes</h2><h3 id="validate"><a class="doc-anchor" href="#validate">§</a><code>validate</code></h3>
+<p><strong>Type:</strong> One of the following:</p>
+<ul>
+<li>Expression evaluating to a <a href="validation/trait.Validate.html" title="trait smart_config::validation::Validate"><code>Validate</code></a> implementation (e.g., a <a href="https://doc.rust-lang.org/nightly/core/ops/range/struct.Range.html" title="struct core::ops::range::Range"><code>Range</code></a>; see the <code>Validate</code> docs
+for implementations). An optional human-readable string validation description may be provided delimited by the comma (e.g., to make the description
+more domain-specific).</li>
+<li>Pointer to a function with the <code>fn(&amp;_) -&gt; Result&lt;(), ErrorWithOrigin&gt;</code> signature and the validation description separated by a comma.</li>
+<li>Pointer to a function with the <code>fn(&amp;_) -&gt; bool</code> signature and the validation description separated by a comma. Validation fails
+if the function returns <code>false</code>.</li>
+</ul>
+<p>See the examples in the <a href="validation/index.html" title="mod smart_config::validation"><code>validation</code></a> module.</p>
+<p>Specifies a post-deserialization validation for the config. This is useful to check invariants involving multiple params.
+Multiple validations are supported by specifying the attribute multiple times.</p>
+<h3 id="tag"><a class="doc-anchor" href="#tag">§</a><code>tag</code></h3>
+<p><strong>Type:</strong> string</p>
+<p>Specifies the param name holding the enum tag, similar to the corresponding attribute in <code>serde</code>.
+Unlike <code>serde</code>, this attribute is <em>required</em> for enums; this is to ensure that source merging is well-defined.</p>
+<h3 id="rename_all"><a class="doc-anchor" href="#rename_all">§</a><code>rename_all</code></h3>
+<p><strong>Type:</strong> string; one of <code>lowercase</code>, <code>UPPERCASE</code>, <code>camelCase</code>, <code>snake_case</code>, <code>SCREAMING_SNAKE_CASE</code>,
+<code>kebab-case</code>, <code>SCREAMING-KEBAB-CASE</code></p>
+<p>Renames all variants in an enum config according to the provided transform. Unlike in <code>serde</code>, this attribute
+<em>only</em> works on enum variants. Params / sub-configs are always expected to have <code>snake_case</code> naming.</p>
+<p>Caveats:</p>
+<ul>
+<li><code>rename_all</code> assumes that original variant names are in <code>PascalCase</code> (i.e., follow Rust naming conventions).</li>
+<li><code>rename_all</code> requires original variant names to consist of ASCII chars.</li>
+<li>Each letter of capitalized acronyms (e.g., “HTTP” in <code>HTTPServer</code>) is treated as a separate word.
+E.g., <code>rename_all = "snake_case"</code> will rename <code>HTTPServer</code> to <code>h_t_t_p_server</code>.
+Note that <a href="https://rust-lang.github.io/rust-clippy/master/index.html#/upper_case_acronyms">it is recommended</a> to not capitalize acronyms (i.e., use <code>HttpServer</code>).</li>
+<li>No spacing is inserted before numbers or other non-letter chars. E.g., <code>rename_all = "snake_case"</code>
+will rename <code>Status500</code> to <code>status500</code>, not to <code>status_500</code>.</li>
+</ul>
+<h3 id="derivedefault"><a class="doc-anchor" href="#derivedefault">§</a><code>derive(Default)</code></h3>
+<p>Derives <code>Default</code> according to the default values of params (+ the default variant for enum configs).
+To work, all params must have a default value specified.</p>
+<h2 id="variant-attributes"><a class="doc-anchor" href="#variant-attributes">§</a>Variant attributes</h2><h3 id="rename-alias"><a class="doc-anchor" href="#rename-alias">§</a><code>rename</code>, <code>alias</code></h3>
+<p><strong>Type:</strong> string</p>
+<p>Have the same meaning as in <code>serde</code>; i.e. allow to rename / specify additional names for the tag(s)
+corresponding to the variant. <code>alias</code> can be specified multiple times.</p>
+<h3 id="default"><a class="doc-anchor" href="#default">§</a><code>default</code></h3>
+<p>If specified, marks the variant as default – one which will be used if the tag param is not set in the input.
+At most one variant can be marked as default.</p>
+<h2 id="field-attributes"><a class="doc-anchor" href="#field-attributes">§</a>Field attributes</h2><h3 id="rename-alias-1"><a class="doc-anchor" href="#rename-alias-1">§</a><code>rename</code>, <code>alias</code></h3>
+<p><strong>Type:</strong> string</p>
+<p>Have the same meaning as in <code>serde</code>; i.e. allow to rename / specify additional names for the param or a nested config.
+Names are <a href="#validations">validated</a> in compile time.</p>
+<p>In addition to simple names, <em>path</em> aliases are supported as well. A path alias starts with <code>.</code> and consists of dot-separated segments,
+e.g. <code>.experimental.value</code> or <code>..value</code>. The paths are resolved relative to the config prefix. As in Python, more than one dot
+at the start of the path signals that the path is relative to the parent(s) of the config.</p>
+<ul>
+<li><code>alias = ".experimental.value"</code> with config prefix <code>test</code> resolves to the absolute path <code>test.experimental.value</code>.</li>
+<li><code>alias = "..value"</code> with config prefix <code>test.experimental</code> resolves to the absolute path <code>test.value</code>.</li>
+</ul>
+<p>If an alias requires more parents than is present in the config prefix, the alias is not applicable.
+(E.g., <code>alias = "...value"</code> with config prefix <code>test</code>.)</p>
+<p>Path aliases are somewhat difficult to reason about, so avoid using them unless necessary.</p>
+<h3 id="deprecated"><a class="doc-anchor" href="#deprecated">§</a><code>deprecated</code></h3>
+<p><strong>Type:</strong> string</p>
+<p>Similar to <code>alias</code>, with the difference that the alias is marked as deprecated in the schema docs,
+and its usages are logged on the <code>WARN</code> level.</p>
+<h3 id="default-1"><a class="doc-anchor" href="#default-1">§</a><code>default</code></h3>
+<p><strong>Type:</strong> path to function (optional)</p>
+<p>Has the same meaning as in <code>serde</code>, i.e. allows to specify a constructor of the default value for the param.
+Without a value, <a href="https://doc.rust-lang.org/nightly/core/default/trait.Default.html" title="trait core::default::Default"><code>Default</code></a> is used for this purpose. Unlike <code>serde</code>, the path shouldn’t be quoted.</p>
+<h3 id="default_t"><a class="doc-anchor" href="#default_t">§</a><code>default_t</code></h3>
+<p><strong>Type:</strong> expression with param type</p>
+<p>Allows to specify the default typed value for the param. The provided expression doesn’t need to be constant.</p>
+<h3 id="example"><a class="doc-anchor" href="#example">§</a><code>example</code></h3>
+<p><strong>Type:</strong> expression with field type</p>
+<p>Allows to specify the example value for the param. The example value can be specified together with the <code>default</code> / <code>default_t</code>
+attribute. In this case, the example value can be more “complex” than the default, to better illustrate how the configuration works.</p>
+<h3 id="fallback"><a class="doc-anchor" href="#fallback">§</a><code>fallback</code></h3>
+<p><strong>Type:</strong> constant expression evaluating to <code>&amp;'static dyn </code><a href="fallback/trait.FallbackSource.html" title="trait smart_config::fallback::FallbackSource"><code>FallbackSource</code></a></p>
+<p>Allows to provide a fallback source for the param. See the <a href="fallback/index.html" title="mod smart_config::fallback"><code>fallback</code></a> module docs for the discussion of fallbacks
+and intended use cases.</p>
+<h3 id="with"><a class="doc-anchor" href="#with">§</a><code>with</code></h3>
+<p><strong>Type:</strong> const expression implementing <a href="de/trait.DeserializeParam.html" title="trait smart_config::de::DeserializeParam"><code>DeserializeParam</code></a></p>
+<p>Allows changing the param deserializer. See <a href="de/index.html" title="mod smart_config::de"><code>de</code></a> module docs for the overview of available deserializers.
+For <code>Option</code>s, <code>with</code> refers to the <em>internal</em> type deserializer; it will be wrapped into an <a href="de/struct.Optional.html" title="struct smart_config::de::Optional"><code>Optional</code></a> automatically.</p>
+<p>Note that there is an alternative: implementing <a href="de/trait.WellKnown.html" title="trait smart_config::de::WellKnown"><code>WellKnown</code></a> for the param type.</p>
+<h3 id="nest"><a class="doc-anchor" href="#nest">§</a><code>nest</code></h3>
+<p>If specified, the field is treated as a nested sub-config rather than a param. Correspondingly, its type must
+implement <code>DescribeConfig</code>, or wrap such a type in an <code>Option</code>.</p>
+<h3 id="flatten"><a class="doc-anchor" href="#flatten">§</a><code>flatten</code></h3>
+<p>If specified, the field is treated as a <em>flattened</em> sub-config rather than a param. Unlike <code>nest</code>, its params
+will be added to the containing config instead of a separate object. The sub-config type must implement <code>DescribeConfig</code>.</p>
+<h3 id="validate-1"><a class="doc-anchor" href="#validate-1">§</a><code>validate</code></h3>
+<p>Has same semantics as <a href="#validate">config validations</a>, but applies to a specific config parameter.</p>
+<h3 id="deserialize_if"><a class="doc-anchor" href="#deserialize_if">§</a><code>deserialize_if</code></h3>
+<p><strong>Type:</strong> same as <a href="#validate">config validations</a></p>
+<p>Filters an <code>Option</code>al value. This is useful to coerce semantically invalid values (e.g., empty strings for URLs)
+to <code>None</code> in the case <a href="de/struct.Optional.html#encoding-nulls" title="struct smart_config::de::Optional">automated null coercion</a> doesn’t apply.
+See the <a href="validation/index.html" title="mod smart_config::validation"><code>validation</code></a> module for examples of usage.</p>
+<h2 id="validations"><a class="doc-anchor" href="#validations">§</a>Validations</h2>
+<p>The following validations are performed by the macro in compile time:</p>
+<ul>
+<li>Param / sub-config names and aliases must be non-empty, consist of lowercase ASCII alphanumeric chars or underscore
+and not start with a digit (i.e., follow the <code>[a-z_][a-z0-9_]*</code> regex).</li>
+<li>Param names / aliases cannot coincide with nested config names.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>smart_config::metadata::TimeUnit;
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+</span><span class="kw">struct </span>TestConfig {
+    <span class="doccomment">/// Doc comments are parsed as a description.
+    </span><span class="attr">#[config(default_t = <span class="number">3</span>)]
+    </span>int: u32,
+    <span class="attr">#[config(default)] </span><span class="comment">// multiple `config` attrs are supported
+    </span><span class="attr">#[config(rename = <span class="string">"str"</span>, alias = <span class="string">"string"</span>)]
+    </span>renamed: String,
+    <span class="doccomment">/// Nested sub-config. E.g., the tag will be read from path `nested.version`.
+    </span><span class="attr">#[config(nest)]
+    </span>nested: NestedConfig,
+    <span class="doccomment">/// Flattened sub-config. E.g., `array` param will be read from `array`, not `flat.array`.
+    </span><span class="attr">#[config(flatten)]
+    </span>flat: FlattenedConfig,
+}
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+#[config(tag = <span class="string">"version"</span>, rename_all = <span class="string">"snake_case"</span>, derive(Default))]
+</span><span class="kw">enum </span>NestedConfig {
+    <span class="attr">#[config(default)]
+    </span>V0,
+    <span class="attr">#[config(alias = <span class="string">"latest"</span>)]
+    </span>V1 {
+        <span class="doccomment">/// Param with a custom deserializer. In this case, it will deserialize
+        /// a duration from a number with milliseconds unit of measurement.
+        </span><span class="attr">#[config(default_t = Duration::from_millis(<span class="number">50</span>), with = TimeUnit::Millis)]
+        </span>latency_ms: Duration,
+        <span class="doccomment">/// `Vec`s, sets and other containers are supported out of the box.
+        </span>set: HashSet&lt;NonZeroUsize&gt;,
+    },
+}
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+</span><span class="kw">struct </span>FlattenedConfig {
+    <span class="attr">#[config(default = FlattenedConfig::default_array)]
+    </span>array: [f32; <span class="number">2</span>],
+}
+
+<span class="kw">impl </span>FlattenedConfig {
+    <span class="kw">const fn </span>default_array() -&gt; [f32; <span class="number">2</span>] { [<span class="number">1.0</span>, <span class="number">2.0</span>] }
+}</code></pre></div>
+</div></details></section></div></main></body></html>

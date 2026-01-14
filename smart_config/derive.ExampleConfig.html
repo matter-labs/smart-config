@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derives the `ExampleConfig` trait for a type."><title>ExampleConfig in smart_config - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-0ce1a80b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="smart_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.89.0-nightly (2eef47813 2025-05-22)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../static.files/storage-4e99c027.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-fd3af306.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../smart_config/index.html">smart_<wbr>config</a><span class="version">0.4.0-pre.2</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Example<wbr>Config</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate smart_<wbr>config</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">smart_config</a></div><h1>Derive Macro <span class="derive">ExampleConfig</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/smart_config_derive/lib.rs.html#26">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(ExampleConfig)]
+{
+    <span class="comment">// Attributes available to this derive:</span>
+    #[config]
+}
+</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Derives the <a href="trait.ExampleConfig.html" title="trait smart_config::ExampleConfig"><code>ExampleConfig</code></a> trait for a type.</p>
+<p>This macro is intended to be used together with <a href="derive.DescribeConfig.html" title="derive smart_config::DescribeConfig"><code>DescribeConfig</code></a>; it reuses
+the same attributes. Specifically, for each config field, the default value is assigned from the following sources
+in the decreasing priority order:</p>
+<ol>
+<li><code>example</code></li>
+<li><code>default</code> / <code>default_t</code>, including implied ones for <code>Option</code>al fields</li>
+<li>From <a href="trait.ExampleConfig.html" title="trait smart_config::ExampleConfig"><code>ExampleConfig</code></a> implementation (only for nested / flattened configs)</li>
+</ol>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(DescribeConfig, ExampleConfig)]
+</span><span class="kw">struct </span>TestConfig {
+    <span class="doccomment">/// Required param that still has an example value.
+    </span><span class="attr">#[config(example = <span class="number">42</span>)]
+    </span>required: u32,
+    optional: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="attr">#[config(default_t = <span class="bool-val">true</span>)]
+    </span>with_default: bool,
+    <span class="attr">#[config(default, example = <span class="macro">vec!</span>[<span class="number">5</span>, <span class="number">8</span>]</span>)]
+    values: Vec&lt;u32&gt;,
+    <span class="attr">#[config(nest)]
+    </span>nested: NestedConfig,
+}
+
+<span class="attr">#[derive(DescribeConfig, ExampleConfig)]
+</span><span class="kw">struct </span>NestedConfig {
+    <span class="attr">#[config(default, example = [<span class="string">"eth_call"</span>.into()]</span>.into())]
+    methods: HashSet&lt;String&gt;,
+}
+
+<span class="kw">let </span>example: TestConfig = TestConfig::example_config();
+<span class="kw">let </span>json = SerializerOptions::default().serialize(<span class="kw-2">&amp;</span>example);
+<span class="macro">assert_eq!</span>(
+    serde_json::Value::from(json),
+    <span class="macro">serde_json::json!</span>({
+        <span class="string">"required"</span>: <span class="number">42</span>,
+        <span class="string">"optional"</span>: null,
+        <span class="string">"with_default"</span>: <span class="bool-val">true</span>,
+        <span class="string">"values"</span>: [<span class="number">5</span>, <span class="number">8</span>],
+        <span class="string">"nested"</span>: {
+            <span class="string">"methods"</span>: [<span class="string">"eth_call"</span>],
+        },
+    })
+);</code></pre></div>
+</div></details></section></div></main></body></html>
