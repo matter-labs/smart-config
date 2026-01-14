@@ -4,7 +4,7 @@
 //! and the examples of usage.
 
 // Documentation settings
-#![doc(html_root_url = "https://docs.rs/smart-config-derive/0.4.0-pre.1")] // x-release-please-version
+#![doc(html_root_url = "https://docs.rs/smart-config-derive/0.4.0-pre.2")] // x-release-please-version
 // General settings
 #![recursion_limit = "128"]
 

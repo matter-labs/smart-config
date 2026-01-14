@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0-pre.2](https://github.com/matter-labs/smart-config/compare/v0.4.0-pre.1...v0.4.0-pre.2) (2026-01-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* Composable `Delimited` deserializer ([#47](https://github.com/matter-labs/smart-config/issues/47))
+
+### Features
+
+* Composable `Delimited` deserializer ([#47](https://github.com/matter-labs/smart-config/issues/47)) ([76852cb](https://github.com/matter-labs/smart-config/commit/76852cb602e7c7654e71940faef0da8f905fd1b6))
+
 ## [0.4.0-pre.1](https://github.com/matter-labs/smart-config/compare/v0.4.0-pre...v0.4.0-pre.1) (2025-12-02)
 
 
