@@ -253,7 +253,7 @@ where
     ///
     /// # Panics
     ///
-    ///  Will panic if either `keys_name` or `values_name` is empty OR they coincide
+    ///  Will panic if either `keys_name` or `values_name` is empty OR they coincide.
     pub const fn named(
         self,
         keys_name: &'static str,
@@ -273,9 +273,11 @@ where
         }
     }
 
+    /// Converts this to a [`DelimitedEntries`] instance.
+    ///
     /// # Panics
     ///
-    /// FIXME
+    /// Will panic if `entry_sep` or `key_value_sep` are empty OR if they coincide.
     pub const fn delimited(
         self,
         entry_sep: &'static str,
@@ -285,7 +287,7 @@ where
         assert!(!key_value_sep.is_empty());
         assert!(
             !const_eq(entry_sep.as_bytes(), key_value_sep.as_bytes()),
-            "separators must differ"
+            "Entry and key–value separators must differ"
         );
 
         DelimitedEntries {
@@ -816,6 +818,33 @@ where
     }
 }
 
+/// Delimited variant of [`Entries`] that can deserialize a map from a delimited string
+/// (with addition to the conventional object deserialization).
+/// Can be constructed using [`Entries::delimited()`].
+///
+/// `DelimitedEntries` are characterized by 2 separators: one between entries, and another between
+/// key and value.
+///
+/// # Examples
+///
+/// ```
+/// # use std::collections::HashMap;
+/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(with = de::Entries::WELL_KNOWN.delimited(",", "="))]
+///     map: HashMap<String, i64>,
+/// }
+///
+/// let config = smart_config::config!("map": "call=5,send=-3");
+/// let config: TestConfig = testing::test(config)?;
+/// assert_eq!(
+///     config.map,
+///     HashMap::from([("call".into(), 5), ("send".into(), -3)])
+/// );
+/// # anyhow::Ok(())
+/// ```
 pub struct DelimitedEntries<
     K,
     V,
