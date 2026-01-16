@@ -257,6 +257,8 @@ pub(crate) struct ConfigWithComplexTypes {
     pub paths: Vec<PathBuf>,
     #[config(default, with = de::OrString(Serde![object]))]
     pub map_or_string: MapOrString,
+    #[config(default, with = de::Entries::WELL_KNOWN.delimited(",", "="))]
+    pub delimited_map: HashMap<String, u64>,
     #[config(default_t = Ipv4Addr::LOCALHOST.into())]
     pub ip_addr: IpAddr,
     #[config(default_t = ([192, 168, 0, 1], 3000).into())]

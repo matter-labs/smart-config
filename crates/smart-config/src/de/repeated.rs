@@ -1,6 +1,7 @@
 //! `Repeated` deserializer for arrays / objects.
 
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     hash::{BuildHasher, Hash},
@@ -15,7 +16,7 @@ use crate::{
     error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
     utils::const_eq,
-    value::{Map, StrValue, Value, ValueOrigin, WithOrigin},
+    value::{StrValue, Value, ValueOrigin, WithOrigin},
 };
 
 /// Deserializer from JSON arrays.
@@ -272,17 +273,39 @@ where
         }
     }
 
-    fn deserialize_map<C: FromIterator<(K, V)>>(
+    /// # Panics
+    ///
+    /// FIXME
+    pub const fn delimited(
+        self,
+        entry_sep: &'static str,
+        key_value_sep: &'static str,
+    ) -> DelimitedEntries<K, V, DeK, DeV> {
+        assert!(!entry_sep.is_empty());
+        assert!(!key_value_sep.is_empty());
+        assert!(
+            !const_eq(entry_sep.as_bytes(), key_value_sep.as_bytes()),
+            "separators must differ"
+        );
+
+        DelimitedEntries {
+            entry_sep,
+            key_value_sep,
+            inner: self,
+        }
+    }
+
+    fn deserialize_map<'s, C: FromIterator<(K, V)>>(
         &self,
         mut ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
-        map: &Map,
+        map_entries: impl Iterator<Item = (&'s str, Cow<'s, WithOrigin>)>,
         map_origin: &Arc<ValueOrigin>,
     ) -> Result<C, ErrorWithOrigin> {
         let mut has_errors = false;
-        let items = map.iter().filter_map(|(key, value)| {
+        let items = map_entries.filter_map(|(key, value)| {
             let key_as_value = WithOrigin::new(
-                key.clone().into(),
+                key.to_owned().into(),
                 Arc::new(ValueOrigin::Synthetic {
                     source: map_origin.clone(),
                     transform: "string key".into(),
@@ -291,7 +314,7 @@ where
             let parsed_key =
                 parse_key_or_value::<K, _>(&mut ctx, param, key, &self.keys, &key_as_value);
             let parsed_value =
-                parse_key_or_value::<V, _>(&mut ctx, param, key, &self.values, value);
+                parse_key_or_value::<V, _>(&mut ctx, param, key, &self.values, &value);
 
             has_errors |= parsed_key.is_none() || parsed_value.is_none();
             Some((parsed_key?, parsed_value?)).filter(|_| !has_errors)
@@ -397,7 +420,10 @@ where
         let Value::Object(map) = deserializer.value() else {
             return Err(deserializer.invalid_type("object"));
         };
-        self.deserialize_map(ctx, param, map, deserializer.origin())
+        let map_entries = map
+            .iter()
+            .map(|(key, value)| (key.as_str(), Cow::Borrowed(value)));
+        self.deserialize_map(ctx, param, map_entries, deserializer.origin())
     }
 
     fn serialize_param(&self, param: &C) -> serde_json::Value {
@@ -764,8 +790,11 @@ where
         let deserializer = ctx.current_value_deserializer(param.name)?;
         match deserializer.value() {
             Value::Object(map) => {
+                let map_entries = map
+                    .iter()
+                    .map(|(key, value)| (key.as_str(), Cow::Borrowed(value)));
                 self.inner
-                    .deserialize_map(ctx, param, map, deserializer.origin())
+                    .deserialize_map(ctx, param, map_entries, deserializer.origin())
             }
             Value::Array(array) => {
                 self.deserialize_entries(ctx, param, array, deserializer.origin())
@@ -784,5 +813,88 @@ where
             })
         });
         serde_json::Value::Array(entries.collect())
+    }
+}
+
+pub struct DelimitedEntries<
+    K,
+    V,
+    DeK = <K as WellKnown>::Deserializer,
+    DeV = <V as WellKnown>::Deserializer,
+> {
+    entry_sep: &'static str,
+    key_value_sep: &'static str,
+    inner: Entries<K, V, DeK, DeV>,
+}
+
+impl<K, V, DeK: fmt::Debug, DeV: fmt::Debug> fmt::Debug for DelimitedEntries<K, V, DeK, DeV> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DelimitedEntries")
+            .field("item_sep", &self.entry_sep)
+            .field("key_value_sep", &self.key_value_sep)
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
+impl<K, V, DeK, DeV, C> DeserializeParam<C> for DelimitedEntries<K, V, DeK, DeV>
+where
+    DeK: DeserializeParam<K>,
+    DeV: DeserializeParam<V>,
+    C: FromIterator<(K, V)>,
+    Entries<K, V, DeK, DeV>: DeserializeParam<C>,
+{
+    const EXPECTING: BasicTypes = Entries::<K, V, DeK, DeV>::EXPECTING.or(BasicTypes::STRING);
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.inner.describe(description);
+    }
+
+    fn deserialize_param(
+        &self,
+        ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<C, ErrorWithOrigin> {
+        let Some(WithOrigin {
+            inner: Value::String(s),
+            origin,
+        }) = ctx.current_value()
+        else {
+            return self.inner.deserialize_param(ctx, param);
+        };
+
+        let map_origin = Arc::new(ValueOrigin::Synthetic {
+            source: origin.clone(),
+            transform: format!("{:?}-delimited string", self.entry_sep),
+        });
+        let map_entries = s
+            .expose()
+            .split(self.entry_sep)
+            .enumerate()
+            .filter_map(|(i, part)| {
+                let Some((key_str, value_str)) = part.split_once(self.key_value_sep) else {
+                    // FIXME: record error
+                    return None;
+                };
+
+                let value_origin = ValueOrigin::Path {
+                    source: map_origin.clone(),
+                    path: format!("{i}.$value"),
+                };
+                let value_string = if s.is_secret() {
+                    StrValue::Secret(value_str.into())
+                } else {
+                    StrValue::Plain(value_str.into())
+                };
+                let value = WithOrigin::new(Value::String(value_string), Arc::new(value_origin));
+                Some((key_str, Cow::Owned(value)))
+            });
+        self.inner
+            .deserialize_map(ctx, param, map_entries, &map_origin)
+    }
+
+    fn serialize_param(&self, param: &C) -> serde_json::Value {
+        self.inner.serialize_param(param)
     }
 }
