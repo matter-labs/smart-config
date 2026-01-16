@@ -61,7 +61,7 @@ pub use self::{
         CustomKnownOption, DeserializeParam, Optional, OrString, Qualified, Serde, WellKnown,
         WellKnownOption, WithDefault,
     },
-    repeated::{Delimited, Entries, NamedEntries, Repeated, ToEntries, DelimitedEntries},
+    repeated::{Delimited, DelimitedEntries, Entries, NamedEntries, Repeated, ToEntries},
     secret::{FromSecretString, Secret},
     units::WithUnit,
 };

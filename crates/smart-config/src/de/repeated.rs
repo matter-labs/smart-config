@@ -882,7 +882,7 @@ where
 
     fn deserialize_param(
         &self,
-        ctx: DeserializeContext<'_>,
+        mut ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
     ) -> Result<C, ErrorWithOrigin> {
         let Some(WithOrigin {
@@ -897,13 +897,22 @@ where
             source: origin.clone(),
             transform: format!("{:?}-delimited string", self.entry_sep),
         });
+        let mut errors = vec![];
+
         let map_entries = s
             .expose()
             .split(self.entry_sep)
             .enumerate()
             .filter_map(|(i, part)| {
                 let Some((key_str, value_str)) = part.split_once(self.key_value_sep) else {
-                    // FIXME: record error
+                    let key_origin = ValueOrigin::Path {
+                        source: map_origin.clone(),
+                        path: i.to_string(),
+                    };
+                    let err =
+                        DeError::custom(format!("{:?} separator is missing", self.key_value_sep));
+                    let err = ErrorWithOrigin::json(err, Arc::new(key_origin));
+                    errors.push(err);
                     return None;
                 };
 
@@ -919,8 +928,20 @@ where
                 let value = WithOrigin::new(Value::String(value_string), Arc::new(value_origin));
                 Some((key_str, Cow::Owned(value)))
             });
-        self.inner
-            .deserialize_map(ctx, param, map_entries, &map_origin)
+
+        let mut output = self
+            .inner
+            .deserialize_map(ctx.borrow(), param, map_entries, &map_origin);
+        if output.is_ok() && !errors.is_empty() {
+            output = Err(ErrorWithOrigin::new(
+                LowLevelError::InvalidObject,
+                map_origin,
+            ));
+        }
+        for err in errors {
+            ctx.push_error(err);
+        }
+        output
     }
 
     fn serialize_param(&self, param: &C) -> serde_json::Value {

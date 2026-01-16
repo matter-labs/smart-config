@@ -517,6 +517,40 @@ fn parsing_complex_types() {
 }
 
 #[test]
+fn delimited_map_errors() {
+    let json = config!("array": [4, 5], "delimited_map": "call=what");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert!(err.inner().to_string().contains("invalid digit"), "{err:?}");
+    let origin = err.origin().to_string();
+    assert!(
+        origin.ends_with("\",\"-delimited string -> path '0.$value'"),
+        "{origin}"
+    );
+
+    let json = config!("array": [4, 5], "delimited_map": "what");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert!(
+        err.inner()
+            .to_string()
+            .contains("\"=\" separator is missing"),
+        "{err:?}"
+    );
+    let origin = err.origin().to_string();
+    assert!(
+        origin.ends_with("\",\"-delimited string -> path '0'"),
+        "{origin}"
+    );
+
+    let json = config!("array": [4, 5], "delimited_map": "what,call=what");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 2); // both errors should be registered
+}
+
+#[test]
 fn deserializing_large_ether_amounts() {
     let json = config!("array": [5, 6], "fee": "1500 ether");
     let config: ConfigWithComplexTypes = test_deserialize(json.inner()).unwrap();
