@@ -97,13 +97,16 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    fmt, ops,
-    sync::Arc,
+    fmt,
+    fmt::Formatter,
+    ops,
+    sync::{Arc, LazyLock},
 };
 
+use regex::Regex;
 use serde::de;
 
-use crate::ErrorWithOrigin;
+use crate::{ErrorWithOrigin, pat::RawStr};
 
 #[doc(hidden)] // only used in proc macros
 pub mod _private;
@@ -215,3 +218,21 @@ impl_not_empty_validation!(HashMap<K, V, S>);
 impl_not_empty_validation!(BTreeMap<K, V>);
 impl_not_empty_validation!(HashSet<K, S>);
 impl_not_empty_validation!(BTreeSet<K>);
+
+impl Validate<String> for LazyLock<Regex> {
+    fn describe(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        write!(formatter, "must match Regex({})", RawStr(self.as_str()))
+    }
+
+    fn validate(&self, target: &String) -> Result<(), ErrorWithOrigin> {
+        let target = target.as_ref();
+        if self.is_match(target) {
+            Ok(())
+        } else {
+            Err(de::Error::custom(format_args!(
+                "value does not match Regex({})",
+                RawStr(self.as_str())
+            )))
+        }
+    }
+}

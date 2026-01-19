@@ -358,6 +358,8 @@ pub(crate) struct ConfigWithFallbacks {
     pub str: Option<SecretString>,
 }
 
+static PHONE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\d{3}-\d{4}").unwrap());
+
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 #[config(validate(Self::validate_len, "`len` must match `secret` length"))]
@@ -370,6 +372,8 @@ pub(crate) struct ConfigWithValidations {
     pub secret: SecretString,
     #[config(default_t = vec![1, 2, 3], validate(NotEmpty))]
     pub numbers: Vec<u32>,
+    #[config(validate(PHONE_REGEX))]
+    pub phone: Option<String>,
 }
 
 impl ConfigWithValidations {

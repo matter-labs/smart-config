@@ -1448,6 +1448,10 @@ fn config_validations() {
     assert_eq!(config.len, 4);
     assert_eq!(config.secret.expose_secret(), "test");
 
+    let json = config!("len": 4, "secret": "test", "phone": "555-7777");
+    let config: ConfigWithValidations = testing::test(json).unwrap();
+    assert_eq!(config.phone, Some("555-7777".into()));
+
     let json = config!("len": 3, "secret": "test");
     let err = testing::test::<ConfigWithValidations>(json).unwrap_err();
     assert_eq!(err.len(), 1, "{err:?}");
@@ -1483,6 +1487,16 @@ fn config_validations() {
     assert_eq!(err.param().unwrap().name, "numbers");
     let inner = err.inner().to_string();
     assert!(inner.contains("value is empty"), "{inner}");
+
+    let json = config!("len": 4, "secret": "test", "phone": "whatever");
+    let err = testing::test::<ConfigWithValidations>(json).unwrap_err();
+    assert_eq!(err.len(), 1, "{err:?}");
+    let err = err.first();
+    assert_eq!(err.path(), "phone");
+    let failed_validation = err.validation().unwrap();
+    assert_eq!(failed_validation, r#"must match Regex(r"\d{3}-\d{4}")"#);
+    let inner = err.inner().to_string();
+    assert!(inner.contains("value does not match Regex"), "{inner}");
 }
 
 #[test]
