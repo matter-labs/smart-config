@@ -7,7 +7,7 @@ Configuration sources:
 - fallbacks, 1 param(s)
 - JSON:/config/base.json -> prefixed with `test`, 4 param(s)
 - YAML:/config/test.yml, 12 param(s)
-- env, 5 param(s)
+- env, 6 param(s)
 - env, 9 param(s)
 
 Values:
@@ -68,6 +68,9 @@ test.funding.balance [Rust: FundingConfig.balance]
 test.funding.min_fee [Rust: FundingConfig.min_fee]
   Raw: "12.5 gwei"
   Origin: YAML:/config/test.yml -> .test.funding.min_fee
+test.funding.aux_balances [Rust: FundingConfig.aux_balances]
+  Raw: "0x0000000000000000000000000000000000000001 = 0.1 ether, 0x000102030405060708090a0b0c0d0e0f00010203 = 1000gwei"
+  Origin: env:"APP_TEST_FUNDS_AUX_BALANCES"
 test.funding.api_key [Rust: FundingConfig.api_key]
   Raw: [REDACTED]
   Origin: env:"APP_TEST_FUNDS_API_KEY"

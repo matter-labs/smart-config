@@ -12,6 +12,7 @@ expression: buffer
   "funding": {
     "address": "0x0000000000000000000000000000000000000000",
     "api_key": "correct horse battery staple",
+    "aux_balances": {},
     "balance": "0x0",
     "min_fee": "0 ether",
     "secret_key": "0x0000000000000000000000000000000000000000000000000000000000000000"

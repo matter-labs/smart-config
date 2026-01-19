@@ -37,8 +37,9 @@ test.temp_dir
 
 test.dir_paths
 test.dirs
-  Type: string | array [Rust: HashSet]; set; using ":" delimiter
+  Type: string | array [Rust: HashSet]; set
     Array items: string [Rust: std::path::PathBuf]; filesystem path
+    Item separator: exact match: ":"
   Default: []
   Example: [
     "./local"
@@ -87,6 +88,15 @@ test.funds.min_fee [deprecated alias]
   Default: "0 ether"
   Minimum fee.
 
+test.funding.aux_balances
+test.funds.aux_balances [deprecated alias]
+  Type: string | object [Rust: HashMap]; map
+    Map keys: string [Rust: primitive_types::H160]; hex string with optional 0x prefix
+    Map values: string | object [Rust: smart_config::types::EtherAmount]; amount with unit, or object with single unit key
+    Entries separator: regex: r"\s*[,\n]\s*"
+    Key–value separator: regex: r"\s*=\s*"
+  Default: {}
+
 test.funding.api_key
 test.funds.api_key [deprecated alias]
   Type: secret string [Rust: Option]
@@ -126,8 +136,9 @@ test.nested.complex
 
 test.nested.more_timeouts
 test.nested.timeouts
-  Type: string | array [Rust: Vec]; using "," delimiter
+  Type: string | array [Rust: Vec]
     Array items: string | object [Rust: core::time::Duration]; duration with unit, or object with single unit key
+    Item separator: exact match: ","
   Default: []
   Example: [
     "5s"

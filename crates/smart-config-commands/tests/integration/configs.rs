@@ -115,6 +115,7 @@ impl fmt::Debug for SecretKey {
 }
 
 static COMMA_OR_NL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*[,\n]\s*").unwrap());
+static EQ: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*=\s*").unwrap());
 
 #[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(validate(
@@ -131,7 +132,7 @@ pub(crate) struct FundingConfig {
     /// Minimum fee.
     #[config(default)]
     pub min_fee: EtherAmount,
-    #[config(default, with = de::Entries::WELL_KNOWN.delimited(&COMMA_OR_NL, "="))]
+    #[config(default, with = de::Entries::WELL_KNOWN.delimited(&COMMA_OR_NL, &EQ))]
     pub aux_balances: HashMap<Address, EtherAmount>,
     /// Secret string value.
     #[config(example = Some("correct horse battery staple".into()))]
@@ -250,7 +251,7 @@ pub(crate) fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepo
         ("APP_TEST_FUNDS_API_KEY", "correct horse battery staple"),
         (
             "APP_TEST_FUNDS_AUX_BALANCES",
-            "0x0000000000000000000000000000000000000001=0.1 ether,0x000102030405060708090a0b0c0d0e0f00010203=1000gwei",
+            "0x0000000000000000000000000000000000000001 = 0.1 ether, 0x000102030405060708090a0b0c0d0e0f00010203 = 1000gwei",
         ),
         (
             "APP_TEST_FUNDS_SECRET_KEY",
