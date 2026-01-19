@@ -525,7 +525,7 @@ fn delimited_map_errors() {
     assert!(err.inner().to_string().contains("invalid digit"), "{err:?}");
     let origin = err.origin().to_string();
     assert!(
-        origin.ends_with(r#"Regex("\\s*[,\\n]\\s*")-delimited entries separated by Regex("\\s*=\\s*") -> path '0.$value'"#),
+        origin.ends_with(r#"Regex(r"\s*[,\n]\s*")-delimited entries separated by Regex(r"\s*=\s*") -> path '0.$value'"#),
         "{origin}"
     );
 
@@ -536,12 +536,12 @@ fn delimited_map_errors() {
     assert!(
         err.inner()
             .to_string()
-            .contains(r#"Regex("\\s*=\\s*") separator is missing"#),
+            .contains(r#"Regex(r"\s*=\s*") separator is missing"#),
         "{err:?}"
     );
     let origin = err.origin().to_string();
     assert!(
-        origin.ends_with(r#"entries separated by Regex("\\s*=\\s*") -> path '0'"#),
+        origin.ends_with(r#"entries separated by Regex(r"\s*=\s*") -> path '0'"#),
         "{origin}"
     );
 

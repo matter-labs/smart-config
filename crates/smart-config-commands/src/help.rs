@@ -1,11 +1,11 @@
-use std::{fmt, io, io::Write as _};
+use std::{io, io::Write as _};
 
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
     ConfigRef, ConfigSchema,
     metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeDescription, TypeSuffixes},
-    pat::PatternDisplay,
+    pat::{PatternDisplay, RawStr},
 };
 
 use crate::{
@@ -307,47 +307,6 @@ fn write_separator(
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct RawStr<'a>(&'a str);
-
-impl fmt::Display for RawStr<'_> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let hash_count = self.hash_count();
-        write!(formatter, "r")?;
-        for _ in 0..hash_count {
-            write!(formatter, "#")?;
-        }
-        write!(formatter, "\"{}\"", self.0)?;
-        for _ in 0..hash_count {
-            write!(formatter, "#")?;
-        }
-        Ok(())
-    }
-}
-
-impl RawStr<'_> {
-    // Determine the number of necessary `#` for the raw string specifier.
-    fn hash_count(self) -> usize {
-        let has_double_quotes = self.0.chars().any(|ch| ch == '"');
-        if has_double_quotes {
-            let mut max_hashes = 0;
-            let mut hash_start = None;
-            for (i, ch) in self.0.chars().enumerate() {
-                if ch == '#' {
-                    if hash_start.is_none() {
-                        hash_start = Some(i);
-                    }
-                } else if let Some(hash_start) = hash_start.take() {
-                    max_hashes = max_hashes.max(i - hash_start);
-                }
-            }
-            max_hashes + 1
-        } else {
-            0
-        }
-    }
-}
-
 fn write_type_description(
     writer: &mut impl io::Write,
     relation_to_parent: Option<&str>,
@@ -448,28 +407,4 @@ fn write_type_description(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hash_count_for_raw_strings_is_correct() {
-        let s = RawStr("Hello, world!");
-        assert_eq!(s.hash_count(), 0);
-        assert_eq!(s.to_string(), "r\"Hello, world!\"");
-
-        let s = RawStr("####");
-        assert_eq!(RawStr("####").hash_count(), 0);
-        assert_eq!(s.to_string(), "r\"####\"");
-
-        let s = RawStr(r#"x="1""#);
-        assert_eq!(s.hash_count(), 1);
-        assert_eq!(s.to_string(), "r#\"x=\"1\"\"#");
-
-        let s = RawStr(r##"x="#1""##);
-        assert_eq!(s.hash_count(), 2);
-        assert_eq!(s.to_string(), "r##\"x=\"#1\"\"##");
-    }
 }
