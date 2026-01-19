@@ -22,12 +22,26 @@ pub trait CompiledPattern: 'static + Send + Sync + fmt::Debug {
     fn compiled(&self) -> Result<&Self::Compiled, &str>;
 }
 
+/// Human-readable (for people familiar with regexes) representation of a compiled pattern.
+#[doc(hidden)]
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub enum PatternDisplay {
+    Regex(String),
+    Generic(String),
+}
+
 /// Splitting strings.
 pub trait Split: fmt::Debug {
     /// Splits the given `haystack` at most once from its start. This generalizes [`str::split_once()`].
     fn split_once<'s>(&self, haystack: &'s str) -> Option<(&'s str, &'s str)>;
     /// Splits the given `haystack`. This generalizes [`str::split()`].
     fn split<'s>(&self, haystack: &'s str) -> impl Iterator<Item = &'s str>;
+
+    #[doc(hidden)]
+    fn display(&self) -> PatternDisplay {
+        PatternDisplay::Generic(format!("{self:?}"))
+    }
 }
 
 impl<const N: usize> CompiledPattern for [char; N] {
@@ -109,5 +123,9 @@ impl Split for Regex {
 
     fn split<'s>(&self, haystack: &'s str) -> impl Iterator<Item = &'s str> {
         Regex::split(self, haystack)
+    }
+
+    fn display(&self) -> PatternDisplay {
+        PatternDisplay::Regex(self.as_str().to_owned())
     }
 }

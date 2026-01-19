@@ -557,12 +557,7 @@ where
 
     fn describe(&self, description: &mut TypeDescription) {
         self.0.describe(description);
-        let details = if let Some(details) = description.details() {
-            format!("{details}; using {:?} delimiter", self.1)
-        } else {
-            format!("using {:?} delimiter", self.1)
-        };
-        description.set_details(details);
+        description.set_items_sep(self.1.display());
     }
 
     fn deserialize_param(
@@ -896,6 +891,10 @@ where
 
     fn describe(&self, description: &mut TypeDescription) {
         self.inner.describe(description);
+        description.set_entries_sep(
+            self.entry_sep.display(),
+            self.key_value_sep.display(),
+        );
     }
 
     fn deserialize_param(
