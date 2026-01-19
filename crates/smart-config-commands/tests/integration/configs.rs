@@ -3,7 +3,6 @@ use std::{
     hash::{BuildHasherDefault, DefaultHasher},
     num::NonZeroU32,
     path::PathBuf,
-    sync::LazyLock,
     time::Duration,
 };
 
@@ -13,7 +12,7 @@ use smart_config::{
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
     EtherAmount, ExampleConfig, Json, Prefixed, Yaml, de, fallback,
     metadata::{SizeUnit, TimeUnit},
-    pat::Regex,
+    pat::{LazyRegex, lazy_regex},
     validation::NotEmpty,
     value::{ExposeSecret, SecretString},
 };
@@ -23,8 +22,7 @@ use smart_config::{
 type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<DefaultHasher>>;
 type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
 
-static APP_NAME_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[_A-Za-z][-_A-Za-z0-9]*$").unwrap());
+static APP_NAME_REGEX: LazyRegex = lazy_regex!(r"^[a-z][-a-z0-9]*$");
 
 /// Configuration with type params of several types.
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
@@ -117,9 +115,6 @@ impl fmt::Debug for SecretKey {
     }
 }
 
-static COMMA_OR_NL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*[,\n]\s*").unwrap());
-static EQ: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*=\s*").unwrap());
-
 #[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(validate(
     Self::validate_address,
@@ -135,7 +130,13 @@ pub(crate) struct FundingConfig {
     /// Minimum fee.
     #[config(default)]
     pub min_fee: EtherAmount,
-    #[config(default, with = de::Entries::WELL_KNOWN.delimited(&COMMA_OR_NL, &EQ))]
+    #[config(
+        default,
+        with = de::Entries::WELL_KNOWN.delimited(
+            lazy_regex!(ref r"\s*[,\n]\s*"),
+            lazy_regex!(ref r"\s*=\s*"),
+        )
+    )]
     pub aux_balances: HashMap<Address, EtherAmount>,
     /// Secret string value.
     #[config(example = Some("correct horse battery staple".into()))]

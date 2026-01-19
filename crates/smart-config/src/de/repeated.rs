@@ -480,7 +480,7 @@ where
 ///
 /// ```
 /// use std::{collections::HashSet, path::PathBuf};
-/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+/// use smart_config::{de, pat::lazy_regex, testing, DescribeConfig, DeserializeConfig};
 ///
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct TestConfig {
@@ -491,15 +491,16 @@ where
 ///     // so you should use something like `Repeated`, or use the `repeat()` constructor.
 ///     #[config(with = de::Delimited::repeat(de::Serde![str], ":"))]
 ///     paths: Vec<PathBuf>,
-///     // ...and more complex collections (here together with string -> number coercion)
-///     #[config(with = de::Delimited::new(";"))]
+///     // ...and more complex collections (here together with string -> number coercion
+///     // and a regex-based splitter)
+///     #[config(with = de::Delimited::new(lazy_regex!(ref r"\s*;\s*")))]
 ///     ints: HashSet<u64>,
 /// }
 ///
 /// let sample = smart_config::config!(
 ///     "strings": ["test", "string"], // standard array value is still supported
 ///     "paths": "/usr/bin:/usr/local/bin",
-///     "ints": "12;34;12",
+///     "ints": "12; 34 ; 12",
 /// );
 /// let config: TestConfig = testing::test(sample)?;
 /// assert_eq!(config.strings.len(), 2);
@@ -846,6 +847,36 @@ where
 ///     config.map,
 ///     HashMap::from([("call".into(), 5), ("send".into(), -3)])
 /// );
+/// # anyhow::Ok(())
+/// ```
+///
+/// ## Regex separators
+///
+/// Similar configuration that allows for whitespace around separators.
+///
+/// ```
+/// # use std::collections::HashMap;
+/// # use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+/// use smart_config::pat::lazy_regex;
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(
+///         with = de::Entries::WELL_KNOWN.delimited(
+///             // see `lazy_regex!` docs for the syntax explanation
+///             lazy_regex!(ref r"\s*,\s*"),
+///             lazy_regex!(ref r"\s*=\s*"),
+///         )
+///     )]
+///     map: HashMap<String, i64>,
+/// }
+///
+/// let config = smart_config::config!("map": "call = 5, send = -3");
+/// let config: TestConfig = testing::test(config)?;
+/// # assert_eq!(
+/// #     config.map,
+/// #     HashMap::from([("call".into(), 5), ("send".into(), -3)])
+/// # );
 /// # anyhow::Ok(())
 /// ```
 pub struct DelimitedEntries<

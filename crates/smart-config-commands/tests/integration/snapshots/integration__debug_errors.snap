@@ -17,8 +17,8 @@ test.port [Rust: TestConfig.port]
 test.app_name [Rust: TestConfig.app_name]
   Raw: "hello!"
   Origin: env:"BOGUS_TEST_APP_NAME"
-  Error: value does not match Regex(r"^[_A-Za-z][-_A-Za-z0-9]*$")
-    validation: must match Regex(r"^[_A-Za-z][-_A-Za-z0-9]*$")
+  Error: value does not match Regex(r"^[a-z][-a-z0-9]*$")
+    validation: must match Regex(r"^[a-z][-a-z0-9]*$")
     at test.app_name
     env:"BOGUS_TEST_APP_NAME"
 test.poll_latency [Rust: TestConfig.poll_latency]

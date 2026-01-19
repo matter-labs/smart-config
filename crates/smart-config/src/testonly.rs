@@ -7,13 +7,12 @@ use std::{
     num::{NonZeroI128, NonZeroU128, NonZeroUsize},
     path::PathBuf,
     str::FromStr,
-    sync::{Arc, LazyLock},
+    sync::Arc,
     time::Duration,
 };
 
 use anyhow::Context as _;
 use assert_matches::assert_matches;
-use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, de::Error as DeError};
 
@@ -24,6 +23,7 @@ use crate::{
     fallback,
     fallback::FallbackSource,
     metadata::{BasicTypes, EtherUnit, ParamMetadata, SizeUnit, TimeUnit},
+    pat::{LazyRegex, lazy_regex},
     testing,
     validation::NotEmpty,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
@@ -234,8 +234,7 @@ impl DeserializeParam<usize> for StringLen {
     }
 }
 
-static COMMA_OR_NL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*[,\n]\s*").unwrap());
-static EQ_SEP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*=\s*").unwrap());
+static COMMA_OR_NL: LazyRegex = lazy_regex!(r"\s*[,\n]\s*");
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
@@ -261,7 +260,10 @@ pub(crate) struct ConfigWithComplexTypes {
     pub paths: Vec<PathBuf>,
     #[config(default, with = de::OrString(Serde![object]))]
     pub map_or_string: MapOrString,
-    #[config(default, with = de::Entries::WELL_KNOWN.delimited(&COMMA_OR_NL, &EQ_SEP))]
+    #[config(
+        default,
+        with = de::Entries::WELL_KNOWN.delimited(&COMMA_OR_NL, lazy_regex!(ref r"\s*=\s*"))
+    )]
     pub delimited_map: HashMap<String, u64>,
     #[config(default_t = Ipv4Addr::LOCALHOST.into())]
     pub ip_addr: IpAddr,
@@ -358,8 +360,6 @@ pub(crate) struct ConfigWithFallbacks {
     pub str: Option<SecretString>,
 }
 
-static PHONE_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\d{3}-\d{4}").unwrap());
-
 #[derive(Debug, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 #[config(validate(Self::validate_len, "`len` must match `secret` length"))]
@@ -372,7 +372,7 @@ pub(crate) struct ConfigWithValidations {
     pub secret: SecretString,
     #[config(default_t = vec![1, 2, 3], validate(NotEmpty))]
     pub numbers: Vec<u32>,
-    #[config(validate(PHONE_REGEX))]
+    #[config(validate(lazy_regex!(ref r"^\d{3}-\d{4}$")))]
     pub phone: Option<String>,
 }
 

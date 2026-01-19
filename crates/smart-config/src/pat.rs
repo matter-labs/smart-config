@@ -4,7 +4,7 @@
 //! [`Delimited`]: crate::de::Delimited
 //! [`DelimitedEntries`]: crate::de::DelimitedEntries
 
-use std::{fmt, sync::LazyLock};
+use std::{fmt, ops, sync::LazyLock};
 
 pub use regex::Regex;
 
@@ -80,7 +80,14 @@ impl RawStr<'_> {
     }
 }
 
-/// Splitting strings.
+/// Pattern usable for splitting strings. Used in [`Delimited`](crate::de::Delimited)
+/// and [`DelimitedEntries`](crate::de::DelimitedEntries) deserializers.
+///
+/// # Standard implementations
+///
+/// - `&str`: matches a string exactly
+/// - `[char; _]`: matches any of the chars
+/// - [`LazyRegex`]\: matches a regular expression
 pub trait Split: Send + Sync + 'static {
     /// Splits the given `haystack` at most once from its start. This generalizes [`str::split_once()`].
     fn split_once<'s>(&self, haystack: &'s str) -> Option<(&'s str, &'s str)>;
@@ -119,22 +126,84 @@ impl Split for &'static str {
     }
 }
 
-// We cannot implement `Split for R: Deref<Target = Regex>` here because of orphaning rules,
-// and the direct implementation for `&'static Regex` would be useless because it cannot be initialized in compile time.
-impl Split for &'static LazyLock<Regex> {
+/// Transparent wrapper around a type dereferencing to a [`Regex`]. Can be used as [a separator](Split),
+/// or in [param validation](crate::validation).
+///
+/// # Why a separate type?
+///
+/// A separate type is necessary to circumvent orphaning rules. We want to implement [`Split`]
+/// and [`Validate`](crate::validation::Validate) for any type (e.g., [`LazyLock`]) that lazily initializes a `Regex`,
+/// since a `Regex` on its own cannot be initialized in compile time. Similarly, such a type cannot
+/// be dereferenced in compile time, which rules out implementing these traits for `&'static Regex`.
+///
+/// # Examples
+///
+/// The easiest way to initialize a wrapper is the [`lazy_regex!`] macro.
+///
+/// ```
+/// use smart_config::{de::Delimited, pat::{lazy_regex, LazyRegex}};
+/// # use smart_config::{DescribeConfig, DeserializeConfig};
+///
+/// static NAME_REGEX: LazyRegex = lazy_regex!(r"^[a-z][-a-z0-9]*$");
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(validate(NAME_REGEX))]
+///     app: String,
+///     // The macro also can be inlined!
+///     #[config(with = Delimited::new(lazy_regex!(ref r"\s*,\s*")))]
+///     numbers: Vec<u64>,
+/// }
+/// ```
+pub struct LazyRegex<T = LazyLock<Regex>>(pub T);
+
+/// Creates a [`LazyRegex`].
+///
+/// - If supplied a string literal, it will create [`LazyRegex`] from it.
+/// - If the literal is prepended with `ref`, this will create a private static and reference it
+///   (i.e., return `&'static LazyRegex`). This is useful for single-use regexes inlined into `config` attributes.
+///
+/// # Examples
+///
+/// See [`LazyRegex` docs](LazyRegex#examples) for the examples of usage.
+#[macro_export]
+macro_rules! lazy_regex {
+    ($regex:tt) => {
+        $crate::pat::LazyRegex(::std::sync::LazyLock::new(|| {
+            $crate::pat::Regex::new($regex).unwrap()
+        }))
+    };
+    (ref $regex:tt) => {{
+        static __REGEX: $crate::pat::LazyRegex = $crate::pat::lazy_regex!($regex);
+        const { &__REGEX }
+    }};
+}
+
+pub use lazy_regex;
+
+impl<T: fmt::Debug> fmt::Debug for LazyRegex<T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, formatter)
+    }
+}
+
+impl<T> Split for &'static LazyRegex<T>
+where
+    T: ops::Deref<Target = Regex> + Send + Sync,
+{
     fn split_once<'s>(&self, haystack: &'s str) -> Option<(&'s str, &'s str)> {
-        let mut it = self.splitn(haystack, 2);
+        let mut it = self.0.splitn(haystack, 2);
         let head = it.next()?;
         let tail = it.next()?;
         Some((head, tail))
     }
 
     fn split<'s>(&self, haystack: &'s str) -> impl Iterator<Item = &'s str> {
-        Regex::split(self, haystack)
+        Regex::split(&self.0, haystack)
     }
 
     fn display(&self) -> PatternDisplay {
-        PatternDisplay::Regex(self.as_str().to_owned())
+        PatternDisplay::Regex(self.0.as_str().to_owned())
     }
 }
 

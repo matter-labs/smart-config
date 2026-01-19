@@ -1494,7 +1494,7 @@ fn config_validations() {
     let err = err.first();
     assert_eq!(err.path(), "phone");
     let failed_validation = err.validation().unwrap();
-    assert_eq!(failed_validation, r#"must match Regex(r"\d{3}-\d{4}")"#);
+    assert_eq!(failed_validation, r#"must match Regex(r"^\d{3}-\d{4}$")"#);
     let inner = err.inner().to_string();
     assert!(inner.contains("value does not match Regex"), "{inner}");
 }
