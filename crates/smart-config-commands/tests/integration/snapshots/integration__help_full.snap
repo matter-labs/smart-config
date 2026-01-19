@@ -13,6 +13,7 @@ test.app_name
   Type: string [Rust: String]
   Validations:
   - must not be empty
+  - must match Regex(r"^[_A-Za-z][-_A-Za-z0-9]*$")
   Default: "app"
   Application name.
 

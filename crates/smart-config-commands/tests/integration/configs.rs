@@ -23,6 +23,9 @@ use smart_config::{
 type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<DefaultHasher>>;
 type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
 
+static APP_NAME_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[_A-Za-z][-_A-Za-z0-9]*$").unwrap());
+
 /// Configuration with type params of several types.
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 pub(crate) struct TestConfig {
@@ -30,7 +33,7 @@ pub(crate) struct TestConfig {
     #[config(example = 8080, deprecated = "bind_to")]
     pub port: u16,
     /// Application name.
-    #[config(default_t = "app".into(), validate(NotEmpty))]
+    #[config(default_t = "app".into(), validate(NotEmpty), validate(APP_NAME_REGEX))]
     pub app_name: String,
     #[config(default_t = Duration::from_millis(500))]
     pub poll_latency: Duration,
@@ -276,7 +279,7 @@ pub(crate) fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepo
         let bogus_vars = Environment::from_iter(
             "BOGUS_",
             [
-                ("BOGUS_TEST_APP_NAME", ""),
+                ("BOGUS_TEST_APP_NAME", "hello!"),
                 ("BOGUS_TEST_TIMEOUT_SEC", "what?"),
                 ("BOGUS_TEST_SCALING_FACTOR", "-1"),
                 ("BOGUS_TEST_NESTED_TIMEOUTS", "nope,124us"),

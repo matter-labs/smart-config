@@ -15,10 +15,10 @@ test.port [Rust: TestConfig.port]
   Raw: 3000
   Origin: YAML:/config/test.yml -> .test.port
 test.app_name [Rust: TestConfig.app_name]
-  Raw: ""
+  Raw: "hello!"
   Origin: env:"BOGUS_TEST_APP_NAME"
-  Error: value is empty
-    validation: must not be empty
+  Error: value does not match Regex(r"^[_A-Za-z][-_A-Za-z0-9]*$")
+    validation: must match Regex(r"^[_A-Za-z][-_A-Za-z0-9]*$")
     at test.app_name
     env:"BOGUS_TEST_APP_NAME"
 test.poll_latency [Rust: TestConfig.poll_latency]
