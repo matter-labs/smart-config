@@ -10,7 +10,7 @@ use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Serialize};
 use smart_config::{
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
-    EtherAmount, ExampleConfig, Json, Prefixed, Yaml, de, fallback,
+    EtherAmount, ExampleConfig, Json, LazyRegex, Prefixed, Yaml, de, fallback,
     metadata::{SizeUnit, TimeUnit},
     validation::NotEmpty,
     value::{ExposeSecret, SecretString},
@@ -112,6 +112,8 @@ impl fmt::Debug for SecretKey {
     }
 }
 
+static COMMA_OR_NL: LazyRegex = LazyRegex::new(r"\s*(,|\n)\s*");
+
 #[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(validate(
     Self::validate_address,
@@ -127,6 +129,8 @@ pub(crate) struct FundingConfig {
     /// Minimum fee.
     #[config(default)]
     pub min_fee: EtherAmount,
+    #[config(default, with = de::Entries::WELL_KNOWN.delimited(&COMMA_OR_NL, "="))]
+    pub aux_balances: HashMap<Address, EtherAmount>,
     /// Secret string value.
     #[config(example = Some("correct horse battery staple".into()))]
     pub api_key: Option<SecretString>,
@@ -140,6 +144,7 @@ impl PartialEq for FundingConfig {
     fn eq(&self, other: &Self) -> bool {
         self.address == other.address
             && self.balance == other.balance
+            && self.aux_balances == other.aux_balances
             && self.api_key.as_ref().map(SecretString::expose_secret)
                 == other.api_key.as_ref().map(SecretString::expose_secret)
             && self.secret_key == other.secret_key
@@ -241,6 +246,10 @@ pub(crate) fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepo
         ("APP_TEST_DIRS", "/usr/bin:/usr/local/bin"),
         ("APP_TEST_EXPERIMENTAL_CACHE_SIZE", "128 MiB"),
         ("APP_TEST_FUNDS_API_KEY", "correct horse battery staple"),
+        (
+            "APP_TEST_FUNDS_AUX_BALANCES",
+            "0x0000000000000000000000000000000000000001=0.1 ether,0x000102030405060708090a0b0c0d0e0f00010203=1000gwei",
+        ),
         (
             "APP_TEST_FUNDS_SECRET_KEY",
             "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",

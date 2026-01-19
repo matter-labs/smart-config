@@ -27,8 +27,22 @@ pub trait CompiledPattern: 'static + Send + Sync + fmt::Debug {
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum PatternDisplay {
+    /// Pattern is an exact string match.
+    Exact(String),
+    /// Pattern is a regular expression conforming to the syntax supported by the `regex` crate.
     Regex(String),
+    /// Pattern is generic `Debug` representation (e.g., an array of chars).
     Generic(String),
+}
+
+impl fmt::Display for PatternDisplay {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Exact(s) => write!(formatter, "{s:?}"),
+            Self::Regex(regex) => write!(formatter, "Regex({regex:?})"),
+            Self::Generic(s) => formatter.write_str(s),
+        }
+    }
 }
 
 /// Splitting strings.
@@ -77,6 +91,10 @@ impl Split for str {
 
     fn split<'s>(&self, haystack: &'s str) -> impl Iterator<Item = &'s str> {
         haystack.split(self)
+    }
+
+    fn display(&self) -> PatternDisplay {
+        PatternDisplay::Exact(self.to_owned())
     }
 }
 
