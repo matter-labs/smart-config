@@ -23,7 +23,7 @@ pub trait CompiledPattern: 'static + Send + Sync + fmt::Debug {
 }
 
 /// Splitting strings.
-pub trait Split {
+pub trait Split: fmt::Debug {
     /// Splits the given `haystack` at most once from its start. This generalizes [`str::split_once()`].
     fn split_once<'s>(&self, haystack: &'s str) -> Option<(&'s str, &'s str)>;
     /// Splits the given `haystack`. This generalizes [`str::split()`].
@@ -67,10 +67,15 @@ impl Split for str {
 }
 
 /// Lazily initialized regular expression.
-#[derive(Debug)]
 pub struct LazyRegex {
     raw: &'static str,
     parsed: OnceLock<Result<Regex, String>>,
+}
+
+impl fmt::Debug for LazyRegex {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.debug_tuple("LazyRegex").field(&self.raw).finish()
+    }
 }
 
 impl LazyRegex {

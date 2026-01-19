@@ -578,14 +578,18 @@ where
             return self.0.deserialize_param(ctx, param);
         };
 
-        let array_origin = Arc::new(ValueOrigin::Synthetic {
-            source: origin.clone(),
-            transform: format!("{:?}-delimited string", self.1),
-        });
+        // This is somewhat defensive; normally, the separator will be compiled in `describe()`.
+        // Still, we don't want to panic here.
         let sep = self
             .1
             .compiled()
             .map_err(|err| ErrorWithOrigin::json(DeError::custom(err), origin.clone()))?;
+
+        let array_origin = Arc::new(ValueOrigin::Synthetic {
+            source: origin.clone(),
+            transform: format!("{sep:?}-delimited string"),
+        });
+
         let array_items = sep.split(s.expose()).enumerate().map(|(i, part)| {
             let item_origin = ValueOrigin::Path {
                 source: array_origin.clone(),
@@ -907,12 +911,6 @@ where
             return self.inner.deserialize_param(ctx, param);
         };
 
-        let map_origin = Arc::new(ValueOrigin::Synthetic {
-            source: origin.clone(),
-            transform: format!("{:?}-delimited string", self.entry_sep),
-        });
-        let mut errors = vec![];
-
         let entry_sep = self
             .entry_sep
             .compiled()
@@ -921,6 +919,12 @@ where
             .key_value_sep
             .compiled()
             .map_err(|err| ErrorWithOrigin::json(DeError::custom(err), origin.clone()))?;
+
+        let map_origin = Arc::new(ValueOrigin::Synthetic {
+            source: origin.clone(),
+            transform: format!("{entry_sep:?}-delimited entries separated by {key_value_sep:?}"),
+        });
+        let mut errors = vec![];
 
         let map_entries = entry_sep
             .split(s.expose())
@@ -931,8 +935,7 @@ where
                         source: map_origin.clone(),
                         path: i.to_string(),
                     };
-                    let err =
-                        DeError::custom(format!("{:?} separator is missing", self.key_value_sep));
+                    let err = DeError::custom(format!("{key_value_sep:?} separator is missing"));
                     let err = ErrorWithOrigin::json(err, Arc::new(key_origin));
                     errors.push(err);
                     return None;
