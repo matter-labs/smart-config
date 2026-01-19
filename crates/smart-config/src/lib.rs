@@ -417,7 +417,6 @@ pub use smart_config_derive::ExampleConfig;
 pub use self::{
     de::DeserializeConfig,
     error::{DeserializeConfigError, ErrorWithOrigin, ParseError, ParseErrorCategory, ParseErrors},
-    pat::{CompiledPattern, LazyRegex, PatternDisplay, Split},
     schema::{ConfigMut, ConfigRef, ConfigSchema},
     source::{
         ConfigParser, ConfigRepository, ConfigSource, ConfigSourceKind, ConfigSources, Environment,
@@ -431,7 +430,7 @@ pub mod de;
 mod error;
 pub mod fallback;
 pub mod metadata;
-mod pat;
+pub mod pat;
 mod schema;
 mod source;
 pub mod testing;

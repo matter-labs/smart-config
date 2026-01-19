@@ -3,8 +3,9 @@ use std::{fmt, io, io::Write as _};
 use anstream::stream::{AsLockedWrite, RawStream};
 use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
-    ConfigRef, ConfigSchema, PatternDisplay,
+    ConfigRef, ConfigSchema,
     metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeDescription, TypeSuffixes},
+    pat::PatternDisplay,
 };
 
 use crate::{

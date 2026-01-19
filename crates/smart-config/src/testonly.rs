@@ -7,18 +7,19 @@ use std::{
     num::{NonZeroI128, NonZeroU128, NonZeroUsize},
     path::PathBuf,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, LazyLock},
     time::Duration,
 };
 
 use anyhow::Context as _;
 use assert_matches::assert_matches;
+use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize, de::Error as DeError};
 
 use crate::{
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
-    EtherAmount, ExampleConfig, Json, LazyRegex, ParseErrors, SerializerOptions,
+    EtherAmount, ExampleConfig, Json, ParseErrors, SerializerOptions,
     de::{self, DeserializeContext, DeserializeParam, DeserializerOptions, Serde, WellKnown},
     fallback,
     fallback::FallbackSource,
@@ -233,8 +234,8 @@ impl DeserializeParam<usize> for StringLen {
     }
 }
 
-static COMMA_OR_NL: LazyRegex = LazyRegex::new(r"\s*(,|\n)\s*");
-static EQ_SEP: LazyRegex = LazyRegex::new(r"\s*=\s*");
+static COMMA_OR_NL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*[,\n]\s*").unwrap());
+static EQ_SEP: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*=\s*").unwrap());
 
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]

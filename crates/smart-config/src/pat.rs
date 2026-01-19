@@ -4,26 +4,12 @@
 //! [`Delimited`]: crate::de::Delimited
 //! [`DelimitedEntries`]: crate::de::DelimitedEntries
 
-use std::{fmt, sync::OnceLock};
+use std::{fmt, sync::LazyLock};
 
-use regex::Regex;
-
-/// Pattern (e.g., a regular expression) that can be compiled into a [`Split`] implementation.
-pub trait CompiledPattern: 'static + Send + Sync + fmt::Debug {
-    /// Compiled pattern.
-    type Compiled: Split + ?Sized;
-
-    /// gets the compiled pattern. Due to returning the reference, implementations are all but forced
-    /// to cache the result (e.g., in a [`OnceLock`]).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the pattern is invalid. Errors should be cached as well.
-    fn compiled(&self) -> Result<&Self::Compiled, &str>;
-}
+pub use regex::Regex;
 
 /// Human-readable (for people familiar with regexes) representation of a compiled pattern.
-#[doc(hidden)]
+#[doc(hidden)] // not stable yet
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum PatternDisplay {
@@ -46,45 +32,31 @@ impl fmt::Display for PatternDisplay {
 }
 
 /// Splitting strings.
-pub trait Split: fmt::Debug {
+pub trait Split: Send + Sync + 'static {
     /// Splits the given `haystack` at most once from its start. This generalizes [`str::split_once()`].
     fn split_once<'s>(&self, haystack: &'s str) -> Option<(&'s str, &'s str)>;
     /// Splits the given `haystack`. This generalizes [`str::split()`].
     fn split<'s>(&self, haystack: &'s str) -> impl Iterator<Item = &'s str>;
 
     #[doc(hidden)]
+    fn display(&self) -> PatternDisplay;
+}
+
+impl<const N: usize> Split for [char; N] {
+    fn split_once<'s>(&self, haystack: &'s str) -> Option<(&'s str, &'s str)> {
+        haystack.split_once(self)
+    }
+
+    fn split<'s>(&self, haystack: &'s str) -> impl Iterator<Item = &'s str> {
+        haystack.split(self)
+    }
+
     fn display(&self) -> PatternDisplay {
         PatternDisplay::Generic(format!("{self:?}"))
     }
 }
 
-impl<const N: usize> CompiledPattern for [char; N] {
-    type Compiled = [char];
-
-    fn compiled(&self) -> Result<&Self::Compiled, &str> {
-        Ok(self)
-    }
-}
-
-impl Split for [char] {
-    fn split_once<'s>(&self, haystack: &'s str) -> Option<(&'s str, &'s str)> {
-        haystack.split_once(self)
-    }
-
-    fn split<'s>(&self, haystack: &'s str) -> impl Iterator<Item = &'s str> {
-        haystack.split(self)
-    }
-}
-
-impl CompiledPattern for &'static str {
-    type Compiled = str;
-
-    fn compiled(&self) -> Result<&str, &str> {
-        Ok(*self)
-    }
-}
-
-impl Split for str {
+impl Split for &'static str {
     fn split_once<'s>(&self, haystack: &'s str) -> Option<(&'s str, &'s str)> {
         haystack.split_once(self)
     }
@@ -94,44 +66,13 @@ impl Split for str {
     }
 
     fn display(&self) -> PatternDisplay {
-        PatternDisplay::Exact(self.to_owned())
+        PatternDisplay::Exact((*self).to_owned())
     }
 }
 
-/// Lazily initialized regular expression.
-pub struct LazyRegex {
-    raw: &'static str,
-    parsed: OnceLock<Result<Regex, String>>,
-}
-
-impl fmt::Debug for LazyRegex {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_tuple("LazyRegex").field(&self.raw).finish()
-    }
-}
-
-impl LazyRegex {
-    /// Creates a lazily compiled regular expression.
-    pub const fn new(raw: &'static str) -> LazyRegex {
-        Self {
-            raw,
-            parsed: OnceLock::new(),
-        }
-    }
-}
-
-impl CompiledPattern for &'static LazyRegex {
-    type Compiled = Regex;
-
-    fn compiled(&self) -> Result<&Self::Compiled, &str> {
-        self.parsed
-            .get_or_init(|| Regex::new(self.raw).map_err(|err| err.to_string()))
-            .as_ref()
-            .map_err(String::as_str)
-    }
-}
-
-impl Split for Regex {
+// We cannot implement `Split for R: Deref<Target = Regex>` here because of orphaning rules,
+// and the direct implementation for `&'static Regex` would be useless because it cannot be initialized in compile time.
+impl Split for &'static LazyLock<Regex> {
     fn split_once<'s>(&self, haystack: &'s str) -> Option<(&'s str, &'s str)> {
         let mut it = self.splitn(haystack, 2);
         let head = it.next()?;

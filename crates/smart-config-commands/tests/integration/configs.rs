@@ -3,6 +3,7 @@ use std::{
     hash::{BuildHasherDefault, DefaultHasher},
     num::NonZeroU32,
     path::PathBuf,
+    sync::LazyLock,
     time::Duration,
 };
 
@@ -10,8 +11,9 @@ use primitive_types::{H160 as Address, H256, U256};
 use serde::{Deserialize, Serialize};
 use smart_config::{
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
-    EtherAmount, ExampleConfig, Json, LazyRegex, Prefixed, Yaml, de, fallback,
+    EtherAmount, ExampleConfig, Json, Prefixed, Yaml, de, fallback,
     metadata::{SizeUnit, TimeUnit},
+    pat::Regex,
     validation::NotEmpty,
     value::{ExposeSecret, SecretString},
 };
@@ -112,7 +114,7 @@ impl fmt::Debug for SecretKey {
     }
 }
 
-static COMMA_OR_NL: LazyRegex = LazyRegex::new(r"\s*(,|\n)\s*");
+static COMMA_OR_NL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*[,\n]\s*").unwrap());
 
 #[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
 #[config(validate(

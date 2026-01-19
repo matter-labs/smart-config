@@ -12,11 +12,10 @@ use std::{
 use serde::de::Error as DeError;
 
 use crate::{
-    Split,
     de::{DeserializeContext, DeserializeParam, WellKnown, WellKnownOption},
     error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
-    pat::CompiledPattern,
+    pat::Split,
     utils::const_eq,
     value::{StrValue, Value, ValueOrigin, WithOrigin},
 };
@@ -280,7 +279,7 @@ where
     /// # Panics
     ///
     /// Will panic if `entry_sep` or `key_value_sep` are empty OR if they coincide.
-    pub const fn delimited<ESep: CompiledPattern, KvSep: CompiledPattern>(
+    pub const fn delimited<ESep: Split, KvSep: Split>(
         self,
         entry_sep: ESep,
         key_value_sep: KvSep,
@@ -524,17 +523,26 @@ where
 ///     test: u64,
 /// }
 /// ```
-#[derive(Debug)]
 pub struct Delimited<De = (), S = &'static str>(pub De, pub S);
 
-impl<S: CompiledPattern> Delimited<(), S> {
+impl<De: fmt::Debug, S: Split> fmt::Debug for Delimited<De, S> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_tuple("Delimited")
+            .field(&self.0)
+            .field(&self.1.display())
+            .finish()
+    }
+}
+
+impl<S: Split> Delimited<(), S> {
     /// Creates a new deserializer that can be used for [`WellKnown`] collections.
     pub const fn new(sep: S) -> Self {
         Self((), sep)
     }
 }
 
-impl<De, S: CompiledPattern> Delimited<Repeated<De>, S> {
+impl<De, S: Split> Delimited<Repeated<De>, S> {
     /// Shortcut to wrap a [`Repeated`] deserializer.
     pub const fn repeat(item_de: De, sep: S) -> Self {
         Self(Repeated(item_de), sep)
@@ -544,7 +552,7 @@ impl<De, S: CompiledPattern> Delimited<Repeated<De>, S> {
 impl<T, De, S> DeserializeParam<T> for Delimited<De, S>
 where
     De: DeserializeParam<T>,
-    S: CompiledPattern,
+    S: Split,
 {
     const EXPECTING: BasicTypes = {
         let base = <De as DeserializeParam<T>>::EXPECTING;
@@ -573,19 +581,12 @@ where
             return self.0.deserialize_param(ctx, param);
         };
 
-        // This is somewhat defensive; normally, the separator will be compiled in `describe()`.
-        // Still, we don't want to panic here.
-        let sep = self
-            .1
-            .compiled()
-            .map_err(|err| ErrorWithOrigin::json(DeError::custom(err), origin.clone()))?;
-
         let array_origin = Arc::new(ValueOrigin::Synthetic {
             source: origin.clone(),
-            transform: format!("{sep:?}-delimited string"),
+            transform: format!("{}-delimited string", self.1.display()),
         });
 
-        let array_items = sep.split(s.expose()).enumerate().map(|(i, part)| {
+        let array_items = self.1.split(s.expose()).enumerate().map(|(i, part)| {
             let item_origin = ValueOrigin::Path {
                 source: array_origin.clone(),
                 path: i.to_string(),
@@ -864,14 +865,14 @@ impl<K, V, DeK, DeV, ESep, KvSep> fmt::Debug for DelimitedEntries<K, V, DeK, DeV
 where
     DeK: fmt::Debug,
     DeV: fmt::Debug,
-    ESep: fmt::Debug,
-    KvSep: fmt::Debug,
+    ESep: Split,
+    KvSep: Split,
 {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("DelimitedEntries")
-            .field("item_sep", &self.entry_sep)
-            .field("key_value_sep", &self.key_value_sep)
+            .field("item_sep", &self.entry_sep.display())
+            .field("key_value_sep", &self.key_value_sep.display())
             .field("inner", &self.inner)
             .finish()
     }
@@ -882,8 +883,8 @@ impl<K, V, DeK, DeV, ESep, KvSep, C> DeserializeParam<C>
 where
     DeK: DeserializeParam<K>,
     DeV: DeserializeParam<V>,
-    ESep: CompiledPattern,
-    KvSep: CompiledPattern,
+    ESep: Split,
+    KvSep: Split,
     C: FromIterator<(K, V)>,
     Entries<K, V, DeK, DeV>: DeserializeParam<C>,
 {
@@ -891,10 +892,7 @@ where
 
     fn describe(&self, description: &mut TypeDescription) {
         self.inner.describe(description);
-        description.set_entries_sep(
-            self.entry_sep.display(),
-            self.key_value_sep.display(),
-        );
+        description.set_entries_sep(self.entry_sep.display(), self.key_value_sep.display());
     }
 
     fn deserialize_param(
@@ -910,18 +908,15 @@ where
             return self.inner.deserialize_param(ctx, param);
         };
 
-        let entry_sep = self
-            .entry_sep
-            .compiled()
-            .map_err(|err| ErrorWithOrigin::json(DeError::custom(err), origin.clone()))?;
-        let key_value_sep = self
-            .key_value_sep
-            .compiled()
-            .map_err(|err| ErrorWithOrigin::json(DeError::custom(err), origin.clone()))?;
-
+        let entry_sep = &self.entry_sep;
+        let key_value_sep = &self.key_value_sep;
         let map_origin = Arc::new(ValueOrigin::Synthetic {
             source: origin.clone(),
-            transform: format!("{entry_sep:?}-delimited entries separated by {key_value_sep:?}"),
+            transform: format!(
+                "{}-delimited entries separated by {}",
+                entry_sep.display(),
+                key_value_sep.display()
+            ),
         });
         let mut errors = vec![];
 
@@ -934,7 +929,10 @@ where
                         source: map_origin.clone(),
                         path: i.to_string(),
                     };
-                    let err = DeError::custom(format!("{key_value_sep:?} separator is missing"));
+                    let err = DeError::custom(format!(
+                        "{} separator is missing",
+                        key_value_sep.display()
+                    ));
                     let err = ErrorWithOrigin::json(err, Arc::new(key_origin));
                     errors.push(err);
                     return None;
