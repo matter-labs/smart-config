@@ -1727,6 +1727,7 @@ dependencies = [
  "doc-comment",
  "primitive-types",
  "proptest",
+ "regex",
  "secrecy",
  "serde",
  "serde_json",

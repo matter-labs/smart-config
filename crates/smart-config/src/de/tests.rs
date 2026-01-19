@@ -433,11 +433,11 @@ fn parsing_complex_types() {
         "short_dur": 200,
         "long_dur": "5 min",
         "path": "/mnt",
-        "paths": "/usr/bin:/usr/local/bin",
+        "paths": "/usr/bin:/usr/local/bin;/bin",
         "memory_size_mb": 64,
         "disk_size": "4 GB",
         "map_or_string": "test=1,other=2",
-        "delimited_map": "test=1,other=2",
+        "delimited_map": "test = 1, other = 2",
         "ip_addr": "10.10.0.103",
         "socket_addr": "[::1]:4040",
         "with_custom_deserializer": "what",
@@ -457,7 +457,7 @@ fn parsing_complex_types() {
             path: "/mnt".into(),
             memory_size_mb: Some(64 * SizeUnit::MiB),
             disk_size: Some(4 * SizeUnit::GiB),
-            paths: vec!["/usr/bin".into(), "/usr/local/bin".into()],
+            paths: vec!["/usr/bin".into(), "/usr/local/bin".into(), "/bin".into()],
             map_or_string: MapOrString(HashMap::from([("test".into(), 1), ("other".into(), 2)])),
             delimited_map: HashMap::from([("test".into(), 1), ("other".into(), 2)]),
             ip_addr: [10, 10, 0, 103].into(),
@@ -518,7 +518,7 @@ fn parsing_complex_types() {
 
 #[test]
 fn delimited_map_errors() {
-    let json = config!("array": [4, 5], "delimited_map": "call=what");
+    let json = config!("array": [4, 5], "delimited_map": "call = what");
     let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
     assert_eq!(err.len(), 1);
     let err = err.first();
@@ -545,7 +545,7 @@ fn delimited_map_errors() {
         "{origin}"
     );
 
-    let json = config!("array": [4, 5], "delimited_map": "what,call=what");
+    let json = config!("array": [4, 5], "delimited_map": "what, call = what");
     let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
     assert_eq!(err.len(), 2); // both errors should be registered
 }
@@ -644,7 +644,12 @@ fn parsing_composed_params() {
     assert_eq!(config.delimited_durations, expected_array);
     test_config_roundtrip(&config);
 
-    let json = config!("delimited_durations": "1 sec,5 min");
+    let json = config!("delimited_durations": "1 sec, 5 min");
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.delimited_durations, expected_array);
+    test_config_roundtrip(&config);
+
+    let json = config!("delimited_durations": "1 sec \n5 min");
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.delimited_durations, expected_array);
     test_config_roundtrip(&config);

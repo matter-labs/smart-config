@@ -12,9 +12,11 @@ use std::{
 use serde::de::Error as DeError;
 
 use crate::{
+    Split,
     de::{DeserializeContext, DeserializeParam, WellKnown, WellKnownOption},
     error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
+    pat::CompiledPattern,
     utils::const_eq,
     value::{StrValue, Value, ValueOrigin, WithOrigin},
 };
@@ -278,18 +280,11 @@ where
     /// # Panics
     ///
     /// Will panic if `entry_sep` or `key_value_sep` are empty OR if they coincide.
-    pub const fn delimited(
+    pub const fn delimited<ESep: CompiledPattern, KvSep: CompiledPattern>(
         self,
-        entry_sep: &'static str,
-        key_value_sep: &'static str,
-    ) -> DelimitedEntries<K, V, DeK, DeV> {
-        assert!(!entry_sep.is_empty());
-        assert!(!key_value_sep.is_empty());
-        assert!(
-            !const_eq(entry_sep.as_bytes(), key_value_sep.as_bytes()),
-            "Entry and key–value separators must differ"
-        );
-
+        entry_sep: ESep,
+        key_value_sep: KvSep,
+    ) -> DelimitedEntries<K, V, DeK, DeV, ESep, KvSep> {
         DelimitedEntries {
             entry_sep,
             key_value_sep,
@@ -530,23 +525,27 @@ where
 /// }
 /// ```
 #[derive(Debug)]
-pub struct Delimited<De = ()>(pub De, pub &'static str);
+pub struct Delimited<De = (), S = &'static str>(pub De, pub S);
 
-impl Delimited {
+impl<S: CompiledPattern> Delimited<(), S> {
     /// Creates a new deserializer that can be used for [`WellKnown`] collections.
-    pub const fn new(sep: &'static str) -> Self {
+    pub const fn new(sep: S) -> Self {
         Self((), sep)
     }
 }
 
-impl<De> Delimited<Repeated<De>> {
+impl<De, S: CompiledPattern> Delimited<Repeated<De>, S> {
     /// Shortcut to wrap a [`Repeated`] deserializer.
-    pub const fn repeat(item_de: De, sep: &'static str) -> Self {
+    pub const fn repeat(item_de: De, sep: S) -> Self {
         Self(Repeated(item_de), sep)
     }
 }
 
-impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Delimited<De> {
+impl<T, De, S> DeserializeParam<T> for Delimited<De, S>
+where
+    De: DeserializeParam<T>,
+    S: CompiledPattern,
+{
     const EXPECTING: BasicTypes = {
         let base = <De as DeserializeParam<T>>::EXPECTING;
         assert!(
@@ -583,7 +582,11 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Delimited<De> {
             source: origin.clone(),
             transform: format!("{:?}-delimited string", self.1),
         });
-        let array_items = s.expose().split(self.1).enumerate().map(|(i, part)| {
+        let sep = self
+            .1
+            .compiled()
+            .map_err(|err| ErrorWithOrigin::json(DeError::custom(err), origin.clone()))?;
+        let array_items = sep.split(s.expose()).enumerate().map(|(i, part)| {
             let item_origin = ValueOrigin::Path {
                 source: array_origin.clone(),
                 path: i.to_string(),
@@ -850,13 +853,21 @@ pub struct DelimitedEntries<
     V,
     DeK = <K as WellKnown>::Deserializer,
     DeV = <V as WellKnown>::Deserializer,
+    ESep = &'static str,
+    KvSep = &'static str,
 > {
-    entry_sep: &'static str,
-    key_value_sep: &'static str,
+    entry_sep: ESep,
+    key_value_sep: KvSep,
     inner: Entries<K, V, DeK, DeV>,
 }
 
-impl<K, V, DeK: fmt::Debug, DeV: fmt::Debug> fmt::Debug for DelimitedEntries<K, V, DeK, DeV> {
+impl<K, V, DeK, DeV, ESep, KvSep> fmt::Debug for DelimitedEntries<K, V, DeK, DeV, ESep, KvSep>
+where
+    DeK: fmt::Debug,
+    DeV: fmt::Debug,
+    ESep: fmt::Debug,
+    KvSep: fmt::Debug,
+{
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("DelimitedEntries")
@@ -867,10 +878,13 @@ impl<K, V, DeK: fmt::Debug, DeV: fmt::Debug> fmt::Debug for DelimitedEntries<K, 
     }
 }
 
-impl<K, V, DeK, DeV, C> DeserializeParam<C> for DelimitedEntries<K, V, DeK, DeV>
+impl<K, V, DeK, DeV, ESep, KvSep, C> DeserializeParam<C>
+    for DelimitedEntries<K, V, DeK, DeV, ESep, KvSep>
 where
     DeK: DeserializeParam<K>,
     DeV: DeserializeParam<V>,
+    ESep: CompiledPattern,
+    KvSep: CompiledPattern,
     C: FromIterator<(K, V)>,
     Entries<K, V, DeK, DeV>: DeserializeParam<C>,
 {
@@ -899,12 +913,20 @@ where
         });
         let mut errors = vec![];
 
-        let map_entries = s
-            .expose()
-            .split(self.entry_sep)
+        let entry_sep = self
+            .entry_sep
+            .compiled()
+            .map_err(|err| ErrorWithOrigin::json(DeError::custom(err), origin.clone()))?;
+        let key_value_sep = self
+            .key_value_sep
+            .compiled()
+            .map_err(|err| ErrorWithOrigin::json(DeError::custom(err), origin.clone()))?;
+
+        let map_entries = entry_sep
+            .split(s.expose())
             .enumerate()
             .filter_map(|(i, part)| {
-                let Some((key_str, value_str)) = part.split_once(self.key_value_sep) else {
+                let Some((key_str, value_str)) = key_value_sep.split_once(part) else {
                     let key_origin = ValueOrigin::Path {
                         source: map_origin.clone(),
                         path: i.to_string(),

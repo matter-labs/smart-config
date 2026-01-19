@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize, de::Error as DeError};
 
 use crate::{
     ByteSize, ConfigSource, DescribeConfig, DeserializeConfig, Environment, ErrorWithOrigin,
-    EtherAmount, ExampleConfig, Json, ParseErrors, SerializerOptions,
+    EtherAmount, ExampleConfig, Json, LazyRegex, ParseErrors, SerializerOptions,
     de::{self, DeserializeContext, DeserializeParam, DeserializerOptions, Serde, WellKnown},
     fallback,
     fallback::FallbackSource,
@@ -233,6 +233,9 @@ impl DeserializeParam<usize> for StringLen {
     }
 }
 
+static COMMA_OR_NL: LazyRegex = LazyRegex::new(r"\s*(,|\n)\s*");
+static EQ_SEP: LazyRegex = LazyRegex::new(r"\s*=\s*");
+
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ConfigWithComplexTypes {
@@ -253,11 +256,11 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(default_t = Some(128 * SizeUnit::MiB))]
     pub memory_size_mb: Option<ByteSize>,
     pub disk_size: Option<ByteSize>,
-    #[config(default, with = de::Delimited::new(":"))]
+    #[config(default, with = de::Delimited::new([':', ';']))]
     pub paths: Vec<PathBuf>,
     #[config(default, with = de::OrString(Serde![object]))]
     pub map_or_string: MapOrString,
-    #[config(default, with = de::Entries::WELL_KNOWN.delimited(",", "="))]
+    #[config(default, with = de::Entries::WELL_KNOWN.delimited(&COMMA_OR_NL, &EQ_SEP))]
     pub delimited_map: HashMap<String, u64>,
     #[config(default_t = Ipv4Addr::LOCALHOST.into())]
     pub ip_addr: IpAddr,
@@ -278,7 +281,7 @@ pub(crate) struct ComposedConfig {
     pub arrays: HashSet<[u64; 2]>,
     #[config(default)]
     pub durations: Vec<Duration>,
-    #[config(default, with = de::Delimited::new(","))]
+    #[config(default, with = de::Delimited::new(&COMMA_OR_NL))]
     pub delimited_durations: Vec<Duration>,
     #[config(default)]
     pub map_of_sizes: HashMap<String, ByteSize>,
