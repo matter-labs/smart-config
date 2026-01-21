@@ -14,7 +14,7 @@ pub use regex::Regex;
 #[derive(Debug, Clone)]
 pub enum PatternDisplay {
     /// Pattern is an exact string match.
-    Exact(String),
+    Exact(&'static str),
     /// Pattern is a regular expression conforming to the syntax supported by the `regex` crate.
     Regex(String),
     /// Pattern is generic `Debug` representation (e.g., an array of chars).
@@ -122,7 +122,7 @@ impl Split for &'static str {
     }
 
     fn display(&self) -> PatternDisplay {
-        PatternDisplay::Exact((*self).to_owned())
+        PatternDisplay::Exact(self)
     }
 }
 

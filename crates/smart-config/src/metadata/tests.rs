@@ -101,7 +101,7 @@ fn describing_complex_types() {
     assert_eq!(description.details().unwrap(), "2-element array");
     assert_matches!(
         description.item_separator().unwrap(),
-        PatternDisplay::Exact(s) if s == ","
+        PatternDisplay::Exact(s) if *s == ","
     );
     assert!(!description.contains_secrets());
     let (expected_item, ..) = description.items().unwrap();
