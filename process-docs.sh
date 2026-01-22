@@ -37,7 +37,7 @@ ROOT_DIR=$(realpath "$(dirname "$0")")
 
 pkg_version=$(
   cargo metadata --format-version=1 --no-deps --manifest-path="$ROOT_DIR/Cargo.toml" \
-   | jq -r '.packages.[] | select(.name == "smart-config").version'
+   | jq -r '.packages | .[] | select(.name == "smart-config").version'
 )
 echo "Read package version: $pkg_version"
 
@@ -72,6 +72,11 @@ if [ ! -d "$ROOT_DIR/target/doc" ]; then
   exit 1
 fi
 
+# FreeBSD `sed` requires a backup extension (possibly empty) supplied as a separate arg after `-i`,
+# while the Linux version requires it glued to `-i`.
+sed_in_place_ext=""
+[ "$(uname -s)" != "Linux" ] && sed_in_place_ext=1
+
 echo "Replacing docs.rs links in generated docs"
 html_files=$(find "$ROOT_DIR/target/doc" -name '*.html' -path '*/smart_config*/*' -print)
 for file in $html_files; do
@@ -80,5 +85,5 @@ for file in $html_files; do
   # the docs are served from.
   path_to_config_docs=$(relative_path "$(dirname "$file")" "$ROOT_DIR/target/doc/smart_config")
   sed_replace_cmd='s#https://docs\.rs/smart-config/([^/]+)/smart_config#'"$path_to_config_docs"'#g'
-  sed -E -i '' -e "$sed_replace_cmd" "$file"
+  sed -E -i ${sed_in_place_ext:+''} -e "$sed_replace_cmd" "$file"
 done
