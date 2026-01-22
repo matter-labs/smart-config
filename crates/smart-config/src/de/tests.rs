@@ -417,6 +417,7 @@ fn parsing_complex_types() {
             disk_size: None,
             paths: vec![],
             map_or_string: MapOrString::default(),
+            delimited_map: HashMap::new(),
             ip_addr: Ipv4Addr::LOCALHOST.into(),
             socket_addr: ([192, 168, 0, 1], 3000).into(),
             with_custom_deserializer: 0,
@@ -432,10 +433,11 @@ fn parsing_complex_types() {
         "short_dur": 200,
         "long_dur": "5 min",
         "path": "/mnt",
-        "paths": "/usr/bin:/usr/local/bin",
+        "paths": "/usr/bin:/usr/local/bin;/bin",
         "memory_size_mb": 64,
         "disk_size": "4 GB",
         "map_or_string": "test=1,other=2",
+        "delimited_map": "test = 1, other = 2",
         "ip_addr": "10.10.0.103",
         "socket_addr": "[::1]:4040",
         "with_custom_deserializer": "what",
@@ -455,8 +457,9 @@ fn parsing_complex_types() {
             path: "/mnt".into(),
             memory_size_mb: Some(64 * SizeUnit::MiB),
             disk_size: Some(4 * SizeUnit::GiB),
-            paths: vec!["/usr/bin".into(), "/usr/local/bin".into()],
-            map_or_string: MapOrString(HashMap::from([("test".into(), 1), ("other".into(), 2),])),
+            paths: vec!["/usr/bin".into(), "/usr/local/bin".into(), "/bin".into()],
+            map_or_string: MapOrString(HashMap::from([("test".into(), 1), ("other".into(), 2)])),
+            delimited_map: HashMap::from([("test".into(), 1), ("other".into(), 2)]),
             ip_addr: [10, 10, 0, 103].into(),
             socket_addr: (Ipv6Addr::LOCALHOST, 4040).into(),
             with_custom_deserializer: 4,
@@ -479,6 +482,10 @@ fn parsing_complex_types() {
             "test": 42,
             "other": 23,
         }),
+        "delimited_map": serde_json::json!({
+            "test": 42,
+            "other": 23,
+        }),
         "socket_addr": "127.0.0.1:8000",
         "with_custom_deserializer": "!",
         "fee": "1e-5 ether",
@@ -498,7 +505,8 @@ fn parsing_complex_types() {
             memory_size_mb: None,
             disk_size: Some(256 * SizeUnit::MiB),
             paths: vec!["/usr/bin".into(), "/mnt".into()],
-            map_or_string: MapOrString(HashMap::from([("test".into(), 42), ("other".into(), 23),])),
+            map_or_string: MapOrString(HashMap::from([("test".into(), 42), ("other".into(), 23)])),
+            delimited_map: HashMap::from([("test".into(), 42), ("other".into(), 23)]),
             ip_addr: Ipv4Addr::LOCALHOST.into(),
             socket_addr: ([127, 0, 0, 1], 8000).into(),
             with_custom_deserializer: 1,
@@ -506,6 +514,40 @@ fn parsing_complex_types() {
             tip: Some(833 * EtherUnit::Gwei),
         }
     );
+}
+
+#[test]
+fn delimited_map_errors() {
+    let json = config!("array": [4, 5], "delimited_map": "call = what");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert!(err.inner().to_string().contains("invalid digit"), "{err:?}");
+    let origin = err.origin().to_string();
+    assert!(
+        origin.ends_with(r#"Regex(r"\s*[,\n]\s*")-delimited entries separated by Regex(r"\s*=\s*") -> path '0.$value'"#),
+        "{origin}"
+    );
+
+    let json = config!("array": [4, 5], "delimited_map": "what");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 1);
+    let err = err.first();
+    assert!(
+        err.inner()
+            .to_string()
+            .contains(r#"Regex(r"\s*=\s*") separator is missing"#),
+        "{err:?}"
+    );
+    let origin = err.origin().to_string();
+    assert!(
+        origin.ends_with(r#"entries separated by Regex(r"\s*=\s*") -> path '0'"#),
+        "{origin}"
+    );
+
+    let json = config!("array": [4, 5], "delimited_map": "what, call = what");
+    let err = test_deserialize::<ConfigWithComplexTypes>(json.inner()).unwrap_err();
+    assert_eq!(err.len(), 2); // both errors should be registered
 }
 
 #[test]
@@ -602,7 +644,12 @@ fn parsing_composed_params() {
     assert_eq!(config.delimited_durations, expected_array);
     test_config_roundtrip(&config);
 
-    let json = config!("delimited_durations": "1 sec,5 min");
+    let json = config!("delimited_durations": "1 sec, 5 min");
+    let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
+    assert_eq!(config.delimited_durations, expected_array);
+    test_config_roundtrip(&config);
+
+    let json = config!("delimited_durations": "1 sec \n5 min");
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.delimited_durations, expected_array);
     test_config_roundtrip(&config);

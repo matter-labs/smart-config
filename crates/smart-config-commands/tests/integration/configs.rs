@@ -12,6 +12,7 @@ use smart_config::{
     ByteSize, ConfigRepository, ConfigSchema, DescribeConfig, DeserializeConfig, Environment,
     EtherAmount, ExampleConfig, Json, Prefixed, Yaml, de, fallback,
     metadata::{SizeUnit, TimeUnit},
+    pat::{LazyRegex, lazy_regex},
     validation::NotEmpty,
     value::{ExposeSecret, SecretString},
 };
@@ -21,6 +22,8 @@ use smart_config::{
 type HashSet<T> = std::collections::HashSet<T, BuildHasherDefault<DefaultHasher>>;
 type HashMap<K, V> = std::collections::HashMap<K, V, BuildHasherDefault<DefaultHasher>>;
 
+static APP_NAME_REGEX: LazyRegex = lazy_regex!(r"^[a-z][-a-z0-9]*$");
+
 /// Configuration with type params of several types.
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig, ExampleConfig)]
 pub(crate) struct TestConfig {
@@ -28,7 +31,7 @@ pub(crate) struct TestConfig {
     #[config(example = 8080, deprecated = "bind_to")]
     pub port: u16,
     /// Application name.
-    #[config(default_t = "app".into(), validate(NotEmpty))]
+    #[config(default_t = "app".into(), validate(NotEmpty), validate(APP_NAME_REGEX))]
     pub app_name: String,
     #[config(default_t = Duration::from_millis(500))]
     pub poll_latency: Duration,
@@ -127,6 +130,14 @@ pub(crate) struct FundingConfig {
     /// Minimum fee.
     #[config(default)]
     pub min_fee: EtherAmount,
+    #[config(
+        default,
+        with = de::Entries::WELL_KNOWN.delimited(
+            lazy_regex!(ref r"\s*[,\n]\s*"),
+            lazy_regex!(ref r"\s*=\s*"),
+        )
+    )]
+    pub aux_balances: HashMap<Address, EtherAmount>,
     /// Secret string value.
     #[config(example = Some("correct horse battery staple".into()))]
     pub api_key: Option<SecretString>,
@@ -140,6 +151,7 @@ impl PartialEq for FundingConfig {
     fn eq(&self, other: &Self) -> bool {
         self.address == other.address
             && self.balance == other.balance
+            && self.aux_balances == other.aux_balances
             && self.api_key.as_ref().map(SecretString::expose_secret)
                 == other.api_key.as_ref().map(SecretString::expose_secret)
             && self.secret_key == other.secret_key
@@ -242,6 +254,10 @@ pub(crate) fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepo
         ("APP_TEST_EXPERIMENTAL_CACHE_SIZE", "128 MiB"),
         ("APP_TEST_FUNDS_API_KEY", "correct horse battery staple"),
         (
+            "APP_TEST_FUNDS_AUX_BALANCES",
+            "0x0000000000000000000000000000000000000001 = 0.1 ether, 0x000102030405060708090a0b0c0d0e0f00010203 = 1000gwei",
+        ),
+        (
             "APP_TEST_FUNDS_SECRET_KEY",
             "0x000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f",
         ),
@@ -264,7 +280,7 @@ pub(crate) fn create_mock_repo(schema: &ConfigSchema, bogus: bool) -> ConfigRepo
         let bogus_vars = Environment::from_iter(
             "BOGUS_",
             [
-                ("BOGUS_TEST_APP_NAME", ""),
+                ("BOGUS_TEST_APP_NAME", "hello!"),
                 ("BOGUS_TEST_TIMEOUT_SEC", "what?"),
                 ("BOGUS_TEST_SCALING_FACTOR", "-1"),
                 ("BOGUS_TEST_NESTED_TIMEOUTS", "nope,124us"),

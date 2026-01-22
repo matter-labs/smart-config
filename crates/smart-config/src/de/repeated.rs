@@ -1,6 +1,7 @@
 //! `Repeated` deserializer for arrays / objects.
 
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
     hash::{BuildHasher, Hash},
@@ -14,8 +15,9 @@ use crate::{
     de::{DeserializeContext, DeserializeParam, WellKnown, WellKnownOption},
     error::{ErrorWithOrigin, LowLevelError},
     metadata::{BasicTypes, ParamMetadata, TypeDescription},
+    pat::Split,
     utils::const_eq,
-    value::{Map, StrValue, Value, ValueOrigin, WithOrigin},
+    value::{StrValue, Value, ValueOrigin, WithOrigin},
 };
 
 /// Deserializer from JSON arrays.
@@ -252,7 +254,7 @@ where
     ///
     /// # Panics
     ///
-    ///  Will panic if either `keys_name` or `values_name` is empty OR they coincide
+    ///  Will panic if either `keys_name` or `values_name` is empty OR they coincide.
     pub const fn named(
         self,
         keys_name: &'static str,
@@ -272,17 +274,34 @@ where
         }
     }
 
-    fn deserialize_map<C: FromIterator<(K, V)>>(
+    /// Converts this to a [`DelimitedEntries`] instance.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `entry_sep` or `key_value_sep` are empty OR if they coincide.
+    pub const fn delimited<ESep: Split, KvSep: Split>(
+        self,
+        entry_sep: ESep,
+        key_value_sep: KvSep,
+    ) -> DelimitedEntries<K, V, DeK, DeV, ESep, KvSep> {
+        DelimitedEntries {
+            entry_sep,
+            key_value_sep,
+            inner: self,
+        }
+    }
+
+    fn deserialize_map<'s, C: FromIterator<(K, V)>>(
         &self,
         mut ctx: DeserializeContext<'_>,
         param: &'static ParamMetadata,
-        map: &Map,
+        map_entries: impl Iterator<Item = (&'s str, Cow<'s, WithOrigin>)>,
         map_origin: &Arc<ValueOrigin>,
     ) -> Result<C, ErrorWithOrigin> {
         let mut has_errors = false;
-        let items = map.iter().filter_map(|(key, value)| {
+        let items = map_entries.filter_map(|(key, value)| {
             let key_as_value = WithOrigin::new(
-                key.clone().into(),
+                key.to_owned().into(),
                 Arc::new(ValueOrigin::Synthetic {
                     source: map_origin.clone(),
                     transform: "string key".into(),
@@ -291,7 +310,7 @@ where
             let parsed_key =
                 parse_key_or_value::<K, _>(&mut ctx, param, key, &self.keys, &key_as_value);
             let parsed_value =
-                parse_key_or_value::<V, _>(&mut ctx, param, key, &self.values, value);
+                parse_key_or_value::<V, _>(&mut ctx, param, key, &self.values, &value);
 
             has_errors |= parsed_key.is_none() || parsed_value.is_none();
             Some((parsed_key?, parsed_value?)).filter(|_| !has_errors)
@@ -397,7 +416,10 @@ where
         let Value::Object(map) = deserializer.value() else {
             return Err(deserializer.invalid_type("object"));
         };
-        self.deserialize_map(ctx, param, map, deserializer.origin())
+        let map_entries = map
+            .iter()
+            .map(|(key, value)| (key.as_str(), Cow::Borrowed(value)));
+        self.deserialize_map(ctx, param, map_entries, deserializer.origin())
     }
 
     fn serialize_param(&self, param: &C) -> serde_json::Value {
@@ -458,7 +480,7 @@ where
 ///
 /// ```
 /// use std::{collections::HashSet, path::PathBuf};
-/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+/// use smart_config::{de, pat::lazy_regex, testing, DescribeConfig, DeserializeConfig};
 ///
 /// #[derive(DescribeConfig, DeserializeConfig)]
 /// struct TestConfig {
@@ -469,15 +491,16 @@ where
 ///     // so you should use something like `Repeated`, or use the `repeat()` constructor.
 ///     #[config(with = de::Delimited::repeat(de::Serde![str], ":"))]
 ///     paths: Vec<PathBuf>,
-///     // ...and more complex collections (here together with string -> number coercion)
-///     #[config(with = de::Delimited::new(";"))]
+///     // ...and more complex collections (here together with string -> number coercion
+///     // and a regex-based splitter)
+///     #[config(with = de::Delimited::new(lazy_regex!(ref r"\s*;\s*")))]
 ///     ints: HashSet<u64>,
 /// }
 ///
 /// let sample = smart_config::config!(
 ///     "strings": ["test", "string"], // standard array value is still supported
 ///     "paths": "/usr/bin:/usr/local/bin",
-///     "ints": "12;34;12",
+///     "ints": "12; 34 ; 12",
 /// );
 /// let config: TestConfig = testing::test(sample)?;
 /// assert_eq!(config.strings.len(), 2);
@@ -501,24 +524,37 @@ where
 ///     test: u64,
 /// }
 /// ```
-#[derive(Debug)]
-pub struct Delimited<De = ()>(pub De, pub &'static str);
+pub struct Delimited<De = (), S = &'static str>(pub De, pub S);
 
-impl Delimited {
+impl<De: fmt::Debug, S: Split> fmt::Debug for Delimited<De, S> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_tuple("Delimited")
+            .field(&self.0)
+            .field(&self.1.display())
+            .finish()
+    }
+}
+
+impl<S: Split> Delimited<(), S> {
     /// Creates a new deserializer that can be used for [`WellKnown`] collections.
-    pub const fn new(sep: &'static str) -> Self {
+    pub const fn new(sep: S) -> Self {
         Self((), sep)
     }
 }
 
-impl<De> Delimited<Repeated<De>> {
+impl<De, S: Split> Delimited<Repeated<De>, S> {
     /// Shortcut to wrap a [`Repeated`] deserializer.
-    pub const fn repeat(item_de: De, sep: &'static str) -> Self {
+    pub const fn repeat(item_de: De, sep: S) -> Self {
         Self(Repeated(item_de), sep)
     }
 }
 
-impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Delimited<De> {
+impl<T, De, S> DeserializeParam<T> for Delimited<De, S>
+where
+    De: DeserializeParam<T>,
+    S: Split,
+{
     const EXPECTING: BasicTypes = {
         let base = <De as DeserializeParam<T>>::EXPECTING;
         assert!(
@@ -530,12 +566,7 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Delimited<De> {
 
     fn describe(&self, description: &mut TypeDescription) {
         self.0.describe(description);
-        let details = if let Some(details) = description.details() {
-            format!("{details}; using {:?} delimiter", self.1)
-        } else {
-            format!("using {:?} delimiter", self.1)
-        };
-        description.set_details(details);
+        description.set_items_sep(self.1.display());
     }
 
     fn deserialize_param(
@@ -553,9 +584,10 @@ impl<T, De: DeserializeParam<T>> DeserializeParam<T> for Delimited<De> {
 
         let array_origin = Arc::new(ValueOrigin::Synthetic {
             source: origin.clone(),
-            transform: format!("{:?}-delimited string", self.1),
+            transform: format!("{}-delimited string", self.1.display()),
         });
-        let array_items = s.expose().split(self.1).enumerate().map(|(i, part)| {
+
+        let array_items = self.1.split(s.expose()).enumerate().map(|(i, part)| {
             let item_origin = ValueOrigin::Path {
                 source: array_origin.clone(),
                 path: i.to_string(),
@@ -764,8 +796,11 @@ where
         let deserializer = ctx.current_value_deserializer(param.name)?;
         match deserializer.value() {
             Value::Object(map) => {
+                let map_entries = map
+                    .iter()
+                    .map(|(key, value)| (key.as_str(), Cow::Borrowed(value)));
                 self.inner
-                    .deserialize_map(ctx, param, map, deserializer.origin())
+                    .deserialize_map(ctx, param, map_entries, deserializer.origin())
             }
             Value::Array(array) => {
                 self.deserialize_entries(ctx, param, array, deserializer.origin())
@@ -784,5 +819,185 @@ where
             })
         });
         serde_json::Value::Array(entries.collect())
+    }
+}
+
+/// Delimited variant of [`Entries`] that can deserialize a map from a delimited string
+/// (with addition to the conventional object deserialization).
+/// Can be constructed using [`Entries::delimited()`].
+///
+/// `DelimitedEntries` are characterized by 2 separators: one between entries, and another between
+/// key and value.
+///
+/// # Examples
+///
+/// ```
+/// # use std::collections::HashMap;
+/// use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(with = de::Entries::WELL_KNOWN.delimited(",", "="))]
+///     map: HashMap<String, i64>,
+/// }
+///
+/// let config = smart_config::config!("map": "call=5,send=-3");
+/// let config: TestConfig = testing::test(config)?;
+/// assert_eq!(
+///     config.map,
+///     HashMap::from([("call".into(), 5), ("send".into(), -3)])
+/// );
+/// # anyhow::Ok(())
+/// ```
+///
+/// ## Regex separators
+///
+/// Similar configuration that allows for whitespace around separators.
+///
+/// ```
+/// # use std::collections::HashMap;
+/// # use smart_config::{de, testing, DescribeConfig, DeserializeConfig};
+/// use smart_config::pat::lazy_regex;
+///
+/// #[derive(DescribeConfig, DeserializeConfig)]
+/// struct TestConfig {
+///     #[config(
+///         with = de::Entries::WELL_KNOWN.delimited(
+///             // see `lazy_regex!` docs for the syntax explanation
+///             lazy_regex!(ref r"\s*,\s*"),
+///             lazy_regex!(ref r"\s*=\s*"),
+///         )
+///     )]
+///     map: HashMap<String, i64>,
+/// }
+///
+/// let config = smart_config::config!("map": "call = 5, send = -3");
+/// let config: TestConfig = testing::test(config)?;
+/// # assert_eq!(
+/// #     config.map,
+/// #     HashMap::from([("call".into(), 5), ("send".into(), -3)])
+/// # );
+/// # anyhow::Ok(())
+/// ```
+pub struct DelimitedEntries<
+    K,
+    V,
+    DeK = <K as WellKnown>::Deserializer,
+    DeV = <V as WellKnown>::Deserializer,
+    ESep = &'static str,
+    KvSep = &'static str,
+> {
+    entry_sep: ESep,
+    key_value_sep: KvSep,
+    inner: Entries<K, V, DeK, DeV>,
+}
+
+impl<K, V, DeK, DeV, ESep, KvSep> fmt::Debug for DelimitedEntries<K, V, DeK, DeV, ESep, KvSep>
+where
+    DeK: fmt::Debug,
+    DeV: fmt::Debug,
+    ESep: Split,
+    KvSep: Split,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DelimitedEntries")
+            .field("item_sep", &self.entry_sep.display())
+            .field("key_value_sep", &self.key_value_sep.display())
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
+impl<K, V, DeK, DeV, ESep, KvSep, C> DeserializeParam<C>
+    for DelimitedEntries<K, V, DeK, DeV, ESep, KvSep>
+where
+    DeK: DeserializeParam<K>,
+    DeV: DeserializeParam<V>,
+    ESep: Split,
+    KvSep: Split,
+    C: FromIterator<(K, V)>,
+    Entries<K, V, DeK, DeV>: DeserializeParam<C>,
+{
+    const EXPECTING: BasicTypes = Entries::<K, V, DeK, DeV>::EXPECTING.or(BasicTypes::STRING);
+
+    fn describe(&self, description: &mut TypeDescription) {
+        self.inner.describe(description);
+        description.set_entries_sep(self.entry_sep.display(), self.key_value_sep.display());
+    }
+
+    fn deserialize_param(
+        &self,
+        mut ctx: DeserializeContext<'_>,
+        param: &'static ParamMetadata,
+    ) -> Result<C, ErrorWithOrigin> {
+        let Some(WithOrigin {
+            inner: Value::String(s),
+            origin,
+        }) = ctx.current_value()
+        else {
+            return self.inner.deserialize_param(ctx, param);
+        };
+
+        let entry_sep = &self.entry_sep;
+        let key_value_sep = &self.key_value_sep;
+        let map_origin = Arc::new(ValueOrigin::Synthetic {
+            source: origin.clone(),
+            transform: format!(
+                "{}-delimited entries separated by {}",
+                entry_sep.display(),
+                key_value_sep.display()
+            ),
+        });
+        let mut errors = vec![];
+
+        let map_entries = entry_sep
+            .split(s.expose())
+            .enumerate()
+            .filter_map(|(i, part)| {
+                let Some((key_str, value_str)) = key_value_sep.split_once(part) else {
+                    let key_origin = ValueOrigin::Path {
+                        source: map_origin.clone(),
+                        path: i.to_string(),
+                    };
+                    let err = DeError::custom(format!(
+                        "{} separator is missing",
+                        key_value_sep.display()
+                    ));
+                    let err = ErrorWithOrigin::json(err, Arc::new(key_origin));
+                    errors.push(err);
+                    return None;
+                };
+
+                let value_origin = ValueOrigin::Path {
+                    source: map_origin.clone(),
+                    path: format!("{i}.$value"),
+                };
+                let value_string = if s.is_secret() {
+                    StrValue::Secret(value_str.into())
+                } else {
+                    StrValue::Plain(value_str.into())
+                };
+                let value = WithOrigin::new(Value::String(value_string), Arc::new(value_origin));
+                Some((key_str, Cow::Owned(value)))
+            });
+
+        let mut output = self
+            .inner
+            .deserialize_map(ctx.borrow(), param, map_entries, &map_origin);
+        if output.is_ok() && !errors.is_empty() {
+            output = Err(ErrorWithOrigin::new(
+                LowLevelError::InvalidObject,
+                map_origin,
+            ));
+        }
+        for err in errors {
+            ctx.push_error(err);
+        }
+        output
+    }
+
+    fn serialize_param(&self, param: &C) -> serde_json::Value {
+        self.inner.serialize_param(param)
     }
 }

@@ -90,7 +90,9 @@ impl ConfigField {
                 let wrapped = val.wrap(cr);
                 // A reference is required to convert to `&dyn Validate<_>`. `()`s are here to correctly handle some validation expressions
                 // (e.g., `a..b` ranges; unless a range is parenthesized, `&` will be interpreted as a part of the range start).
-                quote_spanned!(val.expr.span()=> &(#wrapped))
+                // `const` expression is required for static (non-constant) items (e.g., regular expressions) that implement `Drop`;
+                // without it, using such an item will lead to borrow checker errors.
+                quote_spanned!(val.expr.span()=> const { &(#wrapped) })
             });
             deserializer =
                 quote!(#cr::de::_private::Validated::new(#deserializer, &[#(#validations,)*]));

@@ -430,6 +430,7 @@ pub mod de;
 mod error;
 pub mod fallback;
 pub mod metadata;
+pub mod pat;
 mod schema;
 mod source;
 pub mod testing;

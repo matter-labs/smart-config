@@ -98,12 +98,13 @@ fn describing_complex_types() {
         BasicTypes::ARRAY.or(BasicTypes::STRING)
     );
     let description = array_param.type_description();
-    assert_eq!(
-        description.details().unwrap(),
-        "2-element array; using \",\" delimiter"
+    assert_eq!(description.details().unwrap(), "2-element array");
+    assert_matches!(
+        description.item_separator().unwrap(),
+        PatternDisplay::Exact(s) if *s == ","
     );
     assert!(!description.contains_secrets());
-    let (expected_item, _) = description.items().unwrap();
+    let (expected_item, ..) = description.items().unwrap();
     assert_eq!(expected_item, BasicTypes::INTEGER);
 
     let assumed_param = metadata
@@ -166,4 +167,32 @@ fn suffixes_for_composed_params() {
         .unwrap();
     let ty = dur_param.type_description();
     assert_matches!(ty.suffixes, None);
+}
+
+#[test]
+fn describing_separators() {
+    let metadata = &ConfigWithComplexTypes::DESCRIPTION;
+    let delimited_map_param = metadata
+        .params
+        .iter()
+        .find(|param| param.name == "delimited_map")
+        .unwrap();
+    let ty = delimited_map_param.type_description();
+    assert_matches!(
+        ty.entry_separators().unwrap(),
+        (PatternDisplay::Regex(_), PatternDisplay::Regex(_))
+    );
+    assert_matches!(ty.item_separator(), None);
+
+    let paths_param = metadata
+        .params
+        .iter()
+        .find(|param| param.name == "paths")
+        .unwrap();
+    let ty = paths_param.type_description();
+    assert_matches!(
+        ty.item_separator().unwrap(),
+        PatternDisplay::Generic(s) if s == "[':', ';']"
+    );
+    assert_matches!(ty.entry_separators(), None);
 }

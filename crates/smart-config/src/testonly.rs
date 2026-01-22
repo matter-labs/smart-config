@@ -23,6 +23,7 @@ use crate::{
     fallback,
     fallback::FallbackSource,
     metadata::{BasicTypes, EtherUnit, ParamMetadata, SizeUnit, TimeUnit},
+    pat::{LazyRegex, lazy_regex},
     testing,
     validation::NotEmpty,
     value::{FileFormat, Value, ValueOrigin, WithOrigin},
@@ -233,6 +234,8 @@ impl DeserializeParam<usize> for StringLen {
     }
 }
 
+static COMMA_OR_NL: LazyRegex = lazy_regex!(r"\s*[,\n]\s*");
+
 #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct ConfigWithComplexTypes {
@@ -253,10 +256,15 @@ pub(crate) struct ConfigWithComplexTypes {
     #[config(default_t = Some(128 * SizeUnit::MiB))]
     pub memory_size_mb: Option<ByteSize>,
     pub disk_size: Option<ByteSize>,
-    #[config(default, with = de::Delimited::new(":"))]
+    #[config(default, with = de::Delimited::new([':', ';']))]
     pub paths: Vec<PathBuf>,
     #[config(default, with = de::OrString(Serde![object]))]
     pub map_or_string: MapOrString,
+    #[config(
+        default,
+        with = de::Entries::WELL_KNOWN.delimited(&COMMA_OR_NL, lazy_regex!(ref r"\s*=\s*"))
+    )]
+    pub delimited_map: HashMap<String, u64>,
     #[config(default_t = Ipv4Addr::LOCALHOST.into())]
     pub ip_addr: IpAddr,
     #[config(default_t = ([192, 168, 0, 1], 3000).into())]
@@ -276,7 +284,7 @@ pub(crate) struct ComposedConfig {
     pub arrays: HashSet<[u64; 2]>,
     #[config(default)]
     pub durations: Vec<Duration>,
-    #[config(default, with = de::Delimited::new(","))]
+    #[config(default, with = de::Delimited::new(&COMMA_OR_NL))]
     pub delimited_durations: Vec<Duration>,
     #[config(default)]
     pub map_of_sizes: HashMap<String, ByteSize>,
@@ -364,6 +372,8 @@ pub(crate) struct ConfigWithValidations {
     pub secret: SecretString,
     #[config(default_t = vec![1, 2, 3], validate(NotEmpty))]
     pub numbers: Vec<u32>,
+    #[config(validate(lazy_regex!(ref r"^\d{3}-\d{4}$")))]
+    pub phone: Option<String>,
 }
 
 impl ConfigWithValidations {

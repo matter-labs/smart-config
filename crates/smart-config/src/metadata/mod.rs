@@ -6,6 +6,7 @@ use self::_private::{BoxedDeserializer, BoxedVisitor};
 use crate::{
     de::{_private::ErasedDeserializer, DeserializeParam},
     fallback::FallbackSource,
+    pat::PatternDisplay,
     validation::Validate,
 };
 
@@ -310,6 +311,19 @@ pub enum TypeSuffixes {
     EtherUnits,
 }
 
+#[derive(Debug, Clone)]
+struct Items {
+    description: ChildDescription,
+    sep: Option<PatternDisplay>,
+}
+
+#[derive(Debug, Clone)]
+struct Entries {
+    keys: ChildDescription,
+    values: ChildDescription,
+    sep: Option<(PatternDisplay, PatternDisplay)>,
+}
+
 /// Human-readable description for a Rust type used in configuration parameter (Boolean value, integer, string etc.).
 ///
 /// If a configuration parameter supports complex inputs (objects and/or arrays), this information *may* contain
@@ -323,8 +337,8 @@ pub struct TypeDescription {
     pub(crate) is_secret: bool,
     validations: Vec<String>,
     deserialize_if: Option<String>,
-    items: Option<ChildDescription>,
-    entries: Option<(ChildDescription, ChildDescription)>,
+    items: Option<Items>,
+    entries: Option<Entries>,
     fallback: Option<ChildDescription>,
 }
 
@@ -363,19 +377,33 @@ impl TypeDescription {
     pub fn items(&self) -> Option<(BasicTypes, &Self)> {
         self.items
             .as_ref()
-            .map(|child| (child.expecting, &*child.description))
+            .map(|child| (child.description.expecting, &*child.description.description))
+    }
+
+    /// Returns a separator for array items. This can be `Some(_)` only if `items()` returns `Some(_)`.
+    #[doc(hidden)] // not stable yet
+    pub fn item_separator(&self) -> Option<&PatternDisplay> {
+        self.items.as_ref()?.sep.as_ref()
     }
 
     /// Returns the description of map keys, if one was provided.
     pub fn keys(&self) -> Option<(BasicTypes, &Self)> {
-        let keys = &self.entries.as_ref()?.0;
+        let keys = &self.entries.as_ref()?.keys;
         Some((keys.expecting, &*keys.description))
     }
 
     /// Returns the description of map values, if one was provided.
     pub fn values(&self) -> Option<(BasicTypes, &Self)> {
-        let keys = &self.entries.as_ref()?.1;
+        let keys = &self.entries.as_ref()?.values;
         Some((keys.expecting, &*keys.description))
+    }
+
+    /// Returns separator for entries (first, the separator between entries and then the separator
+    /// between key and value in an entry). This can be `Some(_)` only if `keys()` and `values()` return `Some(_)`.
+    #[doc(hidden)] // not stable yet
+    pub fn entry_separators(&self) -> Option<(&PatternDisplay, &PatternDisplay)> {
+        let entries = self.entries.as_ref()?;
+        entries.sep.as_ref().map(|(entries, kv)| (entries, kv))
     }
 
     /// Returns the fallback description, if any.
@@ -391,15 +419,15 @@ impl TypeDescription {
             return true;
         }
         if let Some(item) = &self.items
-            && item.description.contains_secrets()
+            && item.description.description.contains_secrets()
         {
             return true;
         }
-        if let Some((key, value)) = &self.entries {
-            if key.description.contains_secrets() {
+        if let Some(Entries { keys, values, .. }) = &self.entries {
+            if keys.description.contains_secrets() {
                 return true;
             }
-            if value.description.contains_secrets() {
+            if values.description.contains_secrets() {
                 return true;
             }
         }
@@ -443,8 +471,17 @@ impl TypeDescription {
 
     /// Adds a description of array items. This only makes sense for params accepting array input.
     pub fn set_items<T: 'static>(&mut self, items: &impl DeserializeParam<T>) -> &mut Self {
-        self.items = Some(ChildDescription::new(items, true));
+        self.items = Some(Items {
+            description: ChildDescription::new(items, true),
+            sep: None,
+        });
         self
+    }
+
+    pub(crate) fn set_items_sep(&mut self, separator: PatternDisplay) {
+        if let Some(items) = &mut self.items {
+            items.sep = Some(separator);
+        }
     }
 
     /// Adds a description of keys and values. This only makes sense for params accepting object input.
@@ -453,11 +490,18 @@ impl TypeDescription {
         keys: &impl DeserializeParam<K>,
         values: &impl DeserializeParam<V>,
     ) -> &mut Self {
-        self.entries = Some((
-            ChildDescription::new(keys, true),
-            ChildDescription::new(values, true),
-        ));
+        self.entries = Some(Entries {
+            keys: ChildDescription::new(keys, true),
+            values: ChildDescription::new(values, true),
+            sep: None,
+        });
         self
+    }
+
+    pub(crate) fn set_entries_sep(&mut self, entries: PatternDisplay, kv: PatternDisplay) {
+        if let Some(items) = &mut self.entries {
+            items.sep = Some((entries, kv));
+        }
     }
 
     /// Adds a fallback deserializer description.

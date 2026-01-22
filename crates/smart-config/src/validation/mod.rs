@@ -10,7 +10,7 @@
 //!
 //! ```
 //! use secrecy::{ExposeSecret, SecretString};
-//! use smart_config::validation;
+//! use smart_config::{pat::{LazyRegex, lazy_regex}, validation};
 //! # use smart_config::{testing, DescribeConfig, DeserializeConfig, ErrorWithOrigin};
 //!
 //! #[derive(DescribeConfig, DeserializeConfig)]
@@ -27,7 +27,12 @@
 //!     // handle `Option`s intelligently; if the value isn't specified
 //!     // (i.e., is `None`), it will pass validation.
 //!     secret_key_len: Option<usize>,
-//!     #[config(validate(not_empty, "must not be empty"))]
+//!     #[config(
+//!         // validates that the name is not empty using a custom predicate function
+//!         validate(not_empty, "must not be empty"),
+//!         // validates that the name matches the provided regex
+//!         validate(lazy_regex!(ref r"^[a-z][-a-z0-9]*$")),
+//!     )]
 //!     app_name: String,
 //! }
 //!
@@ -97,13 +102,19 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    fmt, ops,
+    fmt,
+    fmt::Formatter,
+    ops,
     sync::Arc,
 };
 
+use regex::Regex;
 use serde::de;
 
-use crate::ErrorWithOrigin;
+use crate::{
+    ErrorWithOrigin,
+    pat::{LazyRegex, RawStr},
+};
 
 #[doc(hidden)] // only used in proc macros
 pub mod _private;
@@ -215,3 +226,27 @@ impl_not_empty_validation!(HashMap<K, V, S>);
 impl_not_empty_validation!(BTreeMap<K, V>);
 impl_not_empty_validation!(HashSet<K, S>);
 impl_not_empty_validation!(BTreeSet<K>);
+
+/// Validates that the string matches the provided regex.
+///
+/// Don't forget to surround the regex with `^$` if you want to match it completely.
+impl<T> Validate<String> for LazyRegex<T>
+where
+    T: ops::Deref<Target = Regex> + Send + Sync + 'static,
+{
+    fn describe(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        write!(formatter, "must match Regex({})", RawStr(self.0.as_str()))
+    }
+
+    fn validate(&self, target: &String) -> Result<(), ErrorWithOrigin> {
+        let target = target.as_ref();
+        if self.0.is_match(target) {
+            Ok(())
+        } else {
+            Err(de::Error::custom(format_args!(
+                "value does not match Regex({})",
+                RawStr(self.0.as_str())
+            )))
+        }
+    }
+}

@@ -5,6 +5,7 @@ use anstyle::{AnsiColor, Color, Style};
 use smart_config::{
     ConfigRef, ConfigSchema,
     metadata::{BasicTypes, ConfigTag, ConfigVariant, TypeDescription, TypeSuffixes},
+    pat::{PatternDisplay, RawStr},
 };
 
 use crate::{
@@ -281,6 +282,31 @@ impl ParamRef<'_> {
     }
 }
 
+fn write_separator(
+    writer: &mut impl io::Write,
+    relation_to_parent: &str,
+    indent: usize,
+    sep: &PatternDisplay,
+) -> io::Result<()> {
+    const REGEX: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Magenta)));
+
+    write!(
+        writer,
+        "{:>indent$}{FIELD}{relation_to_parent}{FIELD:#}: ",
+        ""
+    )?;
+    match sep {
+        PatternDisplay::Exact(s) => {
+            writeln!(writer, "exact match: {STRING}{s:?}{STRING:#}")
+        }
+        PatternDisplay::Regex(regex) => {
+            // TODO: highlight regex syntax
+            writeln!(writer, "regex: {REGEX}{}{REGEX:#}", RawStr(regex))
+        }
+        _ => writeln!(writer, "{sep}"),
+    }
+}
+
 fn write_type_description(
     writer: &mut impl io::Write,
     relation_to_parent: Option<&str>,
@@ -361,12 +387,21 @@ fn write_type_description(
     if let Some((expecting, item)) = description.items() {
         write_type_description(writer, Some("Array items"), indent + 2, expecting, item)?;
     }
+    if let Some(sep) = description.item_separator() {
+        write_separator(writer, "Item separator", indent + 2, sep)?;
+    }
+
     if let Some((expecting, key)) = description.keys() {
         write_type_description(writer, Some("Map keys"), indent + 2, expecting, key)?;
     }
     if let Some((expecting, value)) = description.values() {
         write_type_description(writer, Some("Map values"), indent + 2, expecting, value)?;
     }
+    if let Some((entry_sep, kv_sep)) = description.entry_separators() {
+        write_separator(writer, "Entries separator", indent + 2, entry_sep)?;
+        write_separator(writer, "Key–value separator", indent + 2, kv_sep)?;
+    }
+
     if let Some((expecting, fallback)) = description.fallback() {
         write_type_description(writer, Some("Fallback"), indent + 2, expecting, fallback)?;
     }
