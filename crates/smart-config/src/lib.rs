@@ -136,7 +136,8 @@
 // Documentation settings
 #![doc(html_root_url = "https://docs.rs/smart-config/0.4.0-pre.2")] // x-release-please-version
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(docsrs, doc(auto_cfg(hide(feature = "_docs"))))]
+// TODO: restore the attribute once supported by the nightly toolchain used by ZKsync OS
+//   #![cfg_attr(docsrs, doc(auto_cfg(hide(feature = "_docs"))))]
 // Linter settings
 #![warn(missing_docs)]
 
