@@ -10,6 +10,11 @@ categories.workspace = true
 readme = "README.md"
 description = "Schema-driven layered configuration system with support of multiple configuration formats"
 
+[package.metadata.docs.rs]
+all-features = true
+# Set `docsrs` to enable unstable `doc(cfg(...))` attributes.
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 # Public dependencies (exposed in public crate APIs).
 anyhow.workspace = true
