@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 # Script that checks cross-crate doc links to docs.rs and replaces them to local links in the generated documentation.
-# This allows serving docs locally or from `github.io` without inks getting stale / leading to nowhere.
+# This allows serving docs locally or from `github.io` without links getting stale / leading to nowhere.
 
 set -e
 
