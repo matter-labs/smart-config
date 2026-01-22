@@ -102,6 +102,8 @@ jobs:
           cargo rustdoc -p smart-config-commands --all-features -- -D warnings -Z unstable-options --enable-index-page
       - name: Update cross-crate doc links
         run: ./process-docs.sh
+      - name: Disable Jekyll
+        run: touch target/doc/.nojekyll
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
