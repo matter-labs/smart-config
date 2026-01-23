@@ -10,28 +10,33 @@ categories.workspace = true
 readme = "README.md"
 description = "Schema-driven layered configuration system with support of multiple configuration formats"
 
+[package.metadata.docs.rs]
+all-features = true
+# Set `docsrs` to enable unstable `doc(cfg(...))` attributes.
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 # Public dependencies (exposed in public crate APIs).
 anyhow.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-serde_yaml.workspace = true # TODO: optional?
+serde_yaml.workspace = true
 smart-config-derive.workspace = true
 
 # Private dependencies (not exposed in public crate APIs).
 compile-fmt.workspace = true
 regex.workspace = true
 secrecy.workspace = true
-tracing.workspace = true # TODO: optional?
+tracing.workspace = true
 
 # As a feature: recognizes types from `primitive-types` as well-known
 primitive-types = { workspace = true, features = ["serde"], optional = true }
-
 # As a feature: recognizes types from `alloy` as well-known
 alloy = { workspace = true, default-features = false, features = ["serde"], optional = true }
 
 [dev-dependencies]
 assert_matches.workspace = true
+clap.workspace = true
 doc-comment.workspace = true
 proptest.workspace = true
 trybuild.workspace = true
@@ -39,6 +44,8 @@ version-sync.workspace = true
 
 [features]
 default = []
+# Enables additional documentation (the `_docs` module and its submodules). Needed for documenting purposes only; do not use.
+_docs = []
 
 [lints]
 workspace = true

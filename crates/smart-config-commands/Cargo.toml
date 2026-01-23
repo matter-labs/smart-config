@@ -10,6 +10,11 @@ categories.workspace = true
 readme = "README.md"
 description = "Command-line extensions for `smart-config` library"
 
+[package.metadata.docs.rs]
+all-features = true
+# Set `docsrs` to enable unstable `doc(cfg(...))` attributes.
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 anstream.workspace = true
 anstyle.workspace = true

@@ -1,8 +1,22 @@
-//! String patterns. Used to initialize delimiters for deserializers, like [`Delimited`]
-//! and [`DelimitedEntries`].
+//! String pattern matching.
+//!
+//! # Overview
+//!
+//! In the library, pattern matching is used to initialize delimiters for deserializers, like [`Delimited`]
+//! and [`DelimitedEntries`], and for [validating](crate::validation) string config params. Pattern matching
+//! essentially generalizes the [`Pattern`](std::str::pattern::Pattern) trait from the standard library.
+//! Since the trait itself is unstable, we don't use it directly; instead, we define the [`Split`] trait
+//! and implement it for `&str` and `[char; _]` (via `Pattern`) and for [`Regex`]es from the eponymous crate
+//! (via the [`LazyRegex`] wrapper; see its docs for why this wrapper is needed).
 //!
 //! [`Delimited`]: crate::de::Delimited
 //! [`DelimitedEntries`]: crate::de::DelimitedEntries
+//!
+//! # Examples
+//!
+//! - See [`Delimited`](crate::de::Delimited#examples) and [`DelimitedEntries`](crate::de::DelimitedEntries#examples)
+//!   for the examples of usage of delimiters.
+//! - See the [`validation`](crate::validation) module for the examples of string validation using [`LazyRegex`].
 
 use std::{fmt, ops, sync::LazyLock};
 
