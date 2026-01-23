@@ -3,7 +3,7 @@
 //! Various examples how to use [`DescribeConfig`](macro@crate::DescribeConfig) and other derive macros
 //! from the library.
 //!
-//! ## Basic usage
+//! # Basic usage
 //!
 //! Shows how to use the macros with nested and flattened sub-configs, enum configs etc.
 //!
@@ -55,7 +55,7 @@
 //! }
 //! ```
 //!
-//! ## Deriving `ExampleConfig`
+//! # Deriving `ExampleConfig`
 //!
 //! ```
 //! # use std::collections::HashSet;
@@ -94,4 +94,35 @@
 //!         },
 //!     })
 //! );
+//! ```
+//!
+//! # Advanced features
+//!
+//! Demonstrates some advanced library features:
+//!
+//! - [Parameter validation](crate::validation)
+//! - [Fallback values](crate::fallback)
+//! - Complex deserializers: [`Delimited`](crate::de::Delimited), [`NamedEntries`](crate::de::NamedEntries)
+//!   and [`DelimitedEntries`](crate::de::DelimitedEntries)
+//! - Use or [regexes](crate::pat) as delimiters and validations
+//! - Deserialization of values [with units](crate::de::WithUnit), and the fixed-unit alternative
+//! - [Deprecated aliases](super::derive_ref#deprecated) and the use of paths
+//! - [Secret values](super::derive_ref#secret).
+//!
+//! ```
+#![doc = include_str!("../../tests/code_samples/test_config.rs")]
+//! ```
+//!
+//! ## Matching YAML configuration
+//!
+//! ```yaml
+#![doc = include_str!("../../tests/code_samples/test.yml")]
+//! ```
+//!
+//! ## Matching env variables
+//!
+//! Assumes the `APP_` prefix for env vars.
+//!
+//! ```shell
+#![doc = include_str!("../../tests/code_samples/test.env")]
 //! ```

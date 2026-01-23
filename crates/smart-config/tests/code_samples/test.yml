@@ -1,0 +1,23 @@
+app_name: stage
+# Use the deprecated alias for the `port` param
+bind_to: 8080
+scaling_factor: 3.0
+temp_dir: /var/app-stage
+dir_paths:
+  - /usr/bin
+  - /usr/local/bin
+  - /bin
+timeout_sec: 3
+experimental:
+  # Use the deprecated path alias for `cache_size`
+  cache_size: 32 MB
+  api_key: SUPER_SECRET_DONUT_STEEL
+  # Use the array format that would be translated to a map
+  method_limits:
+    - method: eth_call
+      rps: 200
+    - method: eth_blockNumber
+      rps: 1000
+  balances:
+    1234: 0.01 ether
+    4321: 600000 gwei
