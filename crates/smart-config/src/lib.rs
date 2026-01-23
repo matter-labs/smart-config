@@ -2,6 +2,8 @@
 //!
 //! # Overview
 //!
+//! *See [extra docs](_docs) for deep dive into library features.*
+//!
 //! The task solved by the library is merging configuration input from a variety of prioritized [sources](ConfigSource)
 //! (JSON and YAML files, env variables, command-line args etc.) and converting this input to strongly typed
 //! representation (i.e., config structs or enums). As with other config systems, config input follows the JSON object model

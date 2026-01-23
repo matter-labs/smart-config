@@ -4,7 +4,7 @@
 //!
 //! Some configuration params may be sourced from places that do not fit well into the hierarchical config schema.
 //! For example, a config param with logging directives may want to read from a `RUST_LOG` env var, regardless of where
-//! the param is placed in the hierarchy. It is possible to manually move raw config values around, it may get unmaintainable
+//! the param is placed in the hierarchy. It is possible to manually move raw config values around, but it may get unmaintainable
 //! for large configs.
 //!
 //! *Fallbacks* provide a more sound approach: declare the fallback config sources as a part of the [`DescribeConfig`](macro@crate::DescribeConfig)
@@ -18,6 +18,10 @@
 //! - By design, fallbacks are location-independent. E.g., an [`Env`] fallback will always read from the same env var,
 //!   regardless of where the param containing it is placed (including the case when it has multiple copies!).
 //! - Fallbacks always have lower priority than all other config sources.
+//!
+//! # Examples
+//!
+//! See [`Env`](Env#examples) and [`Manual`](Manual#examples) docs for the examples of usage.
 
 use std::{collections::HashMap, env, fmt, sync::Arc};
 

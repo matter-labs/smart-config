@@ -1,4 +1,55 @@
 //! Testing tools for configurations.
+//!
+//! # Overview
+//!
+//! On the most basic level, testing allows to ensure that a configuration can be parsed
+//! from the expected data format. Additionally, tests can help ensure that no breaking changes
+//! are made to the configuration code, and can serve as documentation.
+//!
+//! - [`test()`] function parses a [config source](ConfigSource), such as (parsed) YAML or mocked env vars.
+//! - [`test_complete()`] additionally requires that the source is complete, i.e. covers *all* config params,
+//!   recursively if there are any sub-configs. Naturally, for enum configs, a single variant is required
+//!   (but this variant still must be completely covered).
+//! - [`test_minimal()`], conversely, requires that *only* required config params are specified in the source.
+//!   This allows to check for breaking changes caused by adding non-optional params to a config.
+//! - [`Tester`] enables more control over the test setup, such as [testing](Tester::new()) entire [`ConfigSchema`]
+//!   (as opposed to single configs), [mocking env variables](Tester::set_env()) etc.
+//!
+//! # Examples
+//!
+//! See [`test()`], [`test_complete()`] and [`test_minimal()`] docs for basic examples of usage.
+//!
+//! ## Mocking env variables
+//!
+//! This is mostly useful for testing [fallbacks](crate::fallback) that read from env variables,
+//! although the mocked env vars are respected by [`Environment`](crate::Environment) config sources
+//! as well.
+//!
+//! ```
+//! # use std::path::PathBuf;
+//! use smart_config::{
+//!     fallback, testing::Tester,
+//!     DescribeConfig, DeserializeConfig, Environment,
+//! };
+//!
+//! #[derive(DescribeConfig, DeserializeConfig)]
+//! struct TestConfig {
+//!     port: u16,
+//!     #[config(
+//!         default_t = "/tmp".into(),
+//!         fallback = &fallback::Env("TMPDIR")
+//!     )]
+//!     temp_dir: PathBuf,
+//! }
+//!
+//! let config: TestConfig = Tester::default()
+//!     .set_env("TMPDIR", "/var/app")
+//!     .set_env("APP_PORT", "8080")
+//!     .test_complete(Environment::prefixed("APP_"))?;
+//! assert_eq!(config.port, 8_080);
+//! assert_eq!(config.temp_dir.as_os_str(), "/var/app");
+//! # anyhow::Ok(())
+//! ```
 
 use std::{any, cell::RefCell, collections::HashMap, marker::PhantomData, mem};
 
