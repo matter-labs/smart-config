@@ -96,7 +96,7 @@ impl Environment {
             let (name, variable_value) = line.split_once('=').with_context(|| {
                 format!("Incorrect line for setting environment variable: {line}")
             })?;
-            let variable_value = variable_value.trim_matches('"');
+            let variable_value = variable_value.trim_matches(['"', '\'']);
             map.insert(
                 name.to_lowercase(),
                 WithOrigin {
