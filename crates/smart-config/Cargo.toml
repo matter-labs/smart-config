@@ -36,6 +36,7 @@ alloy = { workspace = true, default-features = false, features = ["serde"], opti
 
 [dev-dependencies]
 assert_matches.workspace = true
+clap.workspace = true
 doc-comment.workspace = true
 proptest.workspace = true
 trybuild.workspace = true

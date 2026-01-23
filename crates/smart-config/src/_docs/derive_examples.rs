@@ -126,3 +126,8 @@
 //! ```shell
 #![doc = include_str!("../../tests/code_samples/test.env")]
 //! ```
+//!
+//! # See also
+//!
+//! - [Derive macro reference](super::derive_ref)
+//! - [Combining config sources](super::sources)
