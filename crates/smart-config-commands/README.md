@@ -10,6 +10,7 @@
 This library provides a couple of command-line extensions for the [`smart-config`] library:
 
 - Printing help for configuration params with optional filtering.
+- Generating a Markdown reference for configuration params.
 - Debugging param values and deserialization errors.
 
 ## Usage
@@ -42,6 +43,26 @@ io::Result::Ok(())
 Example output is as follows:
 
 ![Example output for print_help](examples/help.svg)
+
+### Generating Markdown reference docs
+
+```rust
+use std::io;
+use smart_config::ConfigSchema;
+use smart_config_commands::{MarkdownOptions, Printer};
+
+let mut schema = ConfigSchema::default();
+// Add configurations to the schema...
+
+Printer::stdout().print_markdown_reference(&schema, &MarkdownOptions::default(), |_| true)?;
+io::Result::Ok(())
+```
+
+For a binary exposing configuration utilities, prefer a command name based on the task, for example:
+
+```shell
+config docs > docs/src/setup/configuration.md
+```
 
 ### Debugging param values
 

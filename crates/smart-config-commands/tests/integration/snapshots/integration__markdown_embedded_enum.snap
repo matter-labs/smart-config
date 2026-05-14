@@ -1,0 +1,90 @@
+---
+source: crates/smart-config-commands/tests/integration/main.rs
+expression: buffer
+---
+# Configuration Reference
+
+## `da`
+
+| Field | Value |
+| --- | --- |
+| Rust config | `DataAvailabilityConfig` |
+
+### `da.client`
+
+| Field | Value |
+| --- | --- |
+| Type | string tag with variants |
+
+| Value | Rust variant | Default | Aliases | Description |
+| --- | --- | --- | --- | --- |
+| `None` | `DataAvailabilityConfig::None` | yes |  | Do not use data availability anywhere. |
+| `ObjectStore` | `DataAvailabilityConfig::ObjectStore` |  |  | Store data in an object store. |
+
+## `da`
+
+| Field | Value |
+| --- | --- |
+| Rust config | `ObjectStoreConfig` |
+
+### `da.type`
+
+| Field | Value |
+| --- | --- |
+| Type | string tag with variants |
+| Tag | `da.client` == `ObjectStore` |
+
+| Value | Rust variant | Default | Aliases | Description |
+| --- | --- | --- | --- | --- |
+| `local` | `ObjectStoreConfig::Local` | yes |  | Stores object locally as files. |
+| `s3` | `ObjectStoreConfig::S3` |  |  | Stores objects in AWS S3. |
+| `gcs` | `ObjectStoreConfig::Gcs` |  | `google`, `google_cloud` | Stores objects in Google Cloud Storage. |
+
+### `da.path`
+
+| Field | Value |
+| --- | --- |
+| Type | `string`; filesystem path |
+| Rust type | `PathBuf` |
+| Tags | `da.client` == `ObjectStore` && `da.type` == `local` |
+| Default | `"."` |
+
+Path to the root directory.
+
+### `da.bucket_name`
+
+| Field | Value |
+| --- | --- |
+| Type | `string` |
+| Rust type | `String` |
+| Tags | `da.client` == `ObjectStore` && `da.type` == `gcs` |
+
+Bucket to put objects into.
+
+## `da`
+
+| Field | Value |
+| --- | --- |
+| Rust config | `S3Config` |
+
+### `da.bucket_name`
+
+| Field | Value |
+| --- | --- |
+| Type | `string` |
+| Rust type | `String` |
+| Tags | `da.client` == `ObjectStore` && `da.type` == `s3` |
+
+Bucket to put objects into.
+
+### `da.region`
+
+| Field | Value |
+| --- | --- |
+| Type | `string` |
+| Rust type | `Option` |
+| Type filtering | must not be empty, otherwise set to `null` |
+| Tags | `da.client` == `ObjectStore` && `da.type` == `s3` |
+| Default | `null` |
+
+AWS availability region.

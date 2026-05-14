@@ -7,7 +7,7 @@ use smart_config::{
     ConfigRepository, ConfigSchema, DescribeConfig, Environment, ExampleConfig, Json, ParseErrors,
     SerializerOptions, Yaml,
 };
-use smart_config_commands::{ParamRef, Printer};
+use smart_config_commands::{MarkdownOptions, ParamRef, Printer};
 
 use crate::configs::{TestConfig, create_mock_repo};
 
@@ -18,6 +18,11 @@ mod configs;
 enum Cli {
     /// Prints configuration help.
     Print {
+        /// Filter for param paths.
+        filter: Option<String>,
+    },
+    /// Generates configuration reference docs.
+    Docs {
         /// Filter for param paths.
         filter: Option<String>,
     },
@@ -52,28 +57,31 @@ enum SerializationFormat {
 
 const ERROR: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
 
+fn path_filter(filter: Option<&String>) -> impl Fn(ParamRef<'_>) -> bool + '_ {
+    move |param_ref| {
+        filter.is_none_or(|needle| param_ref.all_paths().any(|(path, _)| path.contains(needle)))
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
 
     match cli {
         Cli::Print { filter } => {
-            let filter = |param_ref: ParamRef<'_>| {
-                filter.as_ref().is_none_or(|needle| {
-                    param_ref.all_paths().any(|(path, _)| path.contains(needle))
-                })
-            };
-            Printer::stderr().print_help(&schema, filter)?;
+            Printer::stderr().print_help(&schema, path_filter(filter.as_ref()))?;
+        }
+        Cli::Docs { filter } => {
+            Printer::stdout().print_markdown_reference(
+                &schema,
+                &MarkdownOptions::default(),
+                path_filter(filter.as_ref()),
+            )?;
         }
         Cli::Debug { bogus, filter } => {
             let repo = create_mock_repo(&schema, bogus);
-            let filter = |param_ref: ParamRef<'_>| {
-                filter.as_ref().is_none_or(|needle| {
-                    param_ref.all_paths().any(|(path, _)| path.contains(needle))
-                })
-            };
 
-            let res = Printer::stderr().print_debug(&repo, filter)?;
+            let res = Printer::stderr().print_debug(&repo, path_filter(filter.as_ref()))?;
             if let Err(err) = res {
                 let mut errors: Vec<_> = err.into_iter().collect();
                 // Have deterministic sorting order for errors.
