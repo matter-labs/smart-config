@@ -782,7 +782,7 @@ mod tests {
         assert_eq!(val, 10_u32);
         let val = TimeUnit::Minutes.serialize_param(&Duration::from_secs(10));
         assert_eq!(val, 0_u32);
-        let val = TimeUnit::Minutes.serialize_param(&Duration::from_secs(120));
+        let val = TimeUnit::Minutes.serialize_param(&Duration::from_mins(2));
         assert_eq!(val, 2_u32);
     }
 
@@ -810,11 +810,11 @@ mod tests {
         assert_eq!(val, "5s");
         let val = WithUnit.serialize_param(&Duration::from_millis(5_050));
         assert_eq!(val, "5050ms");
-        let val = WithUnit.serialize_param(&Duration::from_secs(300));
+        let val = WithUnit.serialize_param(&Duration::from_mins(5));
         assert_eq!(val, "5min");
-        let val = WithUnit.serialize_param(&Duration::from_secs(7_200));
+        let val = WithUnit.serialize_param(&Duration::from_hours(2));
         assert_eq!(val, "2h");
-        let val = WithUnit.serialize_param(&Duration::from_secs(86_400));
+        let val = WithUnit.serialize_param(&Duration::from_hours(24));
         assert_eq!(val, "1d");
     }
 
