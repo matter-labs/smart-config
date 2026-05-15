@@ -8,81 +8,73 @@ expression: buffer
 
 Configuration with type params of several types.
 
-| Field | Value |
-| --- | --- |
-| Rust config | `TestConfig` |
+**Rust config:** `TestConfig`
 
 ### `test.port`
 
-| Field | Value |
-| --- | --- |
-| Type | `integer` |
-| Rust type | `u16` |
-| Aliases | `test.bind_to` (deprecated) |
-| Example | `8080` |
+**Aliases:** `test.bind_to` (deprecated)
+
+**Type:** integer (Rust: `u16`)
+
+**Example:** `8080`
 
 Port to bind to.
 
 ### `test.app_name`
 
-| Field | Value |
-| --- | --- |
-| Type | `string` |
-| Rust type | `String` |
-| Type validations | must not be empty<br />must match Regex(r"^[a-z][-a-z0-9]*$") |
-| Default | `"app"` |
+**Type:** string (Rust: `String`)
+
+- **Type validations:**
+
+  - must not be empty
+  - must match Regex(r"^[a-z][-a-z0-9]*$")
+
+**Default:** `"app"`
 
 Application name.
 
 ### `test.poll_latency`
 
-| Field | Value |
-| --- | --- |
-| Type | `string \| object`; duration with unit, or object with single unit key |
-| Rust type | `Duration` |
-| Name suffixes | duration units from millis to weeks, for example `_ms` or `_in_sec` |
-| Default | `"500ms"` |
+**Type:** string or object (Rust: `Duration`); duration with unit, or object with single unit key
+
+- **Name suffixes:** duration units from millis to weeks, for example `_ms` or `_in_sec`
+
+**Default:** `"500ms"`
 
 ### `test.scaling_factor`
 
-| Field | Value |
-| --- | --- |
-| Type | `integer \| float` |
-| Rust type | `Option` |
-| Type validations | must be in range 0.0..=10.0 |
-| Default | `null` |
-| Example | `0.5` |
+**Type:** integer or float (Rust: `Option`)
+
+- **Type validations:**
+
+  - must be in range 0.0..=10.0
+
+**Default:** `null`
+
+**Example:** `0.5`
 
 Should be greater than 0.
 
 ### `test.temp_dir`
 
-| Field | Value |
-| --- | --- |
-| Type | `string`; filesystem path |
-| Rust type | `PathBuf` |
-| Default | `"/tmp"` |
-| Fallbacks | env var "TMPDIR" |
+**Type:** string (Rust: `PathBuf`); filesystem path
+
+**Default:** `"/tmp"`
+
+**Fallbacks:** env var "TMPDIR"
 
 Directory for temporary stuff.
 
 ### `test.dir_paths`
 
-| Field | Value |
-| --- | --- |
-| Type | `string \| array`; set |
-| Rust type | `HashSet` |
-| Array items | `string`; Rust: `std::path::PathBuf`; filesystem path |
-| Item separator | exact match: `":"` |
-| Aliases | `test.dirs` |
-| Default | See below. |
-| Example | See below. |
+**Aliases:** `test.dirs`
 
-**Default:**
+**Type:** string or array (Rust: `HashSet`); set
 
-```json
-[]
-```
+- **Array items:** string (Rust: `std::path::PathBuf`); filesystem path
+- **Item separator:** exact match: `":"`
+
+**Default:** `[]`
 
 **Example:**
 
@@ -96,146 +88,128 @@ Paths to key directories.
 
 ### `test.timeout_sec`
 
-| Field | Value |
-| --- | --- |
-| Type | `integer`; time duration; unit: `seconds` |
-| Rust type | `Duration` |
-| Default | `60` |
+**Type:** integer (Rust: `Duration`); time duration; unit: `seconds`
+
+**Default:** `60`
 
 Timeout for some operation.
 
 ### `test.cache_size`
 
-| Field | Value |
-| --- | --- |
-| Type | `string \| object`; size with unit, or object with single unit key |
-| Rust type | `ByteSize` |
-| Name suffixes | byte size units up to gigabytes, for example `_mb` or `_in_kib` |
-| Aliases | `test.experimental.cache_size` (deprecated) |
-| Default | `"16 MiB"` |
+**Aliases:** `test.experimental.cache_size` (deprecated)
+
+**Type:** string or object (Rust: `ByteSize`); size with unit, or object with single unit key
+
+- **Name suffixes:** byte size units up to gigabytes, for example `_mb` or `_in_kib`
+
+**Default:** `"16 MiB"`
 
 In-memory cache size.
 
 ### `test.required`
 
-| Field | Value |
-| --- | --- |
-| Type | `integer` |
-| Rust type | `u64` |
-| Example | `42` |
+**Type:** integer (Rust: `u64`)
+
+**Example:** `42`
 
 Required param.
 
 ## `test.funding`
 
-| Field | Value |
-| --- | --- |
-| Rust config | `FundingConfig` |
-| Aliases | `test.funds` (deprecated) |
-| Validations | `address` should be non-zero for non-zero `balance` |
+**Rust config:** `FundingConfig`
+
+**Aliases:** `test.funds` (deprecated)
+
+**Validations:**
+
+- `address` should be non-zero for non-zero `balance`
 
 ### `test.funding.address`
 
-| Field | Value |
-| --- | --- |
-| Type | `string`; hex string with optional 0x prefix |
-| Rust type | `Address` |
-| Aliases | `test.funds.address` (deprecated) |
-| Default | `"0x0000000000000000000000000000000000000000"` |
+**Aliases:** `test.funds.address` (deprecated)
+
+**Type:** string (Rust: `Address`); hex string with optional 0x prefix
+
+**Default:** `"0x0000000000000000000000000000000000000000"`
 
 Ethereum-like address to fund.
 
 ### `test.funding.balance`
 
-| Field | Value |
-| --- | --- |
-| Type | `string`; 0x-prefixed hex number |
-| Rust type | `U256` |
-| Aliases | `test.funds.balance` (deprecated) |
-| Default | `"0x0"` |
+**Aliases:** `test.funds.balance` (deprecated)
+
+**Type:** string (Rust: `U256`); 0x-prefixed hex number
+
+**Default:** `"0x0"`
 
 Initial balance for the address.
 
 ### `test.funding.min_fee`
 
-| Field | Value |
-| --- | --- |
-| Type | `string \| object`; amount with unit, or object with single unit key |
-| Rust type | `EtherAmount` |
-| Name suffixes | ether value units, for example `_gwei` or `_in_ether` |
-| Aliases | `test.funds.min_fee` (deprecated) |
-| Default | `"0 ether"` |
+**Aliases:** `test.funds.min_fee` (deprecated)
+
+**Type:** string or object (Rust: `EtherAmount`); amount with unit, or object with single unit key
+
+- **Name suffixes:** ether value units, for example `_gwei` or `_in_ether`
+
+**Default:** `"0 ether"`
 
 Minimum fee.
 
 ### `test.funding.aux_balances`
 
-| Field | Value |
-| --- | --- |
-| Type | `string \| object`; map |
-| Rust type | `HashMap` |
-| Map keys | `string`; Rust: `primitive_types::H160`; hex string with optional 0x prefix |
-| Map values | `string \| object`; Rust: `smart_config::types::EtherAmount`; amount with unit, or object with single unit key |
-| Entries separator | regex: `\\s*[,\\n]\\s*` |
-| Key-value separator | regex: `\\s*=\\s*` |
-| Aliases | `test.funds.aux_balances` (deprecated) |
-| Default | See below. |
+**Aliases:** `test.funds.aux_balances` (deprecated)
 
-**Default:**
+**Type:** string or object (Rust: `HashMap`); map
 
-```json
-{}
-```
+- **Map keys:** string (Rust: `primitive_types::H160`); hex string with optional 0x prefix
+- **Map values:** string or object (Rust: `smart_config::types::EtherAmount`); amount with unit, or object with single unit key
+- **Entries separator:** regex: `\s*[,\n]\s*`
+- **Key-value separator:** regex: `\s*=\s*`
+
+**Default:** `{}`
 
 ### `test.funding.api_key`
 
-| Field | Value |
-| --- | --- |
-| Type | secret `string` |
-| Rust type | `Option` |
-| Aliases | `test.funds.api_key` (deprecated) |
-| Default | `null` |
-| Example | `"correct horse battery staple"` |
+**Aliases:** `test.funds.api_key` (deprecated)
+
+**Type:** secret string (Rust: `Option`)
+
+**Default:** `null`
+
+**Example:** `"correct horse battery staple"`
 
 Secret string value.
 
 ### `test.funding.secret_key`
 
-| Field | Value |
-| --- | --- |
-| Type | secret `string` |
-| Rust type | `Option` |
-| Aliases | `test.funds.secret_key` (deprecated) |
-| Default | `null` |
-| Example | `"0x0000000000000000000000000000000000000000000000000000000000000000"` |
+**Aliases:** `test.funds.secret_key` (deprecated)
+
+**Type:** secret string (Rust: `Option`)
+
+**Default:** `null`
+
+**Example:** `"0x0000000000000000000000000000000000000000000000000000000000000000"`
 
 Secret key.
 
 ## `test.nested`
 
-| Field | Value |
-| --- | --- |
-| Rust config | `NestedConfig` |
+**Rust config:** `NestedConfig`
 
 ### `test.nested.exit_on_error`
 
-| Field | Value |
-| --- | --- |
-| Type | `Boolean` |
-| Rust type | `bool` |
-| Aliases | `test.experimental.exit_on_error` (deprecated) |
-| Default | `true` |
+**Aliases:** `test.experimental.exit_on_error` (deprecated)
+
+**Type:** boolean (Rust: `bool`)
+
+**Default:** `true`
 
 Whether to exit the application on error.
 
 ### `test.nested.complex`
 
-| Field | Value |
-| --- | --- |
-| Type | `object` |
-| Rust type | `ComplexParam` |
-| Default | See below. |
-| Example | See below. |
+**Type:** object (Rust: `ComplexParam`)
 
 **Default:**
 
@@ -264,21 +238,14 @@ Complex parameter deserialized from an object.
 
 ### `test.nested.more_timeouts`
 
-| Field | Value |
-| --- | --- |
-| Type | `string \| array` |
-| Rust type | `Vec` |
-| Array items | `string \| object`; Rust: `core::time::Duration`; duration with unit, or object with single unit key |
-| Item separator | exact match: `","` |
-| Aliases | `test.nested.timeouts` |
-| Default | See below. |
-| Example | See below. |
+**Aliases:** `test.nested.timeouts`
 
-**Default:**
+**Type:** string or array (Rust: `Vec`)
 
-```json
-[]
-```
+- **Array items:** string or object (Rust: `core::time::Duration`); duration with unit, or object with single unit key
+- **Item separator:** exact match: `","`
+
+**Default:** `[]`
 
 **Example:**
 
@@ -290,20 +257,12 @@ Complex parameter deserialized from an object.
 
 ### `test.nested.method_limits`
 
-| Field | Value |
-| --- | --- |
-| Type | `array \| object`; map or array of { "method": _, "rps": _ } tuples |
-| Rust type | `HashMap` |
-| Map keys | `string`; Rust: `alloc::string::String` |
-| Map values | `integer`; Rust: `core::num::nonzero::NonZero<u32>`; non-zero |
-| Default | See below. |
-| Example | See below. |
+**Type:** array or object (Rust: `HashMap`); map or array of { "method": _, "rps": _ } tuples
 
-**Default:**
+- **Map keys:** string (Rust: `alloc::string::String`)
+- **Map values:** integer (Rust: `core::num::nonzero::NonZero<u32>`); non-zero
 
-```json
-[]
-```
+**Default:** `[]`
 
 **Example:**
 
@@ -324,67 +283,56 @@ Can be deserialized either from a map or an array of tuples.
 
 ## `test.object_store`
 
-| Field | Value |
-| --- | --- |
-| Rust config | `ObjectStoreConfig` |
+**Rust config:** `ObjectStoreConfig`
 
 ### `test.object_store.type`
 
-| Field | Value |
-| --- | --- |
-| Type | string tag with variants |
+**Type:** string tag with variants:
 
-| Value | Rust variant | Default | Aliases | Description |
-| --- | --- | --- | --- | --- |
-| `local` | `ObjectStoreConfig::Local` | yes |  | Stores object locally as files. |
-| `s3` | `ObjectStoreConfig::S3` |  |  | Stores objects in AWS S3. |
-| `gcs` | `ObjectStoreConfig::Gcs` |  | `google`, `google_cloud` | Stores objects in Google Cloud Storage. |
+- `local` (Rust: `ObjectStoreConfig::Local`) **(default)** - Stores object locally as files.
+- `s3` (Rust: `ObjectStoreConfig::S3`) - Stores objects in AWS S3.
+- `gcs` (Rust: `ObjectStoreConfig::Gcs`) - Stores objects in Google Cloud Storage.
+
+  - **Aliases:** `google`, `google_cloud`
 
 ### `test.object_store.path`
 
-| Field | Value |
-| --- | --- |
-| Type | `string`; filesystem path |
-| Rust type | `PathBuf` |
-| Tag | `test.object_store.type` == `local` |
-| Default | `"."` |
+**Type:** string (Rust: `PathBuf`); filesystem path
+
+**Tag:** `test.object_store.type == 'local'`
+
+**Default:** `"."`
 
 Path to the root directory.
 
 ### `test.object_store.bucket_name`
 
-| Field | Value |
-| --- | --- |
-| Type | `string` |
-| Rust type | `String` |
-| Tag | `test.object_store.type` == `gcs` |
+**Type:** string (Rust: `String`)
+
+**Tag:** `test.object_store.type == 'gcs'`
 
 Bucket to put objects into.
 
 ## `test.object_store`
 
-| Field | Value |
-| --- | --- |
-| Rust config | `S3Config` |
+**Rust config:** `S3Config`
 
 ### `test.object_store.bucket_name`
 
-| Field | Value |
-| --- | --- |
-| Type | `string` |
-| Rust type | `String` |
-| Tag | `test.object_store.type` == `s3` |
+**Type:** string (Rust: `String`)
+
+**Tag:** `test.object_store.type == 's3'`
 
 Bucket to put objects into.
 
 ### `test.object_store.region`
 
-| Field | Value |
-| --- | --- |
-| Type | `string` |
-| Rust type | `Option` |
-| Type filtering | must not be empty, otherwise set to `null` |
-| Tag | `test.object_store.type` == `s3` |
-| Default | `null` |
+**Type:** string (Rust: `Option`)
+
+- **Type filtering:** must not be empty, otherwise set to `null`
+
+**Tag:** `test.object_store.type == 's3'`
+
+**Default:** `null`
 
 AWS availability region.

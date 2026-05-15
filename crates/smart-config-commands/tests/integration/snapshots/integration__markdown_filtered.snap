@@ -6,85 +6,79 @@ expression: buffer
 
 ## `test.funding`
 
-| Field | Value |
-| --- | --- |
-| Rust config | `FundingConfig` |
-| Aliases | `test.funds` (deprecated) |
-| Validations | `address` should be non-zero for non-zero `balance` |
+**Rust config:** `FundingConfig`
+
+**Aliases:** `test.funds` (deprecated)
+
+**Validations:**
+
+- `address` should be non-zero for non-zero `balance`
 
 ### `test.funding.address`
 
-| Field | Value |
-| --- | --- |
-| Type | `string`; hex string with optional 0x prefix |
-| Rust type | `Address` |
-| Aliases | `test.funds.address` (deprecated) |
-| Default | `"0x0000000000000000000000000000000000000000"` |
+**Aliases:** `test.funds.address` (deprecated)
+
+**Type:** string (Rust: `Address`); hex string with optional 0x prefix
+
+**Default:** `"0x0000000000000000000000000000000000000000"`
 
 Ethereum-like address to fund.
 
 ### `test.funding.balance`
 
-| Field | Value |
-| --- | --- |
-| Type | `string`; 0x-prefixed hex number |
-| Rust type | `U256` |
-| Aliases | `test.funds.balance` (deprecated) |
-| Default | `"0x0"` |
+**Aliases:** `test.funds.balance` (deprecated)
+
+**Type:** string (Rust: `U256`); 0x-prefixed hex number
+
+**Default:** `"0x0"`
 
 Initial balance for the address.
 
 ### `test.funding.min_fee`
 
-| Field | Value |
-| --- | --- |
-| Type | `string \| object`; amount with unit, or object with single unit key |
-| Rust type | `EtherAmount` |
-| Name suffixes | ether value units, for example `_gwei` or `_in_ether` |
-| Aliases | `test.funds.min_fee` (deprecated) |
-| Default | `"0 ether"` |
+**Aliases:** `test.funds.min_fee` (deprecated)
+
+**Type:** string or object (Rust: `EtherAmount`); amount with unit, or object with single unit key
+
+- **Name suffixes:** ether value units, for example `_gwei` or `_in_ether`
+
+**Default:** `"0 ether"`
 
 Minimum fee.
 
 ### `test.funding.aux_balances`
 
-| Field | Value |
-| --- | --- |
-| Type | `string \| object`; map |
-| Rust type | `HashMap` |
-| Map keys | `string`; Rust: `primitive_types::H160`; hex string with optional 0x prefix |
-| Map values | `string \| object`; Rust: `smart_config::types::EtherAmount`; amount with unit, or object with single unit key |
-| Entries separator | regex: `\\s*[,\\n]\\s*` |
-| Key-value separator | regex: `\\s*=\\s*` |
-| Aliases | `test.funds.aux_balances` (deprecated) |
-| Default | See below. |
+**Aliases:** `test.funds.aux_balances` (deprecated)
 
-**Default:**
+**Type:** string or object (Rust: `HashMap`); map
 
-```json
-{}
-```
+- **Map keys:** string (Rust: `primitive_types::H160`); hex string with optional 0x prefix
+- **Map values:** string or object (Rust: `smart_config::types::EtherAmount`); amount with unit, or object with single unit key
+- **Entries separator:** regex: `\s*[,\n]\s*`
+- **Key-value separator:** regex: `\s*=\s*`
+
+**Default:** `{}`
 
 ### `test.funding.api_key`
 
-| Field | Value |
-| --- | --- |
-| Type | secret `string` |
-| Rust type | `Option` |
-| Aliases | `test.funds.api_key` (deprecated) |
-| Default | `null` |
-| Example | `"correct horse battery staple"` |
+**Aliases:** `test.funds.api_key` (deprecated)
+
+**Type:** secret string (Rust: `Option`)
+
+**Default:** `null`
+
+**Example:** `"correct horse battery staple"`
 
 Secret string value.
 
 ### `test.funding.secret_key`
 
-| Field | Value |
-| --- | --- |
-| Type | secret `string` |
-| Rust type | `Option` |
-| Aliases | `test.funds.secret_key` (deprecated) |
-| Default | `null` |
-| Example | `"0x0000000000000000000000000000000000000000000000000000000000000000"` |
+**Aliases:** `test.funds.secret_key` (deprecated)
+
+**Type:** secret string (Rust: `Option`)
+
+**Default:** `null`
+
+**Example:** `"0x0000000000000000000000000000000000000000000000000000000000000000"`
 
 Secret key.
