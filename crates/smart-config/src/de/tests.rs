@@ -453,7 +453,7 @@ fn parsing_complex_types() {
             choices: Some(vec![SimpleEnum::First, SimpleEnum::Second]),
             assumed: Some(serde_json::json!(24)),
             short_dur: Duration::from_millis(200),
-            long_dur: Duration::from_secs(5 * 60),
+            long_dur: Duration::from_mins(5),
             path: "/mnt".into(),
             memory_size_mb: Some(64 * SizeUnit::MiB),
             disk_size: Some(4 * SizeUnit::GiB),
@@ -628,7 +628,7 @@ fn deserializing_u128_and_i128() {
 fn parsing_composed_params() {
     let json = config!("durations": ["1sec", "5 min"]);
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
-    let expected_array = [Duration::from_secs(1), Duration::from_secs(300)];
+    let expected_array = [Duration::from_secs(1), Duration::from_mins(5)];
     assert_eq!(config.durations, expected_array);
     test_config_roundtrip(&config);
 
@@ -681,7 +681,7 @@ fn parsing_composed_params() {
     );
     let config: ComposedConfig = test_deserialize(json.inner()).unwrap();
     assert_eq!(config.entry_map[&5], Duration::from_secs(30));
-    assert_eq!(config.entry_map[&10], Duration::from_secs(120));
+    assert_eq!(config.entry_map[&10], Duration::from_mins(2));
     test_config_roundtrip(&config);
 
     let methods = serde_json::json!([
