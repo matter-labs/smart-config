@@ -907,17 +907,17 @@ fn nesting_with_duration_param() {
 
     let json = config!("array": [4, 5], "long_dur_hours": "4");
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(3_600 * 4));
+    assert_eq!(config.long_dur, Duration::from_hours(4));
     test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur_in_hours": 4.5);
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(3_600 * 9 / 2));
+    assert_eq!(config.long_dur, Duration::from_mins(270));
     test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur": "3min");
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(60 * 3));
+    assert_eq!(config.long_dur, Duration::from_mins(3));
     test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur": "0.3 min");
@@ -942,12 +942,12 @@ fn nesting_with_duration_param() {
 
     let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", 1)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(86_400));
+    assert_eq!(config.long_dur, Duration::from_hours(24));
     test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", 0.4)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(34_560));
+    assert_eq!(config.long_dur, Duration::from_mins(576));
     test_config_roundtrip(&config);
 
     let json = config!("array": [4, 5], "long_dur": HashMap::from([("days", "1.23e-2")]));
@@ -957,7 +957,7 @@ fn nesting_with_duration_param() {
 
     let json = config!("array": [4, 5], "long_dur": HashMap::from([("in_days", 1)]));
     let config: ConfigWithComplexTypes = testing::test(json).unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(86_400));
+    assert_eq!(config.long_dur, Duration::from_hours(24));
     test_config_roundtrip(&config);
 }
 
@@ -989,7 +989,7 @@ fn nesting_with_aliased_duration_param() {
     let env = Environment::from_iter("", [("LONG_ALIAS_LONG_DUR_MIN", "1")]);
     repo = repo.with(env);
     let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(60));
+    assert_eq!(config.long_dur, Duration::from_mins(1));
 }
 
 #[test]
@@ -1160,7 +1160,7 @@ fn merging_duration_params_is_atomic() {
     );
 
     let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(60));
+    assert_eq!(config.long_dur, Duration::from_mins(1));
 
     // Prefixed base and override
     let base = config!("test.array": [4, 5], "test.long_dur_in_secs": "3");
@@ -1176,7 +1176,7 @@ fn merging_duration_params_is_atomic() {
     );
 
     let config: ConfigWithComplexTypes = repo.single().unwrap().parse().unwrap();
-    assert_eq!(config.long_dur, Duration::from_secs(120));
+    assert_eq!(config.long_dur, Duration::from_mins(2));
 }
 
 #[test]
@@ -1199,14 +1199,14 @@ fn env_config_with_composed_deserializers() {
     assert_eq!(config.arrays, HashSet::from([[1, 2], [3, 4], [5, 6]]));
     assert_eq!(
         config.durations,
-        [Duration::from_secs(1), Duration::from_secs(3 * 60)]
+        [Duration::from_secs(1), Duration::from_mins(3)]
     );
     assert_eq!(
         config.delimited_durations,
         [
             Duration::from_millis(3),
             Duration::from_secs(5),
-            Duration::from_secs(2 * 3_600)
+            Duration::from_hours(2),
         ]
     );
     assert_eq!(

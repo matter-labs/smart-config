@@ -615,10 +615,10 @@ impl From<TimeUnit> for Duration {
         match unit {
             TimeUnit::Millis => Duration::from_millis(1),
             TimeUnit::Seconds => Duration::from_secs(1),
-            TimeUnit::Minutes => Duration::from_secs(60),
-            TimeUnit::Hours => Duration::from_secs(3_600),
-            TimeUnit::Days => Duration::from_secs(86_400),
-            TimeUnit::Weeks => Duration::from_secs(86_400 * 7),
+            TimeUnit::Minutes => Duration::from_mins(1),
+            TimeUnit::Hours => Duration::from_hours(1),
+            TimeUnit::Days => Duration::from_hours(24),
+            TimeUnit::Weeks => Duration::from_hours(24 * 7),
         }
     }
 }
