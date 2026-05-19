@@ -1,0 +1,338 @@
+---
+source: crates/smart-config-commands/tests/integration/main.rs
+expression: buffer
+---
+# Configuration Reference
+
+## `test`
+
+Configuration with type params of several types.
+
+**Rust config:** `TestConfig`
+
+### `test.port`
+
+**Aliases:** `test.bind_to` (deprecated)
+
+**Type:** integer (Rust: `u16`)
+
+**Example:** `8080`
+
+Port to bind to.
+
+### `test.app_name`
+
+**Type:** string (Rust: `String`)
+
+- **Type validations:**
+
+  - must not be empty
+  - must match Regex(r"^[a-z][-a-z0-9]*$")
+
+**Default:** `"app"`
+
+Application name.
+
+### `test.poll_latency`
+
+**Type:** string or object (Rust: `Duration`); duration with unit, or object with single unit key
+
+- **Name suffixes:** duration units from millis to weeks, for example `_ms` or `_in_sec`
+
+**Default:** `"500ms"`
+
+### `test.scaling_factor`
+
+**Type:** integer or float (Rust: `Option`)
+
+- **Type validations:**
+
+  - must be in range 0.0..=10.0
+
+**Default:** `null`
+
+**Example:** `0.5`
+
+Should be greater than 0.
+
+### `test.temp_dir`
+
+**Type:** string (Rust: `PathBuf`); filesystem path
+
+**Default:** `"/tmp"`
+
+**Fallbacks:** env var "TMPDIR"
+
+Directory for temporary stuff.
+
+### `test.dir_paths`
+
+**Aliases:** `test.dirs`
+
+**Type:** string or array (Rust: `HashSet`); set
+
+- **Array items:** string (Rust: `std::path::PathBuf`); filesystem path
+- **Item separator:** exact match: `":"`
+
+**Default:** `[]`
+
+**Example:**
+
+```json
+[
+  "./local"
+]
+```
+
+Paths to key directories.
+
+### `test.timeout_sec`
+
+**Type:** integer (Rust: `Duration`); time duration; unit: `seconds`
+
+**Default:** `60`
+
+Timeout for some operation.
+
+### `test.cache_size`
+
+**Aliases:** `test.experimental.cache_size` (deprecated)
+
+**Type:** string or object (Rust: `ByteSize`); size with unit, or object with single unit key
+
+- **Name suffixes:** byte size units up to gigabytes, for example `_mb` or `_in_kib`
+
+**Default:** `"16 MiB"`
+
+In-memory cache size.
+
+### `test.required`
+
+**Type:** integer (Rust: `u64`)
+
+**Example:** `42`
+
+Required param.
+
+## `test.funding`
+
+**Rust config:** `FundingConfig`
+
+**Aliases:** `test.funds` (deprecated)
+
+**Validations:**
+
+- `address` should be non-zero for non-zero `balance`
+
+### `test.funding.address`
+
+**Aliases:** `test.funds.address` (deprecated)
+
+**Type:** string (Rust: `Address`); hex string with optional 0x prefix
+
+**Default:** `"0x0000000000000000000000000000000000000000"`
+
+Ethereum-like address to fund.
+
+### `test.funding.balance`
+
+**Aliases:** `test.funds.balance` (deprecated)
+
+**Type:** string (Rust: `U256`); 0x-prefixed hex number
+
+**Default:** `"0x0"`
+
+Initial balance for the address.
+
+### `test.funding.min_fee`
+
+**Aliases:** `test.funds.min_fee` (deprecated)
+
+**Type:** string or object (Rust: `EtherAmount`); amount with unit, or object with single unit key
+
+- **Name suffixes:** ether value units, for example `_gwei` or `_in_ether`
+
+**Default:** `"0 ether"`
+
+Minimum fee.
+
+### `test.funding.aux_balances`
+
+**Aliases:** `test.funds.aux_balances` (deprecated)
+
+**Type:** string or object (Rust: `HashMap`); map
+
+- **Map keys:** string (Rust: `primitive_types::H160`); hex string with optional 0x prefix
+- **Map values:** string or object (Rust: `smart_config::types::EtherAmount`); amount with unit, or object with single unit key
+- **Entries separator:** regex: `\s*[,\n]\s*`
+- **Key-value separator:** regex: `\s*=\s*`
+
+**Default:** `{}`
+
+### `test.funding.api_key`
+
+**Aliases:** `test.funds.api_key` (deprecated)
+
+**Type:** secret string (Rust: `Option`)
+
+**Default:** `null`
+
+**Example:** `"correct horse battery staple"`
+
+Secret string value.
+
+### `test.funding.secret_key`
+
+**Aliases:** `test.funds.secret_key` (deprecated)
+
+**Type:** secret string (Rust: `Option`)
+
+**Default:** `null`
+
+**Example:** `"0x0000000000000000000000000000000000000000000000000000000000000000"`
+
+Secret key.
+
+## `test.nested`
+
+**Rust config:** `NestedConfig`
+
+### `test.nested.exit_on_error`
+
+**Aliases:** `test.experimental.exit_on_error` (deprecated)
+
+**Type:** boolean (Rust: `bool`)
+
+**Default:** `true`
+
+Whether to exit the application on error.
+
+### `test.nested.complex`
+
+**Type:** object (Rust: `ComplexParam`)
+
+**Default:**
+
+```json
+{
+  "array": [],
+  "map": {}
+}
+```
+
+**Example:**
+
+```json
+{
+  "array": [
+    3,
+    5
+  ],
+  "map": {
+    "var": 3
+  }
+}
+```
+
+Complex parameter deserialized from an object.
+
+### `test.nested.more_timeouts`
+
+**Aliases:** `test.nested.timeouts`
+
+**Type:** string or array (Rust: `Vec`)
+
+- **Array items:** string or object (Rust: `core::time::Duration`); duration with unit, or object with single unit key
+- **Item separator:** exact match: `","`
+
+**Default:** `[]`
+
+**Example:**
+
+```json
+[
+  "5s"
+]
+```
+
+### `test.nested.method_limits`
+
+**Type:** array or object (Rust: `HashMap`); map or array of { "method": _, "rps": _ } tuples
+
+- **Map keys:** string (Rust: `alloc::string::String`)
+- **Map values:** integer (Rust: `core::num::nonzero::NonZero<u32>`); non-zero
+
+**Default:** `[]`
+
+**Example:**
+
+```json
+[
+  {
+    "method": "eth_blockNumber",
+    "rps": 1
+  },
+  {
+    "method": "eth_call",
+    "rps": 100
+  }
+]
+```
+
+Can be deserialized either from a map or an array of tuples.
+
+## `test.object_store`
+
+**Rust config:** `ObjectStoreConfig`
+
+### `test.object_store.type`
+
+**Type:** string tag with variants:
+
+- `local` (Rust: `ObjectStoreConfig::Local`) **(default)** - Stores object locally as files.
+- `s3` (Rust: `ObjectStoreConfig::S3`) - Stores objects in AWS S3.
+- `gcs` (Rust: `ObjectStoreConfig::Gcs`) - Stores objects in Google Cloud Storage.
+
+  - **Aliases:** `google`, `google_cloud`
+
+### `test.object_store.path`
+
+**Type:** string (Rust: `PathBuf`); filesystem path
+
+**Tag:** `test.object_store.type == 'local'`
+
+**Default:** `"."`
+
+Path to the root directory.
+
+### `test.object_store.bucket_name`
+
+**Type:** string (Rust: `String`)
+
+**Tag:** `test.object_store.type == 'gcs'`
+
+Bucket to put objects into.
+
+## `test.object_store`
+
+**Rust config:** `S3Config`
+
+### `test.object_store.bucket_name`
+
+**Type:** string (Rust: `String`)
+
+**Tag:** `test.object_store.type == 's3'`
+
+Bucket to put objects into.
+
+### `test.object_store.region`
+
+**Type:** string (Rust: `Option`)
+
+- **Type filtering:** must not be empty, otherwise set to `null`
+
+**Tag:** `test.object_store.type == 's3'`
+
+**Default:** `null`
+
+AWS availability region.

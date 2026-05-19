@@ -8,7 +8,7 @@ use smart_config::{
     ConfigSchema, DescribeConfig, DeserializeConfig, Environment, ExampleConfig, SerializerOptions,
     testing::Tester,
 };
-use smart_config_commands::Printer;
+use smart_config_commands::{MarkdownOptions, Printer};
 use test_casing::{Product, test_casing};
 
 use crate::configs::{ObjectStoreConfig, TestConfig, create_mock_repo};
@@ -61,6 +61,44 @@ fn embedded_enum_config_help() {
         .unwrap();
     let buffer = String::from_utf8(buffer).unwrap();
     insta::assert_snapshot!("help_embedded_enum", buffer);
+}
+
+#[test]
+fn full_config_markdown_reference() {
+    let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
+
+    let mut buffer = vec![];
+    Printer::custom(AutoStream::never(&mut buffer))
+        .print_markdown_reference(&schema, &MarkdownOptions::default(), |_| true)
+        .unwrap();
+    let buffer = String::from_utf8(buffer).unwrap();
+    insta::assert_snapshot!("markdown_full", buffer);
+}
+
+#[test]
+fn filtered_config_markdown_reference() {
+    let schema = ConfigSchema::new(&TestConfig::DESCRIPTION, "test");
+
+    let mut buffer = vec![];
+    Printer::custom(AutoStream::never(&mut buffer))
+        .print_markdown_reference(&schema, &MarkdownOptions::default(), |param| {
+            param.all_paths().any(|(path, _)| path.contains("fund"))
+        })
+        .unwrap();
+    let buffer = String::from_utf8(buffer).unwrap();
+    insta::assert_snapshot!("markdown_filtered", buffer);
+}
+
+#[test]
+fn embedded_enum_config_markdown_reference() {
+    let schema = ConfigSchema::new(&DataAvailabilityConfig::DESCRIPTION, "da");
+
+    let mut buffer = vec![];
+    Printer::custom(AutoStream::never(&mut buffer))
+        .print_markdown_reference(&schema, &MarkdownOptions::default(), |_| true)
+        .unwrap();
+    let buffer = String::from_utf8(buffer).unwrap();
+    insta::assert_snapshot!("markdown_embedded_enum", buffer);
 }
 
 #[test]

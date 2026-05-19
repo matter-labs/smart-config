@@ -3,6 +3,7 @@
 //! The extensions are as follows:
 //!
 //! - [Printing help](Printer::print_help()) for configuration params with optional filtering.
+//! - [Printing a Markdown reference](Printer::print_markdown_reference()) for generated documentation.
 //! - [Debugging](Printer::print_debug()) param values and deserialization errors.
 //!
 //! All extensions are encapsulated in [`Printer`].
@@ -23,6 +24,22 @@
 //! Printer::stderr().print_help(&schema, |_| true)?;
 //! # std::io::Result::Ok(())
 //! ```
+//!
+//! ## Generating Markdown reference docs
+//!
+//! ```
+//! use smart_config::ConfigSchema;
+//! use smart_config_commands::{MarkdownOptions, Printer};
+//!
+//! let mut schema = ConfigSchema::default();
+//! // Add configurations to the schema...
+//!
+//! Printer::stderr().print_markdown_reference(&schema, &MarkdownOptions::default(), |_| true)?;
+//! # std::io::Result::Ok(())
+//! ```
+//!
+//! In binaries, prefer a task-oriented command name such as `config docs`; the API name is
+//! format-specific because this method emits Markdown.
 //!
 //! ## Debugging param values
 //!
@@ -62,7 +79,11 @@ use smart_config::{
 
 mod debug;
 mod help;
+mod markdown;
+mod schema_ref;
 mod utils;
+
+pub use self::markdown::{EnvVarOptions, MarkdownOptions};
 
 const CONFIG_PATH: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
 

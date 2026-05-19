@@ -1,0 +1,84 @@
+---
+source: crates/smart-config-commands/tests/integration/main.rs
+expression: buffer
+---
+# Configuration Reference
+
+## `test.funding`
+
+**Rust config:** `FundingConfig`
+
+**Aliases:** `test.funds` (deprecated)
+
+**Validations:**
+
+- `address` should be non-zero for non-zero `balance`
+
+### `test.funding.address`
+
+**Aliases:** `test.funds.address` (deprecated)
+
+**Type:** string (Rust: `Address`); hex string with optional 0x prefix
+
+**Default:** `"0x0000000000000000000000000000000000000000"`
+
+Ethereum-like address to fund.
+
+### `test.funding.balance`
+
+**Aliases:** `test.funds.balance` (deprecated)
+
+**Type:** string (Rust: `U256`); 0x-prefixed hex number
+
+**Default:** `"0x0"`
+
+Initial balance for the address.
+
+### `test.funding.min_fee`
+
+**Aliases:** `test.funds.min_fee` (deprecated)
+
+**Type:** string or object (Rust: `EtherAmount`); amount with unit, or object with single unit key
+
+- **Name suffixes:** ether value units, for example `_gwei` or `_in_ether`
+
+**Default:** `"0 ether"`
+
+Minimum fee.
+
+### `test.funding.aux_balances`
+
+**Aliases:** `test.funds.aux_balances` (deprecated)
+
+**Type:** string or object (Rust: `HashMap`); map
+
+- **Map keys:** string (Rust: `primitive_types::H160`); hex string with optional 0x prefix
+- **Map values:** string or object (Rust: `smart_config::types::EtherAmount`); amount with unit, or object with single unit key
+- **Entries separator:** regex: `\s*[,\n]\s*`
+- **Key-value separator:** regex: `\s*=\s*`
+
+**Default:** `{}`
+
+### `test.funding.api_key`
+
+**Aliases:** `test.funds.api_key` (deprecated)
+
+**Type:** secret string (Rust: `Option`)
+
+**Default:** `null`
+
+**Example:** `"correct horse battery staple"`
+
+Secret string value.
+
+### `test.funding.secret_key`
+
+**Aliases:** `test.funds.secret_key` (deprecated)
+
+**Type:** secret string (Rust: `Option`)
+
+**Default:** `null`
+
+**Example:** `"0x0000000000000000000000000000000000000000000000000000000000000000"`
+
+Secret key.

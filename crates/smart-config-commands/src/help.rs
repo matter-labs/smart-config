@@ -10,6 +10,7 @@ use smart_config::{
 
 use crate::{
     CONFIG_PATH, ParamRef, Printer,
+    schema_ref::collect_conditions,
     utils::{NULL, STRING, write_json_value},
 };
 
@@ -23,17 +24,6 @@ const UNIT: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan)));
 const SECRET: Style = Style::new()
     .bg_color(Some(Color::Ansi(AnsiColor::Cyan)))
     .fg_color(None);
-
-fn collect_conditions(mut config: ConfigRef<'_>) -> Vec<(ParamRef<'_>, &ConfigVariant)> {
-    let mut conditions = vec![];
-    while let Some((parent_ref, this_ref)) = config.parent_link() {
-        if let Some(variant) = this_ref.tag_variant {
-            conditions.push((ParamRef::for_tag(parent_ref), variant));
-        }
-        config = parent_ref;
-    }
-    conditions
-}
 
 impl<W: RawStream + AsLockedWrite> Printer<W> {
     /// Prints help on config params in the provided `schema`. Params can be filtered by the supplied predicate.
