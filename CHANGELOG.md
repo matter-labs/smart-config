@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0-pre.3](https://github.com/matter-labs/smart-config/compare/v0.4.0-pre.2...v0.4.0-pre.3) (2026-05-19)
+
+
+### Features
+
+* **cli:** add smart-config markdown docs generation ([#53](https://github.com/matter-labs/smart-config/issues/53)) ([a0f6e22](https://github.com/matter-labs/smart-config/commit/a0f6e2283a44293ca6a33ac042cc825f2a166d7b))
+* Delimited maps ([#50](https://github.com/matter-labs/smart-config/issues/50)) ([7de2ebc](https://github.com/matter-labs/smart-config/commit/7de2ebcce1e9ab8aa455a09f1f4cb1557be22335))
+* Support regex validation for strings ([7de2ebc](https://github.com/matter-labs/smart-config/commit/7de2ebcce1e9ab8aa455a09f1f4cb1557be22335))
+* Support regexes and char arrays for delimiting separators ([7de2ebc](https://github.com/matter-labs/smart-config/commit/7de2ebcce1e9ab8aa455a09f1f4cb1557be22335))
+
 ## [0.4.0-pre.2](https://github.com/matter-labs/smart-config/compare/v0.4.0-pre.1...v0.4.0-pre.2) (2026-01-14)
 
 
