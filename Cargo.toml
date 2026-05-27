@@ -18,7 +18,7 @@ categories = ["development-tools"]
 
 [workspace.dependencies]
 # External dependencies
-alloy = { version = "1", default-features = false }
+alloy = { version = "2", default-features = false }
 anstream = "1"
 anstyle = "1"
 anyhow = "1"
