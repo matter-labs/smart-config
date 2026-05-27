@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0-pre.4](https://github.com/matter-labs/smart-config/compare/v0.4.0-pre.3...v0.4.0-pre.4) (2026-05-27)
+
+
+### Features
+
+* bump alloy to v2 ([#55](https://github.com/matter-labs/smart-config/issues/55)) ([8a0ac25](https://github.com/matter-labs/smart-config/commit/8a0ac25a5a5de1a338e070dd5d76cc639505d031))
+
 ## [0.4.0-pre.3](https://github.com/matter-labs/smart-config/compare/v0.4.0-pre.2...v0.4.0-pre.3) (2026-05-19)
 
 
