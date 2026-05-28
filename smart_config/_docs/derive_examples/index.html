@@ -1,0 +1,227 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derive macro examples"><title>smart_config::_docs::derive_examples - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-bbd8d786.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="smart_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (eda76d9d1 2026-01-21)" data-channel="nightly" data-search-js="search-86d08462.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-f9617a14.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-12f88f4f.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-ffcac47a.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module derive_examples</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../smart_config/index.html">smart_<wbr>config</a><span class="version">0.4.0-pre.4</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module derive_<wbr>examples</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#derive-macro-examples" title="Derive macro examples">Derive macro examples</a></li><li><a href="#basic-usage" title="Basic usage">Basic usage</a></li><li><a href="#deriving-exampleconfig" title="Deriving `ExampleConfig`">Deriving <code>ExampleConfig</code></a></li><li><a href="#advanced-features" title="Advanced features">Advanced features</a><ul><li><a href="#matching-yaml-configuration" title="Matching YAML configuration">Matching YAML configuration</a></li><li><a href="#matching-env-variables" title="Matching env variables">Matching env variables</a></li></ul></li><li><a href="#see-also" title="See also">See also</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In smart_<wbr>config::<wbr>_<wbr>docs</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">smart_config</a>::<wbr><a href="../index.html">_docs</a></div><h1>Module <span>derive_<wbr>examples</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/smart_config/_docs/derive_examples.rs.html#1-133">Source</a> </span></div><span class="item-info"><div class="stab portability">Available on <strong>crate feature <code>_docs</code></strong> only.</div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="derive-macro-examples"><a class="doc-anchor" href="#derive-macro-examples">§</a>Derive macro examples</h2>
+<p>Various examples how to use <a href="../../derive.DescribeConfig.html" title="derive smart_config::DescribeConfig"><code>DescribeConfig</code></a> and other derive macros
+from the library.</p>
+<h2 id="basic-usage"><a class="doc-anchor" href="#basic-usage">§</a>Basic usage</h2>
+<p>Shows how to use the macros with nested and flattened sub-configs, enum configs etc.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>smart_config::metadata::TimeUnit;
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+</span><span class="kw">struct </span>TestConfig {
+    <span class="doccomment">/// Doc comments are parsed as a description.
+    </span><span class="attr">#[config(default_t = <span class="number">3</span>)]
+    </span>int: u32,
+    <span class="attr">#[config(default)] </span><span class="comment">// multiple `config` attrs are supported
+    </span><span class="attr">#[config(rename = <span class="string">"str"</span>, alias = <span class="string">"string"</span>)]
+    </span>renamed: String,
+    <span class="doccomment">/// Nested sub-config. E.g., the tag will be read from path `nested.version`.
+    </span><span class="attr">#[config(nest)]
+    </span>nested: NestedConfig,
+    <span class="doccomment">/// Flattened sub-config. E.g., `array` param will be read from `array`, not `flat.array`.
+    </span><span class="attr">#[config(flatten)]
+    </span>flat: FlattenedConfig,
+}
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+#[config(tag = <span class="string">"version"</span>, rename_all = <span class="string">"snake_case"</span>, derive(Default))]
+</span><span class="kw">enum </span>NestedConfig {
+    <span class="attr">#[config(default)]
+    </span>V0,
+    <span class="attr">#[config(alias = <span class="string">"latest"</span>)]
+    </span>V1 {
+        <span class="doccomment">/// Param with a custom deserializer. In this case, it will deserialize
+        /// a duration from a number with milliseconds unit of measurement.
+        </span><span class="attr">#[config(default_t = Duration::from_millis(<span class="number">50</span>), with = TimeUnit::Millis)]
+        </span>latency_ms: Duration,
+        <span class="doccomment">/// `Vec`s, sets and other containers are supported out of the box.
+        </span>set: HashSet&lt;NonZeroUsize&gt;,
+    },
+}
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+</span><span class="kw">struct </span>FlattenedConfig {
+    <span class="attr">#[config(default = FlattenedConfig::default_array)]
+    </span>array: [f32; <span class="number">2</span>],
+}
+
+<span class="kw">impl </span>FlattenedConfig {
+    <span class="kw">const fn </span>default_array() -&gt; [f32; <span class="number">2</span>] { [<span class="number">1.0</span>, <span class="number">2.0</span>] }
+}</code></pre></div><h2 id="deriving-exampleconfig"><a class="doc-anchor" href="#deriving-exampleconfig">§</a>Deriving <code>ExampleConfig</code></h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(DescribeConfig, ExampleConfig)]
+</span><span class="kw">struct </span>TestConfig {
+    <span class="doccomment">/// Required param that still has an example value.
+    </span><span class="attr">#[config(example = <span class="number">42</span>)]
+    </span>required: u32,
+    optional: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="attr">#[config(default_t = <span class="bool-val">true</span>)]
+    </span>with_default: bool,
+    <span class="attr">#[config(default, example = <span class="macro">vec!</span>[<span class="number">5</span>, <span class="number">8</span>]</span>)]
+    values: Vec&lt;u32&gt;,
+    <span class="attr">#[config(nest)]
+    </span>nested: NestedConfig,
+}
+
+<span class="attr">#[derive(DescribeConfig, ExampleConfig)]
+</span><span class="kw">struct </span>NestedConfig {
+    <span class="attr">#[config(default, example = [<span class="string">"eth_call"</span>.into()]</span>.into())]
+    methods: HashSet&lt;String&gt;,
+}
+
+<span class="kw">let </span>example: TestConfig = TestConfig::example_config();
+<span class="kw">let </span>json = SerializerOptions::default().serialize(<span class="kw-2">&amp;</span>example);
+<span class="macro">assert_eq!</span>(
+    serde_json::Value::from(json),
+    <span class="macro">serde_json::json!</span>({
+        <span class="string">"required"</span>: <span class="number">42</span>,
+        <span class="string">"optional"</span>: null,
+        <span class="string">"with_default"</span>: <span class="bool-val">true</span>,
+        <span class="string">"values"</span>: [<span class="number">5</span>, <span class="number">8</span>],
+        <span class="string">"nested"</span>: {
+            <span class="string">"methods"</span>: [<span class="string">"eth_call"</span>],
+        },
+    })
+);</code></pre></div><h2 id="advanced-features"><a class="doc-anchor" href="#advanced-features">§</a>Advanced features</h2>
+<p>Demonstrates some advanced library features:</p>
+<ul>
+<li><a href="../../validation/index.html" title="mod smart_config::validation">Parameter validation</a></li>
+<li><a href="../../fallback/index.html" title="mod smart_config::fallback">Fallback values</a></li>
+<li>Complex deserializers: <a href="../../de/struct.Delimited.html" title="struct smart_config::de::Delimited"><code>Delimited</code></a>, <a href="../../de/struct.NamedEntries.html" title="struct smart_config::de::NamedEntries"><code>NamedEntries</code></a>
+and <a href="../../de/struct.DelimitedEntries.html" title="struct smart_config::de::DelimitedEntries"><code>DelimitedEntries</code></a></li>
+<li>Use or <a href="../../pat/index.html" title="mod smart_config::pat">regexes</a> as delimiters and validations</li>
+<li>Deserialization of values <a href="../../de/struct.WithUnit.html" title="struct smart_config::de::WithUnit">with units</a>, and the fixed-unit alternative</li>
+<li><a href="../derive_ref/index.html#deprecated" title="mod smart_config::_docs::derive_ref">Deprecated aliases</a> and the use of paths</li>
+<li><a href="../derive_ref/index.html#secret" title="mod smart_config::_docs::derive_ref">Secret values</a>.</li>
+</ul>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroU32,
+    path::PathBuf,
+    time::Duration,
+};
+
+<span class="kw">use </span>smart_config::{
+    ByteSize, DescribeConfig, DeserializeConfig, EtherAmount, ExampleConfig, de, fallback,
+    metadata::{SizeUnit, TimeUnit},
+    pat::{LazyRegex, lazy_regex},
+    value::SecretString,
+};
+
+<span class="kw">static </span>APP_NAME_REGEX: LazyRegex = <span class="macro">lazy_regex!</span>(<span class="string">r"^[a-z][-a-z0-9]*$"</span>);
+
+<span class="doccomment">/// Configuration with type params of several types.
+</span><span class="attr">#[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>TestConfig {
+    <span class="doccomment">/// Application name.
+    </span><span class="comment">// We validate that the name conforms to the regex defined above.
+    </span><span class="attr">#[config(default_t = <span class="string">"app"</span>.into(), validate(APP_NAME_REGEX))]
+    </span><span class="kw">pub </span>app_name: String,
+    <span class="doccomment">/// Port to bind to.
+    </span><span class="comment">// `deprecated` allows to specify an alias that will be highlighted as deprecated
+    // in docs (e.g., `smart-config-commands` output).
+    </span><span class="attr">#[config(example = <span class="number">8080</span>, deprecated = <span class="string">"bind_to"</span>)]
+    </span><span class="kw">pub </span>port: u16,
+    <span class="doccomment">/// Should be greater than 0.
+    </span><span class="comment">// When a range is used as a validation, it's checked whether tha value
+    // is in the range.
+    </span><span class="attr">#[config(default, validate(<span class="number">0.0</span>..=<span class="number">10.0</span>), example = <span class="prelude-val">Some</span>(<span class="number">0.5</span>))]
+    </span><span class="kw">pub </span>scaling_factor: <span class="prelude-ty">Option</span>&lt;f32&gt;,
+    <span class="doccomment">/// Directory for temporary stuff.
+    </span><span class="comment">// `fallback` allows to read the value from another source that does not fit
+    // into the hierarchical config schema.
+    </span><span class="attr">#[config(default_t = <span class="string">"/tmp"</span>.into(), fallback = <span class="kw-2">&amp;</span>fallback::Env(<span class="string">"TMPDIR"</span>))]
+    </span><span class="kw">pub </span>temp_dir: PathBuf,
+    <span class="doccomment">/// Paths to key directories.
+    </span><span class="comment">// `Delimited` deserializer allows to read paths both from an array
+    // and from a ':'-delimited string. This is useful if the config
+    // is parsed from env vars.
+    </span><span class="attr">#[config(default, alias = <span class="string">"dirs"</span>, with = de::Delimited::new(<span class="string">":"</span>))]
+    #[config(example = HashSet::from_iter([<span class="string">"./local"</span>.into()]</span>))]
+    <span class="kw">pub </span>dir_paths: HashSet&lt;PathBuf&gt;,
+    <span class="doccomment">/// In-memory cache size.
+    </span><span class="comment">// The default deserializer for `ByteSize`s, `Duration`s and `EtherUnit`s
+    // accepts a numeric value together with a unit, e.g. '16 MB'. In case of durations
+    // and `EtherUnit`, the value may be a decimal, like '0.5 days' or '0.02 ether'.
+    //
+    // Note that `deprecated` in this case is a relative path, not just a name.
+    </span><span class="attr">#[config(default_t = <span class="number">16 </span>* SizeUnit::MiB, deprecated = <span class="string">".experimental.cache_size"</span>)]
+    </span><span class="kw">pub </span>cache_size: ByteSize,
+    <span class="doccomment">/// Timeout for some operation.
+    </span><span class="comment">// Using a specific unit as a deserializer will accept numeric values
+    // measured in this unit. This is not recommended to use; the default deserializer
+    // for united values automatically handles suffixed values.
+    </span><span class="attr">#[config(default_t = <span class="number">1 </span>* TimeUnit::Minutes, with = TimeUnit::Seconds)]
+    </span><span class="kw">pub </span>timeout_sec: Duration,
+    <span class="comment">// Nested configuration.
+    </span><span class="attr">#[config(nest)]
+    </span><span class="kw">pub </span>experimental: ExperimentalConfig,
+}
+
+<span class="attr">#[derive(Debug, DescribeConfig, DeserializeConfig, ExampleConfig)]
+#[config(derive(Default))]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ExperimentalConfig {
+    <span class="doccomment">/// Secret string value.
+    </span><span class="attr">#[config(example = <span class="prelude-val">Some</span>(<span class="string">"correct horse battery staple"</span>.into()))]
+    </span><span class="kw">pub </span>api_key: <span class="prelude-ty">Option</span>&lt;SecretString&gt;,
+    <span class="doccomment">/// Can be deserialized either from a map or an array of tuples.
+    </span><span class="attr">#[config(default, with = de::Entries::WELL_KNOWN.named(<span class="string">"method"</span>, <span class="string">"rps"</span>))]
+    #[config(example = HashMap::from_iter([
+        (<span class="string">"eth_call"</span>.into(), NonZeroU32::new(<span class="number">100</span>).unwrap()),
+        (<span class="string">"eth_blockNumber"</span>.into(), NonZeroU32::new(<span class="number">1</span>).unwrap()),
+    ]</span>))]
+    <span class="kw">pub </span>method_limits: HashMap&lt;String, NonZeroU32&gt;,
+    <span class="doccomment">/// Can be deserialized from a string.
+    </span><span class="attr">#[config(
+        default,
+        with = de::Entries::WELL_KNOWN.delimited(
+            <span class="macro">lazy_regex!</span>(<span class="kw-2">ref </span><span class="string">r"\s*[,\n]\s*"</span>),
+            <span class="macro">lazy_regex!</span>(<span class="kw-2">ref </span><span class="string">r"\s*=\s*"</span>),
+        )
+    )]
+    </span><span class="kw">pub </span>balances: HashMap&lt;u64, EtherAmount&gt;,
+}</code></pre></div><h3 id="matching-yaml-configuration"><a class="doc-anchor" href="#matching-yaml-configuration">§</a>Matching YAML configuration</h3><div class="example-wrap"><pre class="language-yaml"><code>app_name: stage
+# Use the deprecated alias for the `port` param
+bind_to: 8080
+scaling_factor: 3.0
+temp_dir: /var/app-stage
+dir_paths:
+  - /usr/bin
+  - /usr/local/bin
+  - /bin
+timeout_sec: 3
+experimental:
+  # Use the deprecated path alias for `cache_size`
+  cache_size: 32 MB
+  api_key: SUPER_SECRET_DONUT_STEEL
+  # Use the array format that would be translated to a map
+  method_limits:
+    - method: eth_call
+      rps: 200
+    - method: eth_blockNumber
+      rps: 1000
+  balances:
+    1234: 0.01 ether
+    4321: 600000 gwei</code></pre></div><h3 id="matching-env-variables"><a class="doc-anchor" href="#matching-env-variables">§</a>Matching env variables</h3>
+<p>Assumes the <code>APP_</code> prefix for env vars.</p>
+<div class="example-wrap"><pre class="language-shell"><code>APP_APP_NAME=stage
+APP_PORT=8080
+APP_SCALING_FACTOR=3.0
+APP_TEMP_DIR=/var/app-stage
+# Note the use of &#39;:&#39; delimiter
+APP_DIR_PATHS=&quot;/usr/bin:/usr/local/bin:/bin&quot;
+APP_TIMEOUT_SEC=2
+
+# Unit deserializer is smart enough to parse unit suffixes
+# (&#39;_MB&#39; in this case). Note that we still use a deprecated path alias
+# for the param.
+APP_EXPERIMENTAL_CACHE_SIZE_MB=128
+APP_EXPERIMENTAL_API_KEY=SUPER_SECRET_DONUT_STEEL
+# Here, we use JSON coercion because the deserializer doesn&#39;t support any plain values
+APP_EXPERIMENTAL_METHOD_LIMITS__JSON=&#39;{ &quot;eth_call&quot;: 200, &quot;eth_blockNumber&quot;: 1000 }&#39;
+# Note the natural spacing around &#39;,&#39; and &#39;=&#39; enabled by the use of regexes
+APP_EXPERIMENTAL_BALANCES=&quot;1234 = 0.01 ether, 4321 = 600000 gwei&quot;</code></pre></div><h2 id="see-also"><a class="doc-anchor" href="#see-also">§</a>See also</h2>
+<ul>
+<li><a href="../derive_ref/index.html" title="mod smart_config::_docs::derive_ref">Derive macro reference</a></li>
+<li><a href="../sources/index.html" title="mod smart_config::_docs::sources">Combining config sources</a></li>
+</ul>
+</div></details></section></div></main></body></html>

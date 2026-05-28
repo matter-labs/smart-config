@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FileFormat","StrValue","Value","ValueOrigin"],"struct":["WithOrigin"],"trait":["ExposeSecret"],"type":["Map","SecretString"]};

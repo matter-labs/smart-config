@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Parsing configurations from multiple sources"><title>smart_config::_docs::sources - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-bbd8d786.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="smart_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (eda76d9d1 2026-01-21)" data-channel="nightly" data-search-js="search-86d08462.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-f9617a14.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-12f88f4f.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-ffcac47a.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module sources</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../smart_config/index.html">smart_<wbr>config</a><span class="version">0.4.0-pre.4</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module sources</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#parsing-configurations-from-multiple-sources" title="Parsing configurations from multiple sources">Parsing configurations from multiple sources</a></li><li><a href="#source-kinds" title="Source kinds">Source kinds</a></li><li><a href="#combining-sources" title="Combining sources">Combining sources</a></li><li><a href="#see-also" title="See also">See also</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In smart_<wbr>config::<wbr>_<wbr>docs</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">smart_config</a>::<wbr><a href="../index.html">_docs</a></div><h1>Module <span>sources</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/smart_config/_docs/sources.rs.html#1-92">Source</a> </span></div><span class="item-info"><div class="stab portability">Available on <strong>crate feature <code>_docs</code></strong> only.</div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="parsing-configurations-from-multiple-sources"><a class="doc-anchor" href="#parsing-configurations-from-multiple-sources">§</a>Parsing configurations from multiple sources</h2><h2 id="source-kinds"><a class="doc-anchor" href="#source-kinds">§</a>Source kinds</h2>
+<p><a href="../../trait.DescribeConfig.html" title="trait smart_config::DescribeConfig">Configuration types</a> can be parsed from multiple <a href="../../trait.ConfigSource.html" title="trait smart_config::ConfigSource">sources</a>.
+Sources supported out of the box are:</p>
+<ul>
+<li><a href="../../struct.Yaml.html" title="struct smart_config::Yaml">YAML</a> and <a href="../../struct.Json.html" title="struct smart_config::Json">JSON</a> files</li>
+<li><a href="../../struct.Environment.html" title="struct smart_config::Environment">environment variables</a>.</li>
+</ul>
+<p>YAML and JSON sources are <em>structured</em>, i.e., support the full JSON object model. In other words,
+config parameters can be serialized as objects or arrays.</p>
+<p>On the other hand, environment variables only support serialization of params as strings. There are a couple of workarounds
+to bridge the gap:</p>
+<ul>
+<li><a href="../../struct.Environment.html#method.coerce_json" title="method smart_config::Environment::coerce_json"><code>Environment::coerce_json()</code></a> allows to signal that the variable value is JSON,
+via the <code>__JSON</code> suffix appended to the variable name.</li>
+<li>Several deserializers like <a href="../../de/struct.Delimited.html" title="struct smart_config::de::Delimited"><code>Delimited</code></a> and <a href="../../de/struct.DelimitedEntries.html" title="struct smart_config::de::DelimitedEntries"><code>DelimitedEntries</code></a>
+allow to deserialize structured data from a string <em>in addition</em> to the structured object / array deserialization.</li>
+</ul>
+<h2 id="combining-sources"><a class="doc-anchor" href="#combining-sources">§</a>Combining sources</h2>
+<p>Config sources can be combined in a <a href="../../struct.ConfigSources.html" title="struct smart_config::ConfigSources"><code>ConfigSources</code></a> object.
+<em>How</em> sources are combined, depends on the app; the library doesn’t force any particular choice.</p>
+<p>As an example, assume that we want to source configuration
+from files supplied by the user via command-line args (like <code>--cfg-file base.yml:overrides.yml</code>),
+and with higher-priority env variable overrides, where env variables are prefixed by <code>APP_</code>.
+In this case, <code>ConfigSources</code> can be constructed as follows (using <a href="https://docs.rs/clap/"><code>clap</code></a> as the command-line parser):</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>smart_config::{
+    ConfigRepository, ConfigSchema, ConfigSources, Environment, Json, Yaml,
+};
+
+<span class="comment">// Separator between paths
+</span><span class="kw">const </span>PATH_SEP: char = <span class="kw">if </span><span class="macro">cfg!</span>(windows) { <span class="string">';' </span>} <span class="kw">else </span>{ <span class="string">':' </span>};
+
+<span class="attr">#[derive(Debug, clap::Parser)]
+</span><span class="kw">struct </span>Cli {
+    <span class="doccomment">/// Configuration files.
+    </span><span class="attr">#[arg(long, value_name = <span class="string">"FILE"</span>, value_delimiter = PATH_SEP)]
+    </span>cfg_file: Vec&lt;PathBuf&gt;,
+    <span class="comment">// Other command-line args...
+</span>}
+
+<span class="kw">let </span>cli: Cli = Cli::parse();
+<span class="kw">let </span><span class="kw-2">mut </span>sources = ConfigSources::default();
+
+<span class="comment">// Add file configuration sources
+</span><span class="kw">for </span>file <span class="kw">in </span><span class="kw-2">&amp;</span>cli.cfg_file {
+    <span class="comment">// Auto-detect file type by its extension
+    </span><span class="kw">let </span>ext = file.extension().context(<span class="string">"no file extension"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>ext = ext.to_str().context(<span class="string">"unsupported file extension"</span>)<span class="question-mark">?</span>;
+    <span class="kw">match </span>ext {
+        <span class="string">"json" </span>=&gt; {
+            <span class="kw">let </span>file_reader = io::BufReader::new(fs::File::open(file)<span class="question-mark">?</span>);
+            <span class="kw">let </span>json = serde_json::from_reader(file_reader)<span class="question-mark">?</span>;
+            sources.push(Json::new(<span class="kw-2">&amp;</span>file.to_string_lossy(), json));
+        }
+        <span class="string">"yml" </span>| <span class="string">"yaml" </span>=&gt; {
+            <span class="kw">let </span>file_reader = io::BufReader::new(fs::File::open(file)<span class="question-mark">?</span>);
+            <span class="kw">let </span>yaml = serde_yaml::from_reader(file_reader)<span class="question-mark">?</span>;
+            sources.push(Yaml::new(<span class="kw-2">&amp;</span>file.to_string_lossy(), yaml)<span class="question-mark">?</span>);
+        }
+        <span class="kw">_ </span>=&gt; <span class="macro">anyhow::bail!</span>(<span class="string">"unsupported extension: {ext}"</span>),
+    }
+}
+
+<span class="comment">// Add environment variables
+</span><span class="kw">let </span><span class="kw-2">mut </span>env = Environment::prefixed(<span class="string">"APP_"</span>);
+<span class="comment">// Coerce JSON-suffixed env variables
+</span>env.coerce_json()<span class="question-mark">?</span>;
+sources.push(env);
+
+<span class="comment">// Parse configurations from the sources.
+</span><span class="kw">let </span>schema: ConfigSchema = <span class="comment">// ...
+</span><span class="kw">let </span>repo = ConfigRepository::new(<span class="kw-2">&amp;</span>schema).with_all(sources);
+<span class="comment">// `repo` can be used to parse configurations, output canonical param values etc.</span></code></pre></div><h2 id="see-also"><a class="doc-anchor" href="#see-also">§</a>See also</h2>
+<ul>
+<li><a href="../derive_examples/index.html#advanced-features" title="mod smart_config::_docs::derive_examples">Examples of YAML and env sources</a></li>
+</ul>
+</div></details></section></div></main></body></html>

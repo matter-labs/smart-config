@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Testing tools for configurations."><title>smart_config::testing - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-bbd8d786.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="smart_config" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (eda76d9d1 2026-01-21)" data-channel="nightly" data-search-js="search-86d08462.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-f9617a14.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-12f88f4f.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-ffcac47a.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module testing</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../smart_config/index.html">smart_<wbr>config</a><span class="version">0.4.0-pre.4</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module testing</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#overview" title="Overview">Overview</a></li><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#mocking-env-variables" title="Mocking env variables">Mocking env variables</a></li></ul></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate smart_<wbr>config</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">smart_config</a></div><h1>Module <span>testing</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/smart_config/testing.rs.html#1-816">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Testing tools for configurations.</p>
+<h2 id="overview"><a class="doc-anchor" href="#overview">§</a>Overview</h2>
+<p>On the most basic level, testing allows to ensure that a configuration can be parsed
+from the expected data format. Additionally, tests can help ensure that no breaking changes
+are made to the configuration code, and can serve as documentation.</p>
+<ul>
+<li><a href="fn.test.html" title="fn smart_config::testing::test"><code>test()</code></a> function parses a <a href="../trait.ConfigSource.html" title="trait smart_config::ConfigSource">config source</a>, such as (parsed) YAML or mocked env vars.</li>
+<li><a href="fn.test_complete.html" title="fn smart_config::testing::test_complete"><code>test_complete()</code></a> additionally requires that the source is complete, i.e. covers <em>all</em> config params,
+recursively if there are any sub-configs. Naturally, for enum configs, a single variant is required
+(but this variant still must be completely covered).</li>
+<li><a href="fn.test_minimal.html" title="fn smart_config::testing::test_minimal"><code>test_minimal()</code></a>, conversely, requires that <em>only</em> required config params are specified in the source.
+This allows to check for breaking changes caused by adding non-optional params to a config.</li>
+<li><a href="struct.Tester.html" title="struct smart_config::testing::Tester"><code>Tester</code></a> enables more control over the test setup, such as <a href="struct.Tester.html#method.new" title="associated function smart_config::testing::Tester::new">testing</a> entire <a href="../struct.ConfigSchema.html" title="struct smart_config::ConfigSchema"><code>ConfigSchema</code></a>
+(as opposed to single configs), <a href="struct.Tester.html#method.set_env" title="method smart_config::testing::Tester::set_env">mocking env variables</a> etc.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>See <a href="fn.test.html" title="fn smart_config::testing::test"><code>test()</code></a>, <a href="fn.test_complete.html" title="fn smart_config::testing::test_complete"><code>test_complete()</code></a> and <a href="fn.test_minimal.html" title="fn smart_config::testing::test_minimal"><code>test_minimal()</code></a> docs for basic examples of usage.</p>
+<h3 id="mocking-env-variables"><a class="doc-anchor" href="#mocking-env-variables">§</a>Mocking env variables</h3>
+<p>This is mostly useful for testing <a href="../fallback/index.html" title="mod smart_config::fallback">fallbacks</a> that read from env variables,
+although the mocked env vars are respected by <a href="../struct.Environment.html" title="struct smart_config::Environment"><code>Environment</code></a> config sources
+as well.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>smart_config::{
+    fallback, testing::Tester,
+    DescribeConfig, DeserializeConfig, Environment,
+};
+
+<span class="attr">#[derive(DescribeConfig, DeserializeConfig)]
+</span><span class="kw">struct </span>TestConfig {
+    port: u16,
+    <span class="attr">#[config(
+        default_t = <span class="string">"/tmp"</span>.into(),
+        fallback = <span class="kw-2">&amp;</span>fallback::Env(<span class="string">"TMPDIR"</span>)
+    )]
+    </span>temp_dir: PathBuf,
+}
+
+<span class="kw">let </span>config: TestConfig = Tester::default()
+    .set_env(<span class="string">"TMPDIR"</span>, <span class="string">"/var/app"</span>)
+    .set_env(<span class="string">"APP_PORT"</span>, <span class="string">"8080"</span>)
+    .test_complete(Environment::prefixed(<span class="string">"APP_"</span>))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(config.port, <span class="number">8_080</span>);
+<span class="macro">assert_eq!</span>(config.temp_dir.as_os_str(), <span class="string">"/var/app"</span>);</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Tester.html" title="struct smart_config::testing::Tester">Tester</a></dt><dd>Test case builder that allows configuring deserialization options etc.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.test.html" title="fn smart_config::testing::test">test</a></dt><dd>Tests config deserialization from the provided <code>sample</code>. Takes into account param aliases,
+performs <code>sample</code> preprocessing etc.</dd><dt><a class="fn" href="fn.test_complete.html" title="fn smart_config::testing::test_complete">test_<wbr>complete</a></dt><dd>Tests config deserialization ensuring that <em>all</em> declared config params are covered.</dd><dt><a class="fn" href="fn.test_minimal.html" title="fn smart_config::testing::test_minimal">test_<wbr>minimal</a></dt><dd>Tests config deserialization ensuring that <em>only</em> required config params are covered.
+This is useful to detect new required params (i.e., backward-incompatible changes).</dd></dl></section></div></main></body></html>
