@@ -1972,7 +1972,7 @@ dependencies = [
 
 [[package]]
 name = "smart-config"
-version = "0.4.0-pre.3"
+version = "0.4.0-pre.4"
 dependencies = [
  "alloy",
  "anyhow",
@@ -1995,7 +1995,7 @@ dependencies = [
 
 [[package]]
 name = "smart-config-commands"
-version = "0.4.0-pre.3"
+version = "0.4.0-pre.4"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2015,7 +2015,7 @@ dependencies = [
 
 [[package]]
 name = "smart-config-derive"
-version = "0.4.0-pre.3"
+version = "0.4.0-pre.4"
 dependencies = [
  "proc-macro2",
  "quote",
