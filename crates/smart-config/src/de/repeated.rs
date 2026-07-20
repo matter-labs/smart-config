@@ -313,7 +313,7 @@ where
                 parse_key_or_value::<V, _>(&mut ctx, param, key, &self.values, &value);
 
             has_errors |= parsed_key.is_none() || parsed_value.is_none();
-            Some((parsed_key?, parsed_value?)).filter(|_| !has_errors)
+            (!has_errors).then_some((parsed_key?, parsed_value?))
         });
         let items: C = items.collect();
 
@@ -727,7 +727,7 @@ where
             let parsed_value =
                 parse_key_or_value::<V, _>(&mut ctx, param, &idx_str, &self.inner.values, value);
             has_errors |= parsed_key.is_none() || parsed_value.is_none();
-            Some((parsed_key?, parsed_value?)).filter(|_| !has_errors)
+            (!has_errors).then_some((parsed_key?, parsed_value?))
         });
         let items: C = items.collect();
 
