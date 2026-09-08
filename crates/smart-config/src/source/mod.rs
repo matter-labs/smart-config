@@ -651,24 +651,48 @@ impl WithOrigin {
                     continue;
                 };
 
-                if let Value::String(str) = &mut value.inner {
+                let marked = Self::mark_secret_strings(value);
+                if marked {
                     tracing::trace!(
                         prefix = prefix.0,
                         config = ?config_data.metadata.ty,
                         param = param.rust_field_name,
                         "marked param as secret"
                     );
-                    str.make_secret();
-                } else {
+                } else if !matches!(value.inner, Value::Null) {
                     tracing::warn!(
                         prefix = prefix.0,
                         config = ?config_data.metadata.ty,
                         param = param.rust_field_name,
-                        "param marked as secret has non-string value"
+                        "param marked as secret has no string values to mark as secret"
                     );
                 }
             }
         }
+    }
+
+    /// Recursively marks all strings in `value` as secret. Secret params may be deserialized from structured
+    /// values (e.g., an object describing a key stored in an external KMS), in which case we conservatively
+    /// treat every string inside as secret. Returns whether at least one string was marked.
+    fn mark_secret_strings(value: &mut Self) -> bool {
+        match &mut value.inner {
+            Value::String(str) => {
+                str.make_secret();
+                true
+            }
+            Value::Array(items) => Self::mark_all_secret_strings(items.iter_mut()),
+            Value::Object(fields) => Self::mark_all_secret_strings(fields.values_mut()),
+            Value::Null | Value::Bool(_) | Value::Number(_) => false,
+        }
+    }
+
+    /// Deliberately not short-circuiting so that every string gets marked.
+    fn mark_all_secret_strings<'a>(values: impl Iterator<Item = &'a mut Self>) -> bool {
+        let mut marked = false;
+        for value in values {
+            marked |= Self::mark_secret_strings(value);
+        }
+        marked
     }
 
     #[tracing::instrument(level = "debug", skip_all)]

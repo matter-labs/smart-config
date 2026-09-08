@@ -19,8 +19,8 @@ use crate::{
         AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks,
         ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations, DefaultingConfig,
         EnumConfig, KvTestConfig, NestedConfig, RenamedEnumConfig, SecretConfig, SimpleEnum,
-        U128Config, ValueCoercingConfig, extract_env_var_name, extract_json_name,
-        test_config_roundtrip, test_deserialize,
+        StructuredSecretConfig, U128Config, ValueCoercingConfig, extract_env_var_name,
+        extract_json_name, test_config_roundtrip, test_deserialize,
     },
     value::StrValue,
 };
@@ -1326,6 +1326,40 @@ fn reading_secrets() {
     let debug_str = format!("{:?}", repo.merged());
     assert!(!debug_str.contains("override_secret"), "{debug_str}");
     assert!(!debug_str.contains("opt_secret"), "{debug_str}");
+}
+
+#[test]
+fn reading_structured_secrets() {
+    let schema = ConfigSchema::new(&StructuredSecretConfig::DESCRIPTION, "");
+    let kms_ref = serde_json::json!({ "type": "kms", "key": "projects/test/keys/1" });
+    let mut repo = ConfigRepository::new(&schema).with(config!("signer": kms_ref.clone()));
+
+    let signer = repo.merged().get(Pointer("signer")).unwrap();
+    let Value::Object(fields) = &signer.inner else {
+        panic!("unexpected signer value: {signer:?}");
+    };
+    assert_eq!(fields.len(), 2);
+    for field in fields.values() {
+        assert_matches!(
+            &field.inner,
+            Value::String(StrValue::Secret(_)),
+            "{field:?}"
+        );
+    }
+    let debug_str = format!("{:?}", repo.merged());
+    assert!(!debug_str.contains("projects/test/keys/1"), "{debug_str}");
+
+    let config: StructuredSecretConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.signer, kms_ref);
+
+    // The plain string form must keep working.
+    repo = repo.with(config!("signer": "0xdeadbeef"));
+    assert_matches!(
+        &repo.merged().get(Pointer("signer")).unwrap().inner,
+        Value::String(StrValue::Secret(_))
+    );
+    let config: StructuredSecretConfig = repo.single().unwrap().parse().unwrap();
+    assert_eq!(config.signer, "0xdeadbeef");
 }
 
 #[test]
