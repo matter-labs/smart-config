@@ -327,6 +327,15 @@ pub(crate) struct SecretConfig {
     pub seq: Vec<u64>,
 }
 
+/// Config with a secret param that can be specified either as a plain string or as a structured value
+/// (e.g., a reference to a key stored in an external KMS).
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct StructuredSecretConfig {
+    #[config(secret, with = Serde![str, object])]
+    pub signer: serde_json::Value,
+}
+
 #[derive(DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct NestedAliasedConfig {
