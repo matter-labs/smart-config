@@ -1,0 +1,5 @@
+error: `shorthand` can only be specified for params in enum config variants
+ --> tests/ui/derives/shorthand_in_struct.rs:5:14
+  |
+5 |     #[config(shorthand)]
+  |              ^^^^^^^^^

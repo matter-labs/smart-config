@@ -171,7 +171,7 @@ pub(crate) enum ObjectStoreConfig {
     #[config(default)]
     Local {
         /// Path to the root directory.
-        #[config(default_t = ".".into())]
+        #[config(default_t = ".".into(), shorthand)]
         path: PathBuf,
     },
     /// Stores objects in AWS S3.

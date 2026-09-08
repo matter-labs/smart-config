@@ -295,6 +295,8 @@ Can be deserialized either from a map or an array of tuples.
 
   - **Aliases:** `google`, `google_cloud`
 
+**Shorthand:** a single value is interpreted as variant `local` with the value assigned to param `path`
+
 ### `test.object_store.path`
 
 **Type:** string (Rust: `PathBuf`); filesystem path

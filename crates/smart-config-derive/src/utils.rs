@@ -160,6 +160,7 @@ pub(crate) struct ConfigFieldAttrs {
     pub(crate) flatten: bool,
     pub(crate) nest: bool,
     pub(crate) is_secret: bool,
+    pub(crate) shorthand_span: Option<proc_macro2::Span>,
     pub(crate) with: Option<Expr>,
     pub(crate) deserialize_if: Option<Validation>,
     pub(crate) validations: Vec<Validation>,
@@ -179,6 +180,7 @@ impl ConfigFieldAttrs {
         let mut flatten_span = None;
         let mut with = None;
         let mut secret_span = None;
+        let mut shorthand_span = None;
         let mut deserialize_if = None;
         let mut validations = vec![];
         for attr in config_attrs {
@@ -222,6 +224,9 @@ impl ConfigFieldAttrs {
                     Ok(())
                 } else if meta.path.is_ident("secret") {
                     secret_span = Some(meta.path.span());
+                    Ok(())
+                } else if meta.path.is_ident("shorthand") {
+                    shorthand_span = Some(meta.path.span());
                     Ok(())
                 } else if meta.path.is_ident("with") {
                     with = Some(meta.value()?.parse::<Expr>()?);
@@ -280,6 +285,10 @@ impl ConfigFieldAttrs {
             let msg = "only params can be marked as secret, sub-configs cannot";
             return Err(syn::Error::new(secret_span, msg));
         }
+        if let (Some(shorthand_span), true) = (shorthand_span, nest) {
+            let msg = "only params can be marked as shorthand, sub-configs cannot";
+            return Err(syn::Error::new(shorthand_span, msg));
+        }
 
         Ok(Self {
             rename,
@@ -293,6 +302,7 @@ impl ConfigFieldAttrs {
             deserialize_if,
             validations,
             is_secret: secret_span.is_some(),
+            shorthand_span,
         })
     }
 }
@@ -646,7 +656,16 @@ impl ConfigContainer {
     }
 
     fn extract_struct_fields(data: &DataStruct) -> syn::Result<Vec<ConfigField>> {
-        data.fields.iter().map(ConfigField::new).collect()
+        let fields: Vec<_> = data
+            .fields
+            .iter()
+            .map(ConfigField::new)
+            .collect::<syn::Result<_>>()?;
+        if let Some(span) = fields.iter().find_map(|field| field.attrs.shorthand_span) {
+            let msg = "`shorthand` can only be specified for params in enum config variants";
+            return Err(syn::Error::new(span, msg));
+        }
+        Ok(fields)
     }
 
     fn extract_enum_fields(
@@ -657,6 +676,7 @@ impl ConfigContainer {
         let mut merged_fields_by_name = HashMap::new();
         let mut variants_with_aliases = HashSet::new();
         let mut has_default_variant = false;
+        let mut has_shorthand = false;
 
         for variant in &data.variants {
             let attrs = ConfigVariantAttrs::new(&variant.attrs)?;
@@ -688,6 +708,13 @@ impl ConfigContainer {
                 Fields::Named(fields) => {
                     for field in &fields.named {
                         let new_field = ConfigField::new(field)?;
+                        if let Some(span) = new_field.attrs.shorthand_span {
+                            if has_shorthand {
+                                let msg = "Only one param can be marked as shorthand";
+                                return Err(syn::Error::new(span, msg));
+                            }
+                            has_shorthand = true;
+                        }
                         if let Some(prev_ty) =
                             merged_fields_by_name.insert(new_field.param_name(), &field.ty)
                             && *prev_ty != new_field.ty

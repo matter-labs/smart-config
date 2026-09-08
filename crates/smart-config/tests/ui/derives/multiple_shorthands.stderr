@@ -1,0 +1,5 @@
+error: Only one param can be marked as shorthand
+  --> tests/ui/derives/multiple_shorthands.rs:11:18
+   |
+11 |         #[config(shorthand)]
+   |                  ^^^^^^^^^

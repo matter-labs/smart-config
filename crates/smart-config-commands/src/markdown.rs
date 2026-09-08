@@ -281,6 +281,17 @@ fn render_tag_reference(
             .map(|variant| render_variant(config, tag, variant))
             .collect(),
     ));
+    if let Some(shorthand) = config.shorthand() {
+        nodes.push(labeled_paragraph(
+            "Shorthand",
+            vec![
+                text("a single value is interpreted as variant "),
+                code(shorthand.variant.name),
+                text(" with the value assigned to param "),
+                code(shorthand.param.name),
+            ],
+        ));
+    }
     render_conditions(nodes, conditions.iter().rev().copied());
 }
 

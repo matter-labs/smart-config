@@ -12,8 +12,8 @@ use anyhow::Context;
 use self::mount::{MountingPoint, MountingPoints};
 use crate::{
     metadata::{
-        AliasOptions, BasicTypes, ConfigMetadata, ConfigVariant, NestedConfigMetadata,
-        ParamMetadata,
+        AliasOptions, BasicTypes, ConfigMetadata, ConfigShorthand, ConfigVariant,
+        NestedConfigMetadata, ParamMetadata,
     },
     utils::EnumVariant,
     value::Pointer,
@@ -41,6 +41,18 @@ pub(crate) struct ConfigData {
 impl ConfigData {
     pub(crate) fn prefix(&self) -> Pointer<'_> {
         Pointer(self.all_paths[0].0.as_ref())
+    }
+
+    /// Flattened configs share the location with the parent config, so a shorthand cannot apply to them.
+    pub(crate) fn shorthand(&self) -> Option<ConfigShorthand> {
+        let is_flattened = self
+            .parent_link
+            .as_ref()
+            .is_some_and(|link| link.this_ref.name.is_empty());
+        if is_flattened {
+            return None;
+        }
+        self.metadata.tag.as_ref()?.shorthand
     }
 
     pub(crate) fn aliases(&self) -> impl Iterator<Item = (&str, AliasOptions)> + '_ {
@@ -127,6 +139,12 @@ impl<'a> ConfigRef<'a> {
     /// Checks whether this config is top-level (i.e., was included into the schema directly, rather than as a sub-config).
     pub fn is_top_level(&self) -> bool {
         self.data.parent_link.is_none()
+    }
+
+    /// Returns the shorthand applicable to this config location, if any. Unlike [`ConfigTag::shorthand`](crate::metadata::ConfigTag),
+    /// this accounts for the location: a flattened config shares the location with its parent, so a shorthand cannot apply to it.
+    pub fn shorthand(&self) -> Option<ConfigShorthand> {
+        self.data.shorthand()
     }
 
     #[doc(hidden)] // not stabilized yet
@@ -302,9 +320,21 @@ impl ConfigSchema {
             .filter_map(|(path, mount)| {
                 let expecting = match mount {
                     MountingPoint::Param { expecting, .. } => *expecting,
-                    MountingPoint::Config => return None,
+                    MountingPoint::Config { .. } => return None,
                 };
                 Some((path, expecting))
+            })
+    }
+
+    /// Returns locations of enum configs with a shorthand corresponding to the specified key-value path.
+    pub(crate) fn shorthand_configs_with_kv_path<'s>(
+        &'s self,
+        kv_path: &'s str,
+    ) -> impl Iterator<Item = Pointer<'s>> + 's {
+        self.mounting_points
+            .by_kv_path(kv_path)
+            .filter_map(|(path, mount)| {
+                matches!(mount, MountingPoint::Config { shorthand: true }).then_some(path)
             })
     }
 
@@ -584,11 +614,15 @@ impl<'a> PatchedSchema<'a> {
         let config_name = data.metadata.ty.name_in_code();
         let config_paths = data.all_paths.iter().map(|(name, _)| name.as_ref());
         let config_paths = iter::once(prefix.as_ref()).chain(config_paths);
+        let has_shorthand = data.shorthand().is_some();
 
         for path in config_paths {
+            let mut shorthand = has_shorthand;
             if let Some(mount) = self.mount(path) {
                 match mount {
-                    MountingPoint::Config => { /* OK */ }
+                    MountingPoint::Config {
+                        shorthand: prev_shorthand,
+                    } => shorthand |= *prev_shorthand,
                     MountingPoint::Param { .. } => {
                         anyhow::bail!(
                             "Cannot mount config `{}` at `{path}` because parameter(s) are already mounted at this path",
@@ -599,7 +633,7 @@ impl<'a> PatchedSchema<'a> {
             }
             self.patch
                 .mounting_points
-                .insert(path.to_owned(), MountingPoint::Config);
+                .insert(path.to_owned(), MountingPoint::Config { shorthand });
         }
 
         for param in data.metadata.params {
@@ -616,7 +650,7 @@ impl<'a> PatchedSchema<'a> {
                             was_canonical = *is_canonical;
                             *expecting
                         }
-                        MountingPoint::Config => {
+                        MountingPoint::Config { .. } => {
                             anyhow::bail!(
                                 "Cannot insert param `{name}` [Rust field: `{field}`] from config `{config_name}` at `{full_name}`: \
                                  config(s) are already mounted at this path",

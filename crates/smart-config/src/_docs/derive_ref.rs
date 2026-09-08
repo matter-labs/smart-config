@@ -150,6 +150,17 @@
 //! If specified, the field is treated as a *flattened* sub-config rather than a param. Unlike `nest`, its params
 //! will be added to the containing config instead of a separate object. The sub-config type must implement `DescribeConfig`.
 //!
+//! ## `shorthand`
+//!
+//! Only applicable to params in enum config variants. Marks the param as the *shorthand* for the enum config:
+//! if the config is specified as a single non-object value (e.g., a string), it is interpreted as the variant containing
+//! the param, with the value assigned to the param. E.g., if the `Local` variant of a config tagged with `type` has
+//! `#[config(shorthand)] private_key: SecretString`, then `signer: "0x.."` is equivalent to
+//! `signer: { type: "local", private_key: "0x.." }`. The same applies to key–value sources such as env variables:
+//! `APP_SIGNER=0x..` is equivalent to `APP_SIGNER_TYPE=local APP_SIGNER_PRIVATE_KEY=0x..`.
+//!
+//! At most one param in the enum config can be marked as shorthand.
+//!
 //! ## `validate`
 //!
 //! Has same semantics as [config validations](#validate), but applies to a specific config parameter.

@@ -327,6 +327,32 @@ pub(crate) struct SecretConfig {
     pub seq: Vec<u64>,
 }
 
+/// Source of a signing key: either the key itself, or a reference to an external key store.
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate, tag = "type", rename_all = "snake_case")]
+pub(crate) enum KeySourceConfig {
+    /// Key specified inline.
+    Local {
+        /// The key.
+        #[config(shorthand)]
+        key: SecretString,
+    },
+    /// Key stored in an external KMS.
+    Kms {
+        /// Resource name of the key.
+        resource: String,
+    },
+}
+
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+pub(crate) struct ConfigWithShorthand {
+    #[config(nest)]
+    pub signer: KeySourceConfig,
+    #[config(nest, alias = "alt_signer")]
+    pub optional: Option<KeySourceConfig>,
+}
+
 #[derive(DescribeConfig, DeserializeConfig)]
 #[config(crate = crate)]
 pub(crate) struct NestedAliasedConfig {
