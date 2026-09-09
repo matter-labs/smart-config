@@ -19,7 +19,7 @@ Add this to your `Crate.toml`:
 <!--- x-release-please-start-version -->
 ```toml
 [dependencies]
-smart-config-commands = "0.4.0-pre.4"
+smart-config-commands = "0.4.0-pre.5"
 ```
 <!--- x-release-please-end -->
 
