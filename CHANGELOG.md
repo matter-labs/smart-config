@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0-pre.5](https://github.com/matter-labs/smart-config/compare/v0.4.0-pre.4...v0.4.0-pre.5) (2026-09-09)
+
+
+### Features
+
+* support shorthands for enum configs ([#62](https://github.com/matter-labs/smart-config/issues/62)) ([927d56d](https://github.com/matter-labs/smart-config/commit/927d56dce9e92cc3f7038d55243c5edaa7c1c96a))
+
 ## [0.4.0-pre.4](https://github.com/matter-labs/smart-config/compare/v0.4.0-pre.3...v0.4.0-pre.4) (2026-05-27)
 
 
