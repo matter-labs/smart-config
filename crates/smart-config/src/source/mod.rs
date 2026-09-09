@@ -3,6 +3,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     iter,
     marker::PhantomData,
+    mem,
     sync::Arc,
 };
 
@@ -491,6 +492,7 @@ impl WithOrigin {
         schema: &ConfigSchema,
         prefixes_for_canonical_configs: &HashSet<Pointer<'_>>,
     ) -> usize {
+        self.expand_enum_shorthands(schema);
         self.copy_aliased_values(schema);
         self.mark_secrets(schema);
         self.convert_serde_enums(schema);
@@ -630,6 +632,60 @@ impl WithOrigin {
         s.strip_prefix(prefix)?
             .strip_prefix('_')
             .filter(|suffix| !suffix.is_empty())
+    }
+
+    /// Expands shorthands for enum configs: a single non-object value at a config location is replaced
+    /// with an object containing the tag and the shorthand param. This runs before de-aliasing so that
+    /// a shorthand at an aliased location is copied to the canonical one like any other param,
+    /// and before secret marking so that the shorthand param gets masked if it is secret.
+    #[tracing::instrument(level = "debug", skip_all)]
+    fn expand_enum_shorthands(&mut self, schema: &ConfigSchema) {
+        for (prefix, config_data) in schema.iter_ll() {
+            let Some(shorthand) = config_data.shorthand() else {
+                continue;
+            };
+            let tag = config_data
+                .metadata
+                .tag
+                .as_ref()
+                .expect("config with a shorthand is always tagged");
+
+            let alias_paths = config_data.aliases().map(|(alias, _)| Pointer(alias));
+            for path in iter::once(prefix).chain(alias_paths) {
+                let Some(value) = self.get_mut(path) else {
+                    continue;
+                };
+                if matches!(value.inner, Value::Object(_) | Value::Null) {
+                    continue;
+                }
+
+                tracing::debug!(
+                    prefix = path.0,
+                    config = ?config_data.metadata.ty,
+                    variant = shorthand.variant.name,
+                    "expanding enum config shorthand"
+                );
+                let origin = Arc::new(ValueOrigin::Synthetic {
+                    source: value.origin.clone(),
+                    transform: format!(
+                        "expanding shorthand for variant '{}'",
+                        shorthand.variant.name
+                    ),
+                });
+                let shorthand_value = mem::take(&mut value.inner);
+                let mut map = Map::new();
+                map.insert(
+                    tag.param.name.to_owned(),
+                    WithOrigin::new(shorthand.variant.name.to_owned().into(), origin.clone()),
+                );
+                map.insert(
+                    shorthand.param.name.to_owned(),
+                    WithOrigin::new(shorthand_value, value.origin.clone()),
+                );
+                value.inner = Value::Object(map);
+                value.origin = origin;
+            }
+        }
     }
 
     /// Wraps secret string values into `Value::SecretString(_)`.
@@ -1007,6 +1063,16 @@ impl WithOrigin {
                     Some((prefix, _)) => prefix,
                     None => break,
                 };
+            }
+
+            // A key–value entry may also be the shorthand for an enum config mounted at the corresponding path.
+            for config_path in schema.shorthand_configs_with_kv_path(&key) {
+                tracing::trace!(
+                    config_path = config_path.0,
+                    key,
+                    "copied key–value entry as enum config shorthand"
+                );
+                dest.copy_kv_entry(source_origin, config_path, &key, value.clone());
             }
 
             // Allow for array params.

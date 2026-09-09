@@ -354,6 +354,28 @@ impl ConfigContainer {
         }
     }
 
+    /// Describes the shorthand for an enum config, if any. Refers to the `PARAMS` and `TAG_VARIANTS` consts
+    /// defined in the `DESCRIPTION` scope.
+    fn describe_shorthand(&self, cr: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        // `PARAMS` has the same ordering as the filtered `all_fields()` iterator.
+        let shorthand = self
+            .fields
+            .all_fields()
+            .into_iter()
+            .filter(|(_, field)| !field.attrs.nest)
+            .enumerate()
+            .find_map(|(param_idx, (variant_idx, field))| {
+                let span = field.attrs.shorthand_span?;
+                Some(quote_spanned! {span=>
+                    #cr::metadata::ConfigShorthand {
+                        variant: &TAG_VARIANTS[#variant_idx],
+                        param: &PARAMS[#param_idx],
+                    }
+                })
+            });
+        wrap_in_option(shorthand)
+    }
+
     fn derive_describe_config(&self) -> proc_macro2::TokenStream {
         let name = &self.name;
         let cr = self.cr(name.span());
@@ -408,11 +430,13 @@ impl ConfigContainer {
             });
             let default_variant =
                 wrap_in_option(default_variant_idx.map(|i| quote!(&TAG_VARIANTS[#i])));
+            let shorthand = self.describe_shorthand(&cr);
             tag_description = Some(quote_spanned! {tag_span=>
                 #cr::metadata::ConfigTag {
                     param: &PARAMS[#tag_index],
                     variants: TAG_VARIANTS,
                     default_variant: #default_variant,
+                    shorthand: #shorthand,
                 }
             });
         }

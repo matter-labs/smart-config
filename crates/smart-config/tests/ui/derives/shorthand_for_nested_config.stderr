@@ -1,0 +1,5 @@
+error: only params can be marked as shorthand, sub-configs cannot
+  --> tests/ui/derives/shorthand_for_nested_config.rs:12:24
+   |
+12 |         #[config(nest, shorthand)]
+   |                        ^^^^^^^^^

@@ -157,6 +157,16 @@ fn write_tag_help(
         }
     }
 
+    if let Some(shorthand) = config.shorthand() {
+        writeln!(
+            writer,
+            "{INDENT}{FIELD}Shorthand{FIELD:#}: a single value is interpreted as variant {STRING}'{variant}'{STRING:#} \
+             with the value assigned to param {STRING}'{param}'{STRING:#}",
+            variant = shorthand.variant.name,
+            param = shorthand.param.name
+        )?;
+    }
+
     let condition_count = conditions.len();
     ParamRef::write_tag_conditions(writer, condition_count, conditions.iter().copied())
 }

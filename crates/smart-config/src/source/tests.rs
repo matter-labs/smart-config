@@ -17,10 +17,10 @@ use crate::{
     testing::MockEnvGuard,
     testonly::{
         AliasedConfig, ComposedConfig, CompoundConfig, ConfigWithComplexTypes, ConfigWithFallbacks,
-        ConfigWithNestedValidations, ConfigWithNesting, ConfigWithValidations, DefaultingConfig,
-        EnumConfig, KvTestConfig, NestedConfig, RenamedEnumConfig, SecretConfig, SimpleEnum,
-        U128Config, ValueCoercingConfig, extract_env_var_name, extract_json_name,
-        test_config_roundtrip, test_deserialize,
+        ConfigWithNestedValidations, ConfigWithNesting, ConfigWithShorthand, ConfigWithValidations,
+        DefaultingConfig, EnumConfig, KeySourceConfig, KvTestConfig, NestedConfig,
+        RenamedEnumConfig, SecretConfig, SimpleEnum, U128Config, ValueCoercingConfig,
+        extract_env_var_name, extract_json_name, test_config_roundtrip, test_deserialize,
     },
     value::StrValue,
 };
@@ -1326,6 +1326,123 @@ fn reading_secrets() {
     let debug_str = format!("{:?}", repo.merged());
     assert!(!debug_str.contains("override_secret"), "{debug_str}");
     assert!(!debug_str.contains("opt_secret"), "{debug_str}");
+}
+
+#[test]
+fn enum_config_shorthand() {
+    // A single string is expanded into the `local` variant.
+    let json = config!("signer": "super_secret");
+    let config: ConfigWithShorthand = testing::test(json).unwrap();
+    assert_matches!(
+        &config.signer,
+        KeySourceConfig::Local { key } if key.expose_secret() == "super_secret"
+    );
+    assert!(config.optional.is_none());
+
+    // Same for key–value sources, including via a config alias.
+    let env = Environment::from_iter(
+        "APP_",
+        [
+            ("APP_SIGNER", "env_secret"),
+            ("APP_ALT_SIGNER", "aliased_secret"),
+        ],
+    );
+    let config: ConfigWithShorthand = testing::test(env).unwrap();
+    assert_matches!(
+        &config.signer,
+        KeySourceConfig::Local { key } if key.expose_secret() == "env_secret"
+    );
+    assert_matches!(
+        &config.optional,
+        Some(KeySourceConfig::Local { key }) if key.expose_secret() == "aliased_secret"
+    );
+
+    // The full form keeps working and can be mixed with shorthands.
+    let json = config!(
+        "signer.type": "kms",
+        "signer.resource": "projects/test/keys/1",
+        "optional": "opt_secret",
+    );
+    let config: ConfigWithShorthand = testing::test(json).unwrap();
+    assert_matches!(
+        &config.signer,
+        KeySourceConfig::Kms { resource } if resource == "projects/test/keys/1"
+    );
+    assert_matches!(
+        &config.optional,
+        Some(KeySourceConfig::Local { key }) if key.expose_secret() == "opt_secret"
+    );
+
+    let env = Environment::from_iter(
+        "APP_",
+        [
+            ("APP_SIGNER_TYPE", "kms"),
+            ("APP_SIGNER_RESOURCE", "projects/test/keys/2"),
+            ("APP_OPTIONAL_TYPE", "local"),
+            ("APP_OPTIONAL_KEY", "full_form_secret"),
+        ],
+    );
+    let config: ConfigWithShorthand = testing::test(env).unwrap();
+    assert_matches!(
+        &config.signer,
+        KeySourceConfig::Kms { resource } if resource == "projects/test/keys/2"
+    );
+    assert_matches!(
+        &config.optional,
+        Some(KeySourceConfig::Local { key }) if key.expose_secret() == "full_form_secret"
+    );
+}
+
+#[test]
+fn enum_config_shorthand_in_repository() {
+    let schema = ConfigSchema::new(&ConfigWithShorthand::DESCRIPTION, "");
+    let json = config!("signer": "super_secret", "alt_signer": "aliased_secret");
+    let repo = ConfigRepository::new(&schema).with(json);
+    let merged = repo.merged();
+
+    let tag = merged.get(Pointer("signer.type")).unwrap();
+    assert_matches!(&tag.inner, Value::String(StrValue::Plain(s)) if s == "local");
+    let tag_origin = tag.origin.to_string();
+    assert!(
+        tag_origin.ends_with("-> path 'signer' -> expanding shorthand for variant 'local'"),
+        "{tag_origin}"
+    );
+    // The shorthand value is treated the same as if specified in the full form, incl. secret marking.
+    let key = merged.get(Pointer("signer.key")).unwrap();
+    assert_matches!(&key.inner, Value::String(StrValue::Secret(_)));
+    assert!(
+        key.origin.to_string().ends_with("-> path 'signer'"),
+        "{}",
+        key.origin
+    );
+
+    // The shorthand at the aliased location is copied to the canonical one.
+    let alias_tag = merged.get(Pointer("optional.type")).unwrap();
+    assert_matches!(&alias_tag.inner, Value::String(StrValue::Plain(s)) if s == "local");
+    let alias_key = merged.get(Pointer("optional.key")).unwrap();
+    assert_matches!(&alias_key.inner, Value::String(StrValue::Secret(_)));
+
+    let debug_str = format!("{merged:?}");
+    assert!(!debug_str.contains("super_secret"), "{debug_str}");
+    assert!(!debug_str.contains("aliased_secret"), "{debug_str}");
+}
+
+#[test]
+fn enum_config_shorthand_serialization() {
+    let json =
+        config!("signer": "super_secret", "optional.type": "kms", "optional.resource": "res");
+    let config: ConfigWithShorthand = testing::test(json).unwrap();
+
+    // Serialization always produces the full form, which must parse back to the same config.
+    let json = SerializerOptions::default().serialize(&config);
+    assert_eq!(json["signer"]["type"], "local");
+    assert_eq!(json["signer"]["key"], "super_secret");
+    let config: ConfigWithShorthand = testing::test(Json::new("test.json", json)).unwrap();
+    assert_matches!(
+        &config.signer,
+        KeySourceConfig::Local { key } if key.expose_secret() == "super_secret"
+    );
+    assert_matches!(&config.optional, Some(KeySourceConfig::Kms { resource }) if resource == "res");
 }
 
 #[test]

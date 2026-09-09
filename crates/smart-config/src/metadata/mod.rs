@@ -84,6 +84,18 @@ pub struct ConfigTag {
     pub variants: &'static [ConfigVariant],
     /// Default variant, if any.
     pub default_variant: Option<&'static ConfigVariant>,
+    /// Shorthand for the config, if any.
+    pub shorthand: Option<ConfigShorthand>,
+}
+
+/// Shorthand for an enum config: a single non-object value at the config location is interpreted as `variant`
+/// with the value assigned to `param`.
+#[derive(Debug, Clone, Copy)]
+pub struct ConfigShorthand {
+    /// Variant selected by the shorthand.
+    pub variant: &'static ConfigVariant,
+    /// Param of the variant receiving the shorthand value.
+    pub param: &'static ParamMetadata,
 }
 
 /// Variant of a [`ConfigTag`].

@@ -260,7 +260,7 @@ fn mountpoint_errors() {
     schema.insert(&NestingConfig::DESCRIPTION, "test").unwrap();
     assert_matches!(
         schema.mounting_points["test.hierarchical"],
-        MountingPoint::Config
+        MountingPoint::Config { shorthand: false }
     );
     assert_matches!(
         schema.mounting_points["test.bool_value"],
@@ -346,7 +346,7 @@ fn aliasing_mountpoint_errors() {
     );
     assert_matches!(
         schema.mounting_points["test.hierarchical"],
-        MountingPoint::Config
+        MountingPoint::Config { shorthand: false }
     );
 
     let err = schema

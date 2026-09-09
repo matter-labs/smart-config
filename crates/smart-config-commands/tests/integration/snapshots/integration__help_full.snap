@@ -1,6 +1,5 @@
 ---
 source: crates/smart-config-commands/tests/integration/main.rs
-assertion_line: 37
 expression: buffer
 ---
 test.port
@@ -171,6 +170,7 @@ test.object_store.type
   - 'gcs' [Rust: ObjectStoreConfig::Gcs]
     Aliases: 'google', 'google_cloud'
     Stores objects in Google Cloud Storage.
+  Shorthand: a single value is interpreted as variant 'local' with the value assigned to param 'path'
 
 test.object_store.path
   Type: string [Rust: PathBuf]; filesystem path

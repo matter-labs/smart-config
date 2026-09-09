@@ -10,7 +10,10 @@ use crate::{metadata::BasicTypes, value::Pointer};
 #[derive(Debug, Clone)]
 pub(super) enum MountingPoint {
     /// Contains type IDs of mounted config(s).
-    Config,
+    Config {
+        /// Whether any of the mounted enum configs has a shorthand, i.e. accepts a single value at this location.
+        shorthand: bool,
+    },
     Param {
         is_canonical: bool,
         expecting: BasicTypes,
