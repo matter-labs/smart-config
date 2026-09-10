@@ -297,7 +297,10 @@ impl<'a> DeserializeContext<'a> {
     pub(crate) fn deserialize_any_config_opt(
         mut self,
     ) -> Result<Option<Box<dyn any::Any>>, DeserializeConfigError> {
-        if self.current_value().is_none() {
+        if self
+            .current_value()
+            .is_none_or(|value| matches!(value.inner, Value::Null))
+        {
             return Ok(None);
         }
 
