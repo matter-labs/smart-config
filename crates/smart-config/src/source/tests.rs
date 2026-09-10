@@ -2110,6 +2110,199 @@ fn deserializing_optional_config() {
     assert_eq!(err.len(), 2);
 }
 
+#[derive(Debug, DescribeConfig, DeserializeConfig)]
+#[config(crate = crate)]
+struct OptionalConfigParent {
+    #[config(nest, alias = "alias", alias = "other_alias")]
+    child: Option<KeySourceConfig>,
+}
+
+#[test]
+fn deserializing_null_configs() {
+    let schema = ConfigSchema::new(&OptionalConfigParent::DESCRIPTION, "parent");
+    for name in ["child", "alias"] {
+        for value in [
+            serde_json::Value::Null,
+            serde_json::json!("secret"),
+            serde_json::json!("null"),
+        ] {
+            let mut source = Json::empty("optional.json");
+            source.merge(&format!("parent.{name}"), value.clone());
+            let repo = ConfigRepository::new(&schema).with(source);
+            let parsed = repo
+                .single::<OptionalConfigParent>()
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert_eq!(parsed.child.is_none(), value.is_null());
+            assert_eq!(
+                repo.get::<KeySourceConfig>("parent.child")
+                    .unwrap()
+                    .parse_opt()
+                    .unwrap()
+                    .is_none(),
+                value.is_null()
+            );
+            assert_eq!(
+                repo.get::<KeySourceConfig>("parent.child")
+                    .unwrap()
+                    .parse()
+                    .is_err(),
+                value.is_null()
+            );
+        }
+    }
+}
+
+#[test]
+fn optional_config_null_overrides() {
+    let schema = ConfigSchema::new(&OptionalConfigParent::DESCRIPTION, "parent");
+    for name in ["child", "alias"] {
+        for from_env in [false, true] {
+            let mut sources = ConfigSources::default();
+            sources.push(config!("parent.child.type": "kms", "parent.child.resource": "old"));
+            if from_env {
+                let mut env = Environment::from_iter(
+                    "",
+                    [(format!("PARENT_{name}__JSON").to_uppercase(), "null")],
+                );
+                env.coerce_json().unwrap();
+                sources.push(env);
+            } else {
+                let mut source = Json::empty("override.json");
+                source.merge(&format!("parent.{name}"), serde_json::Value::Null);
+                sources.push(source);
+            }
+            let repo = ConfigRepository::new(&schema).with_all(sources);
+            assert_matches!(
+                repo.merged().pointer("parent.child").unwrap().inner,
+                Value::Null
+            );
+            let parsed = repo
+                .single::<OptionalConfigParent>()
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert!(parsed.child.is_none());
+            // Re-enabling a config after null must not resurrect its old fields.
+            let incomplete = repo.clone().with(config!("parent.child.type": "kms"));
+            assert!(
+                incomplete
+                    .single::<OptionalConfigParent>()
+                    .unwrap()
+                    .parse()
+                    .unwrap()
+                    .child
+                    .is_none()
+            );
+            assert!(
+                incomplete
+                    .get::<KeySourceConfig>("parent.child")
+                    .unwrap()
+                    .parse()
+                    .is_err()
+            );
+            let restored = repo.with(config!("parent.alias": "new_secret"));
+            let parsed = restored
+                .single::<OptionalConfigParent>()
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert_matches!(parsed.child, Some(KeySourceConfig::Local { key }) if key.expose_secret() == "new_secret");
+            assert!(!format!("{:?}", restored.merged()).contains("new_secret"));
+        }
+    }
+}
+
+#[test]
+fn config_null_alias_precedence() {
+    let schema = ConfigSchema::new(&OptionalConfigParent::DESCRIPTION, "parent");
+    for (json, is_none) in [
+        (
+            config!("parent.child": serde_json::Value::Null, "parent.alias": "secret"),
+            true,
+        ),
+        (
+            config!("parent.child": "secret", "parent.alias": serde_json::Value::Null),
+            false,
+        ),
+        (
+            config!("parent.alias": serde_json::Value::Null, "parent.other_alias": "secret"),
+            true,
+        ),
+        (
+            config!("parent.alias": "secret", "parent.other_alias": serde_json::Value::Null),
+            false,
+        ),
+    ] {
+        let repo = ConfigRepository::new(&schema).with(json);
+        let parsed = repo
+            .single::<OptionalConfigParent>()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert_eq!(parsed.child.is_none(), is_none);
+    }
+    let mut schema = ConfigSchema::new(&OptionalConfigParent::DESCRIPTION, "parent");
+    schema
+        .single_mut(&OptionalConfigParent::DESCRIPTION)
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+    for json in [
+        config!("parent": serde_json::Value::Null, "alias.child": "secret"),
+        config!("alias": serde_json::Value::Null),
+    ] {
+        let repo = ConfigRepository::new(&schema).with(json);
+        assert_matches!(repo.merged().pointer("parent").unwrap().inner, Value::Null);
+        assert!(
+            repo.single::<OptionalConfigParent>()
+                .unwrap()
+                .parse_opt()
+                .unwrap()
+                .is_none()
+        );
+    }
+}
+
+#[test]
+fn null_config_overrides_defaults() {
+    #[derive(Debug, DescribeConfig, DeserializeConfig)]
+    #[config(crate = crate)]
+    struct DefaultedConfig {
+        #[config(default_t = 42)]
+        value: u64,
+        #[config(default)]
+        enabled: bool,
+    }
+
+    let mut schema = ConfigSchema::new(&DefaultedConfig::DESCRIPTION, "nested");
+    schema
+        .single_mut(&DefaultedConfig::DESCRIPTION)
+        .unwrap()
+        .push_alias("alias")
+        .unwrap();
+    let repo = ConfigRepository::new(&schema)
+        .with(config!("nested.value": 23))
+        .with(config!("alias": serde_json::Value::Null));
+    assert!(
+        repo.single::<DefaultedConfig>()
+            .unwrap()
+            .parse_opt()
+            .unwrap()
+            .is_none()
+    );
+    assert!(repo.single::<DefaultedConfig>().unwrap().parse().is_err());
+    let restored = repo.with(config!("nested.enabled": true));
+    let parsed = restored
+        .single::<DefaultedConfig>()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(parsed.value, 42);
+    assert!(parsed.enabled);
+}
+
 #[test]
 fn coercing_enum_with_suffixes() {
     #[derive(Debug, PartialEq, DescribeConfig, DeserializeConfig)]

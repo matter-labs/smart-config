@@ -420,8 +420,8 @@ impl ConfigParser<'_, ()> {
     }
 
     /// Attempts to parse an optional config from the repository input. Returns the boxed parsed config.
-    /// If there's no data for the config, returns `Ok(None)`. This includes the case when some required params are missing,
-    /// and this is the only type of errors encountered.
+    /// Returns `Ok(None)` for absent or null configs. This also includes the case when some required
+    /// params are missing, and this is the only type of errors encountered.
     ///
     /// # Errors
     ///
@@ -474,8 +474,8 @@ impl<C: DeserializeConfig> ConfigParser<'_, C> {
         self.with_context(|ctx| ctx.deserialize_config::<C>())
     }
 
-    /// Parses an optional config. Returns `None` if the config object is not present (i.e., none of the config params / sub-configs
-    /// are set); otherwise, tries to perform parsing.
+    /// Parses an optional config. Returns `None` if the config is absent or explicitly null.
+    /// Otherwise, tries parsing; if all errors are missing required fields, returns `None`.
     ///
     /// # Errors
     ///
@@ -504,6 +504,19 @@ impl WithOrigin {
     #[tracing::instrument(level = "debug", skip_all)]
     fn copy_aliased_values(&mut self, schema: &ConfigSchema) {
         for (prefix, config_data) in schema.iter_ll() {
+            // A null ancestor overrides its entire subtree, including values
+            // supplied through aliases in the same source.
+            if prefix.with_ancestors().any(|path| {
+                path != prefix
+                    && self
+                        .get(path)
+                        .is_some_and(|value| matches!(value.inner, Value::Null))
+            }) {
+                continue;
+            }
+            if self.get(prefix).is_none() {
+                self.copy_null_config_alias(config_data);
+            }
             let (new_values, new_map_origin) = self.copy_aliases_for_config(config_data);
             if new_values.is_empty() {
                 continue;
@@ -522,11 +535,35 @@ impl WithOrigin {
         }
     }
 
+    fn copy_null_config_alias(&mut self, config: &ConfigData) {
+        let Some((value, alias, options)) = config.aliases().find_map(|(alias, options)| {
+            self.get(Pointer(alias))
+                .map(|value| (value, alias, options))
+        }) else {
+            return;
+        };
+        // A higher-priority object alias must take precedence over a null alias.
+        if !matches!(value.inner, Value::Null) {
+            return;
+        }
+        let Some((parent, name)) = config.prefix().split_last() else {
+            return;
+        };
+        let value = value.clone();
+        if options.is_deprecated {
+            tracing::warn!(path = alias, canonical_path = config.prefix().0, origin = %value.origin,
+                "using deprecated alias; please use canonical_path instead");
+        }
+        self.ensure_object(parent, |_| value.origin.clone())
+            .insert(name.to_owned(), value);
+    }
+
     #[must_use = "returned map should be inserted into the config"]
     fn copy_aliases_for_config(&self, config: &ConfigData) -> (Map, Option<Arc<ValueOrigin>>) {
         let prefix = config.prefix();
         let canonical_map = match self.get(prefix).map(|val| &val.inner) {
             Some(Value::Object(map)) => Some(map),
+            Some(Value::Null) => return (Map::new(), None),
             Some(_) => {
                 tracing::warn!(
                     prefix = prefix.0,
